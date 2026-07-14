@@ -1,0 +1,50 @@
+flowchart LR
+    MAIN["<b>main.py</b><br/>orchestrator + CLI"]
+    CFG["config.py<br/>constants · COLUMN_MAPS"]
+
+    subgraph CORE["src/ core modules"]
+        DL["data_loading"]
+        SD["synthetic_data"]
+        GC["graph_construction"]
+        FE["feature_engineering"]
+        DET["detection"]
+        EV["evaluation"]
+        VIZ["visualization"]
+        TM["temporal_motifs<br/><i>re-export shim</i>"]
+    end
+
+    subgraph MOT["src/motifs/ — backend strategy"]
+        DISP["__init__<br/>get_backend(name)"]
+        BASE["base.py<br/><i>contract docstring</i>"]
+        NX["networkx_backend<br/>5 collapsed types"]
+        RAPH["raphtory_backend<br/>40 types (default)"]
+        SNAP["snap_backend<br/>broken placeholder"]
+    end
+
+    MAIN --> DL
+    MAIN --> SD
+    MAIN --> GC
+    MAIN -.->|"stage 3"| DISP
+    MAIN -.->|"stage 5 unsup."| FE
+    MAIN -.->|"stage 5"| DET
+    MAIN -.->|"stage 5/6"| EV
+    MAIN -.->|"stage 6"| VIZ
+    MAIN -.->|"stage 6"| TM
+
+    DISP --> NX
+    DISP --> RAPH
+    DISP --> SNAP
+    TM --> NX
+    NX --> GC
+    NX -.->|implements| BASE
+    RAPH -.->|implements| BASE
+    SNAP -.->|implements| BASE
+
+    DL --> CFG
+    SD --> CFG
+    DET --> CFG
+    EV --> CFG
+    VIZ --> CFG
+
+    classDef cfg fill:#f2dede,stroke:#a94442;
+    class CFG cfg;

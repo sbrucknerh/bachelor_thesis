@@ -1,0 +1,10 @@
+flowchart TD
+    X["Feature matrix X<br/>(rows = addresses)"] --> MODE{"--mode"}
+
+    MODE -->|supervised| SUP["train_supervised_model<br/>RandomForest / XGBoost<br/>80/20 stratified split · 5-fold CV<br/>minority-class re-weighting"]
+    SUP --> EVAL["evaluate_classifier<br/>acc · precision · recall · F1<br/>ROC-AUC · PR-AUC"]
+
+    MODE -->|unsupervised| UNS["normalize_features (StandardScaler)<br/>↓<br/>detect_anomalies (IsolationForest / DBSCAN)<br/>cluster_addresses (DBSCAN)<br/>find_coordinated_clusters"]
+
+    EVAL --> JSON[("results_&lt;tag&gt;.json")]
+    UNS --> JSON

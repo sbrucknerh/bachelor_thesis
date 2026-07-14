@@ -1,0 +1,6 @@
+1. Load + clean transactions (+ per-address labels, if any)
+2. Build NetworkX graph → per-node structural features                  ← `--mode graph` stops here
+3. Count per-node temporal motif fingerprints (selected backend)        ← `--mode motifs` stops here
+4. Assemble feature matrix per --features {aggregates, motifs, full}
+5. Train + evaluate  (supervised)  OR  detect + cluster  (unsupervised)
+6. Visualize (skipped with --no-plot)

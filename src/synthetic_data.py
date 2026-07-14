@@ -1,5 +1,7 @@
 """Generate synthetic Ethereum-like transaction datasets for development and testing."""
 
+from __future__ import annotations
+
 import hashlib
 import time
 

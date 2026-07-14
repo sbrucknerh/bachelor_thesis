@@ -1,0 +1,15 @@
+{
+  "model": "random_forest",
+  "metrics": {
+    "accuracy": 0.6666666666666666,
+    "precision": 0.25,
+    "recall": 1.0,
+    "f1": 0.4,
+    "roc_auc": 0.8125,
+    "pr_auc": 0.625
+  },
+  "mode": "supervised",
+  "dataset_type": "huggingface-gnn",
+  "features": "motifs",
+  "motif_backend": "raphtory"
+}

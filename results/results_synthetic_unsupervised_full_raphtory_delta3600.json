@@ -1,0 +1,9 @@
+{
+  "mode": "unsupervised",
+  "method": "isolation_forest",
+  "features": "full",
+  "motif_backend": "raphtory",
+  "n_anomalies": 10,
+  "n_clusters": 0,
+  "coordinated_top": []
+}

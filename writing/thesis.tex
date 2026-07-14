@@ -1,0 +1,1912 @@
+\documentclass{thesisclass}
+
+%% -------------------------------
+%% |    IM Thesis Template       |
+%% -------------------------------
+%% Further additions by: Julian Huber, 2019
+%% julian.huber "at" kit.edu
+%% Further additions by: Kenneth Qua, 2021
+%% kenneth.qua "at" wu.ac.at
+
+%% Notes:
+%% Language switch after \begin{document}
+
+% Based on thesisclass.cls of Timo Rohrberg, 2009
+% ----------------------------------------------------------------
+% Thesis - Main document
+% ----------------------------------------------------------------
+
+% Select your thesis language here:
+\usepackage[english]{babel}
+%\usepackage[german]{babel}
+
+
+%% ---------------------------------
+%% |      Additional packages      |
+%% ---------------------------------
+%% 
+\usepackage{algorithm}
+\usepackage{listing}
+\usepackage{listings}
+\usepackage{algpseudocode}
+
+\usepackage{graphicx}
+%http://en.wikibooks.org/wiki/LaTeX/Importing_Graphics#Graphics_storage
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
+\graphicspath{{./figures/}} %Use curly braces for each path to add and don't
+% forget trailing slash '/'
+% \usepackage{epstopdf} %Nice to automatically convert eps figures to pdf
+% format  (from inkscape, etc)
+\usepackage[natbibapa]{apacite}
+\usepackage{booktabs}
+
+%% ---------------------------------
+%% | Needed for the List of Abbreviations |
+%% ---------------------------------
+\usepackage{nomencl}
+\renewcommand{\nomname}{List of Abbreviations}
+% Punkte zw. Abkürzung und Erklärung
+\setlength{\nomlabelwidth}{.32\hsize}%.32\hsize bezieht sich auf die Punkte zwischen Abkürzung und Erklärung -> je größer die Zahl, desto mehr %Punkte
+\renewcommand{\nomlabel}[1]{#1 \dotfill}
+% Zeilenabstände verkleinern
+\setlength{\nomitemsep}{-\parsep}
+\makenomenclature
+\usepackage[normalem]{ulem}
+\newcommand{\markup}[1]{\uline{#1}}
+
+\usepackage{xspace}
+
+\newcommand\ie{i.\,e.\xspace}
+\newcommand\eg{e.\,g.\xspace}
+\newcommand\Eg{E.\,g.\xspace}
+\newcommand{\Latex}{\LaTeX\xspace}
+
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, bending}
+\definecolor{scamPurple}{HTML}{7F77DD}
+\definecolor{scamTeal}{HTML}{1D9E75}
+\definecolor{scamCoral}{HTML}{D85A30}
+\definecolor{scamBlue}{HTML}{378ADD}
+\tikzset{
+scamnode/.style={circle, minimum size=11mm, inner sep=0pt},
+scamedge/.style={-{Stealth[length=2.4mm,width=2.2mm]}, line width=0.9pt},
+scamedgeheavy/.style={-{Stealth[length=2.8mm,width=2.8mm]}, line width=1.8pt},
+edgelbl/.style={inner sep=2pt, font=\small},
+every label/.append style={font=\small}
+}
+
+%% ---------------------------------
+%% |   Code listing style (lstlistings)   |
+%% ---------------------------------
+\definecolor{lstbg}{HTML}{F7F7F9}
+\definecolor{lstframe}{HTML}{D0D0D8}
+\definecolor{lstkw}{HTML}{1D4E89}
+\definecolor{lstcomment}{HTML}{4B8B3B}
+\definecolor{lststring}{HTML}{A8431E}
+\definecolor{lstnum}{HTML}{9A9A9A}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{lstbg},
+  keywordstyle=\color{lstkw}\bfseries,
+  commentstyle=\color{lstcomment}\itshape,
+  stringstyle=\color{lststring},
+  numberstyle=\tiny\color{lstnum},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{lstframe},
+  breaklines=true,
+  breakatwhitespace=true,
+  postbreak=\mbox{\textcolor{lstnum}{$\hookrightarrow$}\space},
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2,
+  captionpos=b,
+  xleftmargin=14pt,
+  framexleftmargin=14pt,
+  aboveskip=1.2em,
+  belowskip=1em,
+}
+
+
+
+%% ---------------------------------
+%% | Information about the thesis  |
+%% ---------------------------------
+
+\newcommand{\mytype}{\iflanguage{english}{Bachelor Thesis}{Bachelorarbeit}} 
+
+\newcommand{\myname}{Sebastian Eduard Bruckner-Hrubesch}
+\newcommand{\matricle}{h12220272}
+\newcommand{\mytitle}{\iflanguage{english}{Coordinated Malicious Behavior Detection in Blockchain Networks Using Temporal Graph Motifs}{Titel der Arbeit}}
+\newcommand{\myinstitute}{\iflanguage{english}
+{Institute for Complex Networks}
+{Institut für Komplexe Netzwerke}}
+
+\newcommand{\advisor}{Mag.\ Ema Kahr, PhD}
+
+\newcommand{\timestart}{\iflanguage{english}{03. April 2026}{03. April 2026}}
+\newcommand{\timeend}{\iflanguage{english}{XXth of Month 20XX}{XX. Monat 20XX}}
+\newcommand{\submissiontime}{DD. MM. 20XX}
+
+%% -------------------------------
+%% |  Information for PDF file   |
+%% -------------------------------
+%% IM: Auto-Fill this information
+\hypersetup{
+ pdfauthor={\myname},
+ pdftitle={\mytitle},
+ pdfsubject={\mytype},
+ pdfkeywords={\mytype}
+}
+
+%% ---------------------------------
+%% | ToDo Marker - only for draft! |
+%% ---------------------------------
+% Remove this section for final version!
+%\setlength{\marginparwidth}{20mm}
+
+%\newcommand{\margtodo}
+%{\marginpar{\textbf{\textcolor{red}{ToDo}}}{}}
+
+%\newcommand{\todo}[1]
+%{{\textbf{\textcolor{red}{(\margtodo{}#1)}}}{}}
+
+
+%% --------------------------------
+%% | Old Marker - only for draft! |
+%% --------------------------------
+% Remove this section for final version!
+%\newenvironment{deprecated}
+%{\begin{color}{gray}}
+%{\end{color}}
+
+
+%% --------------------------------
+%% | Settings for word separation |
+%% --------------------------------
+% Help for separation:
+% In german package the following hints are additionally available:
+% "- = Additional separation
+% "| = Suppress ligation and possible separation (e.g. Schaf"|fell)
+% "~ = Hyphenation without separation (e.g. bergauf und "~ab)
+% "= = Hyphenation with separation before and after
+% "" = Separation without a hyphenation (e.g. und/""oder)
+
+% Describe separation hints here:
+\hyphenation{
+% Pro-to-koll-in-stan-zen
+% Ma-na-ge-ment  Netz-werk-ele-men-ten
+% Netz-werk Netz-werk-re-ser-vie-rung
+% Netz-werk-adap-ter Fein-ju-stier-ung
+% Da-ten-strom-spe-zi-fi-ka-tion Pa-ket-rumpf
+% Kon-troll-in-stanz
+}
+
+
+%% ------------------------
+%% |    Including files   |
+%% ------------------------
+% Only files listed here will be included!
+% Userful command for partially translating the document (for bug-fixing e.g.)
+\includeonly{%
+titlepage,
+text/abbreviations,
+text/introduction,
+text/content,
+text/evaluation,
+text/conclusion,
+text/appendix
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Here, main documents begins %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+\frontmatter
+\pagenumbering{roman}
+\include{titlepage}
+% IM Style: No additional blank page
+% \blankpage
+
+
+%% -------------------
+%% |   Directories   |
+%% -------------------
+\iflanguage{english}{
+\renewcommand*\contentsname{Table of Contents}}
+{}
+\clearpage
+\tableofcontents
+
+% IM Style: No additional blank page
+% \blankpaage
+
+% If you do not wish to include a list of figures, list of tables and list of abbreviations, comment out the following section
+\iflanguage{english}
+{
+\clearpage
+\phantomsection % Properly links List of Figures in Table of Contents and starts it on new page
+\listoffigures \addcontentsline{toc}{chapter}{List of Figures} 
+\clearpage
+\phantomsection % Properly links List of Tables in Table of Contents and starts it on new page
+\listoftables  \addcontentsline{toc}{chapter}{List of Tables} 
+\printnomenclature   \addcontentsline{toc}{chapter}{List of Abbreviations} 
+}
+{
+\clearpage
+\phantomsection % Properly links List of Figures in Table of Contents and starts it on new page
+\listoffigures \addcontentsline{toc}{chapter}{Abbildungsverzeichnis} 
+\clearpage
+\phantomsection % Properly links List of Tables in Table of Contents and starts it on new page
+\listoftables \addcontentsline{toc}{chapter}{Tabellenverzeichnis} 
+\printnomenclature \addcontentsline{toc}{chapter}{Abkürzungsverzeichnis}
+}
+
+
+% Execute this command for index creation, i.e., for abbreviations by the nomencl package
+% makeindex thesis.nlo -s nomencl.ist -o thesis.nls
+
+
+
+%\printnomenclature
+
+
+
+%% -----------------
+%% |   Main part   |
+%% -----------------
+\mainmatter
+\pagenumbering{arabic}
+
+
+%% ==============
+\chapter*{Abstract} 
+This section is a short summary of your entire paper. It should briefly cover the most important aspects of your paper. After reading this section, the reader should have a good understanding of what the research question is, how you answered it and what the answer was. This section is intentionally meant to be brief and no longer than half a page.
+
+
+Notes:
+* how to formalize coordinated behavior.
+* anti-money laundering typology -> transfer to dataset -> network motive (typical sequence)
+* how to compare if it is statistically significant 
+* encode search of temporal motive 
+
+Look into related work
+Dig into temporal motives
+Isomorphism testing -> no, but counting
+Not Motive mining but “counting”
+* timestamps
+
+networkX -> python toolkit
+Create network from this toolkit
+
+Pool of known motives
+
+%\chapter*{Zusammenfassung} 
+%\textit{summary in German; only if required by the examination rules}
+
+\chapter{Introduction}
+Blockchain networks have become a critical part of the global financial infrastructure. As they have grown, they have also become an attractive target for criminal actors. According to the Chainalysis 2025 Crypto Crime Report, more than \$40.9 billion flowed to illicit cryptocurrency addresses in 2024 alone \citep{chainalysis2025, shi2025realcats}. This number is likely a lower bound. Chainalysis notes that annual illicit-volume estimates have grown by an average of 25\% between reporting periods since 2020, so the 2024 total could exceed \$51 billion \citep{chainalysis2025}. The abuse ranges from ransomware and phishing scams to large-scale money laundering, and it affects both the Bitcoin and the Ethereum ecosystem \citep{shi2025realcats, sanjalawe2023atd}.
+
+The harder problem is not the size of these losses, but the way they are produced. Sophisticated attackers do not rely on a single, continuously active address. Instead, they spread their activity over many short-lived wallets, where each wallet makes only a few transactions that look unremarkable on their own. In fact, 90.70\% of criminal Bitcoin addresses carry a zero balance and 60\% of them stop being active within 31 days \citep{shi2025realcats}. This behaviour deliberately imitates ordinary wallets, so a single transaction rarely looks suspicious. The signal of coordinated activity therefore does not appear in individual transactions, but in how those transactions are connected across several addresses and over time. A ransomware payment chain, a phishing fan-out or a layering operation only becomes visible once its transactions are considered together, in order, and across all the addresses involved.
+
+Detecting these patterns requires a method that explicitly models the temporal order of transactions. However, most existing approaches do not do this. Feature-engineering methods extract aggregate per-address statistics such as transaction count, address lifetime and balance variance \citep{chen2022phishing, alemari2021labeled}. Such features are easy to evade by spreading activity over many short-lived wallets. Graph-embedding methods capture the structure of the transaction graph, but not the temporal order of events across several addresses \citep{shi2025realcats}. Both approaches share the same limitation: they cannot capture ordered, multi-party interaction patterns that span several addresses and several time steps, and this is exactly where coordinated malicious behaviour shows itself.
+
+Temporal motifs are a natural way to close this gap. A temporal motif is a recurring, time-ordered subgraph pattern, where a set of edges occurs among a group of nodes within a bounded time window \citep{kovanen2011temporal, paranjape2017motifs}. Applied to the Bitcoin transaction graph, temporal motif counts already reveal structural anomalies that static analysis cannot detect. For example, cyclic triangle motifs are far more frequent in Bitcoin than in any communication network, which reflects the recirculation that is typical of mixing and layering \citep{paranjape2017motifs}. Despite this, using temporal motifs as features for the supervised detection of coordinated malicious behaviour across multiple addresses is still largely unexplored. This thesis addresses that gap directly.
+
+TODO: research question(s)
+
+\chapter{Related Work} 
+
+how the other papers analyze blockchain in terms of malicious behaviour
+
+dont go into scamming in general -> only network focused
+
+this and that paper mentioned....
+
+- 2-3 pages
+
+\section{Graph-Based Detection of Malicious Behavior on Blockchain Networks}
+
+The most common approach to detecting malicious behavior on blockchain networks is
+to model the transaction history as a directed graph and extract features from it.
+Sanjalawe and Al-Emari~\cite{sanjalawe2023atd} represent the Ethereum network
+as a weighted multi-digraph and collect features such as degree statistics,
+average transaction amounts, and gas metadata, with a 95.06\% detection accuracy.
+Chen et al.~\cite{chen2022phishing} take a similar approach for phishing detection,
+constructing 149 address-level features inspired by fraud patterns in traditional
+bank accounts and reaching 98.89\% precision with a Random Forest classifier.
+
+However those approaches either do not take the temporal ordering of
+transactions into consideration or reduce it to aggregated statistics like the address lifetime.
+Coordinated malicious behavior shows itself in the order in which transactions
+occur across multiple addresses within a specific time window, a pattern that
+static node features and embeddings cannot capture.
+Paranjape et al.~\cite{paranjape2017motifs} demonstrate this directly on Bitcoin:
+the fraction of cyclic triangle motifs is substantially higher than in any
+communication network they study, a property that only becomes visible when the
+temporal ordering of edges is kept.
+This makes a detection approach based on temporal graph motifs rather than
+static graph representations necessary.
+
+\section{Datasets for Blockchain Transaction Analysis}
+\label{sec:relwork_datasets}
+
+Two publicly available datasets are central to the related literature reviewed in this
+thesis: the Benchmark Labelled Transactions Ethereum (BLTE) dataset, which is used
+as the primary evaluation benchmark in the intrusion detection work of
+Sanjalawe and Al-Emari~\cite{sanjalawe2023atd}, and the Real-CATS dataset,
+which is introduced as a cross-chain training resource for general cryptocurrency
+cybercrime detection~\cite{shi2025realcats}.
+
+\subsection*{BLTE}
+
+The BLTE dataset was originally proposed by Al-Emari et al.~\cite{alemari2021labeled}
+as a labeled transactions-based benchmark for the Ethereum network.
+It is built on the Ethereum Classic (ETC) chain and is publicly available on
+Kaggle.
+Fraud addresses are sourced from EtherScamDB, an open-source registry of scam
+addresses, from which 2{,}357 unique Ethereum addresses were extracted,
+including phishing and scamming categories.
+The corresponding transactions were retrieved for each address over the period from
+2017-2019, with a total of 262{,}123{,}807 raw transactions of which
+16{,}784 are marked abnormal~\cite{alemari2021labeled}.
+The final dataset contains 71{,}250 transactions
+at a 4:1 normal-to-abnormal ratio, with each transaction represented by 18 attributes.
+~\cite{alemari2021labeled}.
+
+The BLTE dataset serves as the direct evaluation environment for the
+approach of Sanjalawe and Al-Emari~\cite{sanjalawe2023atd}.
+Their method models the Ethereum network as a weighted multi-digraph
+\(G = (N, E)\) with edge tuples \((s, u, v, t)\) encoding sender, receiver,
+value, and timestamp, from which 22 node-level features are derived via
+multi-digraph theory~\cite{sanjalawe2023atd}.
+A feature selection procedure then reduces this set to
+7 mutual features, including degree statistics, average transaction amounts,
+active duration, mean inter-transaction interval, and average gas
+price~\cite{sanjalawe2023atd}.
+A Semi-Supervised Generative Adversarial Network classifier trained on these
+features achieves a detection accuracy of 95.06\% and an F1-measure of 95.11\%
+on the BLTE data, outperforming standard baselines such as Random Forest, SVM,
+and LSTM~\cite{sanjalawe2023atd}.
+
+\subsection*{Real-CATS}
+
+The Real-CATS dataset was proposed by Shi et al.~\cite{shi2025realcats} to address
+the generalizability and comparability shortcomings of existing blockchain datasets.
+Real-CATS is the largest publicly available labeled dataset for cryptocurrency
+cybercrime detection, comprising 103{,}203 criminal addresses and 106{,}196 benign
+addresses across Bitcoin and Ethereum.
+Criminal addresses are derived from real-world abuse reports crawled from
+Chainabuse.com, while benign addresses are collected from the outputs of exchange
+hot wallets based on the assumption that centralized exchanges apply KYC
+procedures~\cite{shi2025realcats}.
+Concretely, the Bitcoin split contains 90{,}612 criminal and 90{,}176 benign
+addresses (CB and BB), and the Ethereum split contains 12{,}591 criminal and
+16{,}020 benign addresses (CE and BE), each with a profile of 32 and 52 statistical
+features respectively~\cite{shi2025realcats}.
+A supplementary testing dataset, Sup-CATS, was additionally collected from all
+blocks on a single day (12 August 2024) on Ethereum, comprising 3{,}147
+Etherscan-labeled criminal addresses and 11{,}058 benign addresses, to simulate a
+real-world deployment scenario~\cite{shi2025realcats}.
+
+The dataset is explicitly designed to satisfy four characteristics: Comprehensiveness,
+Classifiability, Customizability, and Real-world Transferability (C3R).
+The authors argue that these characteristics are fundamental for practical cybercrime detection
+research~\cite{shi2025realcats}.
+In terms of customizability, Shi et al.~\cite{shi2025realcats} demonstrate that
+the detailed transaction records released alongside the profiles allow the
+construction of weighted multi-digraphs, on which the trans2vec random walk
+method~\cite{wu2020phishers} achieves 0.90 precision, 0.93 recall, and 0.91
+F1-score on a 2{,}500-address subset.
+However, Shi et al.~\cite{shi2025realcats} also note that node embedding methods
+are computationally expensive and require building the full transaction graph at training
+time, making real-time detection of new addresses challenging.
+
+The two datasets have important roles in the related literature.
+BLTE provides a transaction-level benchmark for the Ethereum network that was
+the first publicly available labeled dataset of this type, but its labeling is
+limited to the EtherScamDB registry and its transaction volume is constrained
+to the 2017-2019 period~\cite{alemari2021labeled}.
+Real-CATS addresses the cross-chain scope and real-world requirements that
+BLTE does not cover, offering substantially more addresses and a more diverse
+behavioral distribution~\cite{shi2025realcats}.
+Both datasets, however, operate at the level of individual address features and
+aggregated transaction statistics, and neither provides the temporal edge sequences
+across multiple interacting addresses that are necessary for motif-based detection
+of coordinated malicious behavior.
+
+\section*{Temporal Motifs in Financial and Blockchain Networks}
+
+A small body of work has begun to apply temporal motif counting to
+financial transaction networks, though none of it combines all three
+elements that this thesis requires: blockchain data, labeled malicious
+behavior, and temporal motif-based detection.
+
+Arnold et al.~\cite{arnold2024motifs} apply the temporal motif framework
+of Paranjape et al.\ directly to two Bitcoin transaction datasets and one
+NFT dataset, analyzing sequences of three transactions across up to three
+users. They show that the motif distribution is heavy-tailed across users
+and that examining per-user motif signatures and motif counts over time
+reveals anomalous activity that a global count over all users obscures.
+The authors explicitly suggest that local temporal motif profiles could
+serve as features for classification or clustering in anti-money
+laundering or fraud detection~\cite{arnold2024motifs}. However, the
+paper stops short of constructing any detection system: no labeled
+criminal addresses are used, and the anomalous activity is identified
+only descriptively.
+
+Liu et al.~\cite{liu2023temporal} demonstrate that temporal motifs are
+effective features for fraud detection on financial transaction networks,
+outperforming static graph features and node embedding baselines such as
+LINE and node2vec on labeled datasets from Mercari and a synthetic
+J.P.\ Morgan Chase network. The datasets are not blockchain-based,
+however, and the work does not address the specific behavioral patterns
+of coordinated on-chain scam activity.
+
+Mo et al.~\cite{mo2022motifgcn} incorporate motif matrices into a
+temporal graph convolutional network for fraud detection on the
+Bitcoin-Alpha and Bitcoin-OTC trust networks. The model captures local
+topological structure through motif matrices and temporal evolution
+through snapshot-based aggregation. This is the closest existing work to
+the framing of this thesis, yet two important distinctions apply: the
+motifs used are static subgraph counts computed per snapshot rather than
+$\delta$-temporal motifs in the sense of Paranjape et al., and the
+datasets are signed trust networks rather than transaction graphs with
+labeled scam addresses.
+
+These three papers show that temporal motifs carry signal for financial fraud and that blockchain
+transaction data is well suited to temporal motif analysis. However, the
+literature does not yet contain a method that counts $\delta$-temporal
+motifs on a labeled blockchain scam dataset and uses those motifs directly as features for detection. This combination is the
+core contribution of this thesis.
+
+Sources: 
+- Google Scholar
+- Science Direct
+- ACM digital library
+- IEEE Xplore digital library
+- Wiley
+- Springer Link
+
+
+
+
+
+\chapter{Theoretical Foundations}
+This chapter will cover the theoretical foundations that this thesis builds upon.
+
+\section{Blockchain and Ethereum fundamentals}
+First, we will cover what a Blockchain is and how Ethereum works and handles transactions. 
+A blockchain is a distributed ledger in which transactions are grouped into blocks and linked chronologically so that later blocks reference earlier ones through cryptographic hashes \cite{nakamoto2008bitcoin, buterin2014ethereum}. This makes the ledger append-only, because changing a past record would require rewriting the block and all of the blocks that follow under the network’s consensus rules \cite{nakamoto2008bitcoin}. For this thesis, the important part is not the consensus mechanism itself, but that blockchain data is ordered, time-stamped, and persistent.
+
+Ethereum extends this basic blockchain idea with account-based state and smart-contract execution \cite{buterin2014ethereum}. The relevant transaction record can be represented as a tuple $(s,r,v,t,g)$, where $s$ is the sender, $r$ the receiver, $v$ the transferred value, $t$ the timestamp, and $g$ the gas usage (transaction fee) \cite{alemari2021labeled, sanjalawe2023atd}. Ethereum distinguishes between externally owned accounts (EOAs), which are controlled by private keys and initiate transactions directly, and contract accounts, which execute code when invoked \cite{buterin2014ethereum, alemari2021labeled}.
+
+Because multiple transactions can occur between the same pair of addresses at different times, with different values and gas costs, Ethereum is naturally modeled as a weighted temporal directed multigraph \cite{kovanen2011temporal, paranjape2017motifs}. This is the abstraction used in the remainder of the chapter. In contrast, Bitcoin follows a UTXO (unspent transaction output) model, where transactions consume and create unspent outputs rather than directly transferring value between persistent accounts \cite{nakamoto2008bitcoin}.
+
+With this data model established, the next section introduces the formal graph representation.
+
+\section{Graph-theory foundations}
+\label{sec:graph}
+what is a graph
+
+A graph is a mathematical structure consisting of a set of nodes $V$ and a set 
+of edges $E$, where nodes represent entities and edges represent pairwise 
+relations between them \cite{newman2010networks}. In the context of this 
+thesis, nodes correspond to Ethereum addresses and edges correspond to 
+transactions between them.
+
+Because transactions have a clearly defined sender and receiver, the 
+appropriate structure is a \emph{directed graph}, where an edge $(u, v) \in E$ 
+represents a directed relation from node $u$ to node $v$ 
+\cite{newman2010networks}. Since the same pair of addresses may transact 
+multiple times, each with a distinct value and timestamp, the data is more 
+precisely represented as a \emph{directed multigraph}, in which multiple edges 
+between the same ordered pair of nodes are permitted 
+\cite{paranjape2017motifs, sanjalawe2023atd}.
+
+For a node $v$, the \emph{in-degree} $d^-(v)$ counts the number of incoming 
+edges and the \emph{out-degree} $d^+(v)$ counts the number of outgoing edges 
+\cite{newman2010networks}. These degree measures serve as basic node-level 
+features and are used as baselines in the classification experiments in 
+Chapter~\ref{ch:method}.
+
+The directed multigraph provides the structural foundation for the graph model 
+used throughout this thesis. The following section extends this static 
+representation by incorporating the timestamps of transactions, which is 
+necessary to capture the temporal ordering of interactions.
+
+
+\section{Temporal networks}
+\label{sec:temporal_networks}
+The graph model introduced in Section~\ref{sec:graph} treats the Ethereum transaction graph as a static object once timestamps are discarded. This section explains why that is insufficient for detecting coordinated malicious behavior.
+
+\paragraph{From static to temporal.}
+Static networks aggregate all interactions into a single, time-independent structure. While such aggregation is computationally efficient, it completely ignores the ordering of events, which is exactly the information that distinguishes coordinated sequential behavior from coincidental events. Temporal networks take this information into account by retaining the full sequence of timestamped edges \cite{kovanen2011temporal, paranjape2017motifs}.
+
+\paragraph{Time-respecting paths and edge ordering.}
+blabla
+
+\paragraph{The time window $\delta$.}
+*sliding window
+*why delta was chosen
+
+Not all time-respecting paths are meaningful for detecting coordinated behaviour. For example, two transactions that happened with years in between are unlikely to be part of the same coordinated action. To focus on interactions that are \emph{temporally close}, a time window $\delta$ is introduced. Two edges $e_i$ and $e_j$ are considered temporally close if they share at least one endpoint and $|t_j - t_i| \leq \delta$ \cite{kovanen2011temporal, paranjape2017motifs}. Choosing the appropriate $\delta$ if important for our analysis. A small $\delta$ captures rapid bursts of activity such as phishing campaigns that distribute funds within minutes, while a larger $\delta$ captures slower coordination patterns such as layering across multiple days. In this thesis, $\delta$ is treated as a configurable parameter whose effect on motif counts is evaluated in Chapter TODO:blabla.
+
+\paragraph{What static projection loses.}
+The aggregated static graph loses two things: the \emph{ordering} of edges and the \emph{temporal density} of interactions. This means that two structurally identical subgraphs in the static graph could correspond to entirely different behaviours depending on whether the underlying transactions occurred rapidly or were spread across a bigger time span. \cite{kovanen2011temporal} observe that static networks are often time-aggregates of systems where connections are not continuously active, and that temporal inhomogeneities, which static representations do not capture, have an important effect on dynamic processes. In the Ethereum context, a fan-out pattern in the static graph (one address sending to many others) looks the same regardless of whether all transfers happened within ten seconds or over ten months. Only the temporal graph reveals whether the fan-out was a coordinated event.
+
+\paragraph{Motivation for temporal motifs.}
+The observation that edge ordering matters and that meaningful patterns must occur within a bounded time window motivates the concept of temporal motifs introduced in Section~\ref{sec:motifs}. Rather than asking which subgraph topologies are over-represented in the static graph, temporal motifs ask which \emph{ordered sequences} of interactions recur within a window $\delta$. This is the appropriate question for detecting coordinated behavior in blockchain networks, where the timing of transactions is as informative as their structure.
+
+\section{Temporal motifs}
+\label{sec:motifs}
+
+\paragraph{Static network motifs.}
+The concept of network motifs was introduced by Milo et al.\ \citeyear{milo2002network} to describe small, recurring subgraph patterns that appear significantly more often in a real network than in a randomised reference. These patterns are considered the building blocks of network structure, so that different classes of networks (biological, social, technological) tend to be characterised by different sets of over-represented motifs \cite{milo2002network}. In static graphs, a motif is formally defined as a connected induced subgraph on $k$ nodes whose frequency in the observed network exceeds what would be expected by chance under a suitable null model \cite{milo2002network, newman2010networks}.
+
+
+\paragraph{$\delta$-temporal motifs.}
+Paranjape et al.\ \citeyear{paranjape2017motifs} extend the static motif concept to temporal networks by introducing $\delta$-temporal motifs.
+
+\paragraph{The catalogue of $\delta$-temporal motifs.}
+
+For the case of three nodes and three edges, Paranjape et al.\ 
+\citeyear{paranjape2017motifs} enumerate a complete catalogue of 36 
+$\delta$-temporal motifs, which together cover all distinct interaction patterns for three nodes. The 36 motifs 
+contain three structural classes: four \emph{2-node motifs} (highlighted inside the green rectangle), in which 
+all three edges occur between the same pair of nodes, 24 \emph{star motifs}, 
+in which one center node interacts with two distinct neighbors and eight 
+\emph{triangle motifs}, in which three nodes form a directed cycle 
+\cite{paranjape2017motifs}. Within each structural class, the individual 
+motifs are distinguished solely by the temporal ordering and direction of 
+the three edges. The full catalogue is illustrated in 
+Figure~\ref{fig:motifs_paranjape}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{motifs_paranjape}
+    \caption{All 36 two- and three-node, three-edge $\delta$-temporal motifs, 
+    indexed as $M_{i,j}$ by row $i$ and column $j$. The first edge in each 
+    motif originates from the green node and edge labels denote temporal ordering. 
+    Figure from \citet{paranjape2017motifs}.}
+    \label{fig:motifs_paranjape}
+\end{figure}
+
+\subsection{Counting algorithm}
+
+Motif counting algorithms form the computational foundation of any motif-based analysis. This section first outlines the established methods for static graphs and then explains why a fundamentally different approach is required for temporal data.
+
+\subsubsection{Static motif counting}
+
+Static graph motif counting is a well-studied problem. Given a graph $G$, the goal is to count how many times a given subgraph pattern, such as a triangle or a directed cycle, appears in $G$. Algorithms for this task range from exact neighborhood-intersection methods to matrix-based approaches and sampling-based approximations, covering a broad spectrum of accuracy and efficiency trade-offs \cite{Yin2018}. These methods are computationally mature and underpin many downstream tasks such as clustering coefficient computation and community detection.
+
+However, static methods operate on a time-aggregate representation: all edges that ever existed between two nodes collapse into a single connection, regardless of when they occurred \cite{kovanen2011temporal}. This means that the timely ordering is lost entirely. Paranjape et al \citet{paranjape2017motifs} show that even when a triangle is topologically present in a network, only a subset of its instances are temporally valid. The others either occur out of order or fall outside a given time window $\delta$ \cite{paranjape2017motifs}. A static counter treats all of them as identical. For blockchain transaction networks, this distinction is critical because coordinated malicious behavior happens through transaction sequences that have a specific temporal order, something that static aggregation cannot recover.
+
+\subsubsection{Temporal motif counting}
+Temporal motif counting extends the static counting problem by requiring that all edges of a motif occur in a specific order within a bounded time window $\delta$. 
+
+The general counting algorithm proceeds in three steps: (1) identify all
+static instances of the subgraph $H$ in the static graph $G$;
+(2) for each instance, gather all corresponding temporal edges into a
+time-sorted sequence $S$; and (3) process $S$ within a sliding window of
+size $\delta$, tracking how often each ordered edge pattern appears
+within that window \citep{paranjape2017motifs}. Algorithm~\ref{alg:paranjape}
+formalizes this procedure.
+
+\begin{figure}[t]
+\begin{minipage}{\linewidth}
+
+\begin{algorithm}[H]
+\caption{$\delta$-Temporal Motif Counting adapted from \citet{paranjape2017motifs}}
+\label{alg:paranjape}
+\begin{algorithmic}[1]
+\Require Time-sorted sequence $S = (e_1, \ldots, e_L)$,
+         window $\delta$, motif length $l$
+\Ensure Count of each $l$-edge $\delta$-temporal motif in $S$
+\State $\textit{left} \gets 1$
+\State $\textit{patternCounts} \gets \emptyset$
+\For{$\textit{right} = 1, \ldots, L$}
+    \While{$t_{\textit{left}} \leq t_{\textit{right}} - \delta$}
+        \State \Call{RemoveFromWindow}{$e_{\textit{left}}$}
+        \State $\textit{left} \gets \textit{left} + 1$
+    \EndWhile
+    \State \Call{AddToWindow}{$e_{\textit{right}}$}
+\EndFor
+\State \Return $\textit{patternCounts}$
+\end{algorithmic}
+
+\noindent\rule{\linewidth}{0.4pt}
+\noindent\textbf{Procedure} \textsc{RemoveFromWindow}$(e)$
+\hfill\textit{// expire $e$; withdraw prefix contributions}
+\begin{algorithmic}[1]
+\State $\textit{patternCounts}[e] \gets \textit{patternCounts}[e] - 1$
+\ForAll{suffix $\sigma$ of length $l-1$ in $\textit{patternCounts}$}
+    \State $\textit{patternCounts}[(e,\,\sigma)]
+           \mathrel{-}= \textit{patternCounts}[\sigma]$
+\EndFor
+\end{algorithmic}
+
+\noindent\rule{\linewidth}{0.4pt}
+\noindent\textbf{Procedure} \textsc{AddToWindow}$(e)$
+\hfill\textit{// admit $e$; extend all existing prefixes}
+\begin{algorithmic}[1]
+\ForAll{prefix $\pi$ of length $< l$ in $\textit{patternCounts}$,
+        longest first}
+    \State $\textit{patternCounts}[(\pi,\,e)]
+           \mathrel{+}= \textit{patternCounts}[\pi]$
+\EndFor
+\State $\textit{patternCounts}[e] \gets \textit{patternCounts}[e] + 1$
+\end{algorithmic}
+
+\end{algorithm}
+\end{minipage}
+\end{figure}
+ 
+For 2-node motifs this runs in 
+O(m) time, which is optimal. For 3-node, 3-edge star and triangle motifs, specialized algorithms reduce the worst-case complexity significantly, with the fast triangle algorithm achieving up to a 56.5$\times$ speedup over the general method on the Bitcoin transaction network \cite{paranjape2017motifs}. This scalability is relevant to the present work, as blockchain transaction graphs are large and the motifs we are interested in correspond directly to 3-node star and triangle patterns within a short time window.
+
+\subsection{Motif fingerprint}
+The identification of recurring subgraph patterns in a network provides insight into the local structural properties of individual nodes. However, raw motif counts aggregated over the entire graph provide only an overall description and do not make it possible to differentiate the behavior of individual nodes from one another. To address this, \citet{McDonnell2014} introduced the concept of a \textit{motif-role fingerprint}: a per-node vector $\mathbf{f}_v = [c_1, c_2, \ldots, c_k]$, where each component $c_i$ denotes the number of times node $v$ participates in a subgraph instance of motif type $M_i$. This distinguishes the fingerprint from a global motif count in that it retains which node participates and in which structural role. For instance, if a node acts as the initiator, intermediary, or receiver in a given pattern.
+
+\citet{McDonnell2014} further show that functional motif-role fingerprints, obtained from counts of partial subgraphs, can be transformed into structural fingerprints by multiplying them with an invertible transformation matrix, establishing a mathematically well-defined correspondence between the two representations. The authors identify anomaly detection and the identification of structurally similar nodes as primary use cases, which makes it well applicable for this thesis.
+
+The concept of a motif fingerprint as defined above applies to static directed graphs. In the context of this thesis, the notion is extended to temporal graphs following the $\delta$-temporal motif framework. The motif fingerprint of an address is therefore defined as:
+
+\begin{equation}
+    \mathbf{f}_v^{\delta} = \bigl[c_1^{\delta},\, c_2^{\delta},\, \ldots,\, c_k^{\delta}\bigr]
+    \label{eq:motif_fingerprint}
+\end{equation}
+
+where $c_i^{\delta}$ is the number of times address $v$ participates in an instance of $\delta$-temporal motif type $M_i$. Practically, this is represented as a feature matrix indexed by Ethereum address, with one column per motif type. Each cell answers the question: how many times did this address participate in this type of time-local interaction pattern within the specified window $\delta$?
+
+This serves two purposes. First, it reduces the high-dimensional transaction graph to a compact, interpretable, and fixed-size representation per address. Second, it encodes behavioral structure rather than raw transaction statistics because an address involved in coordinated activity is expected to exhibit a distinct fingerprint compared to ordinary users, as coordinated behavior by definition produces recurring, time-constrained interaction patterns among a group of addresses. The fingerprint therefore creates a behavioral signature of each address showing small recurring temporal subgraph patterns.
+
+\section{Blockchain Relevance}
+\label{sec:blockchain_relevance}
+
+This section connects the foundations from the previous sections to the goal of this thesis, which is detecting coordinated malicious behaviour on Ethereum.
+
+The abstractions introduced above are not only mathematically convenient, they also match the structure of Ethereum transaction data. As shown in the section on Ethereum fundamentals and in Section~\ref{sec:graph}, Ethereum transactions are directed interactions between addresses, and every interaction is recorded together with persistent metadata such as a timestamp, a value and the gas usage. The consequence for this thesis is that Ethereum is not just a static graph, but a transaction graph that keeps changing over time.
+
+This temporal aspect is not a minor detail. Prior work on Ethereum anomaly detection argues that the time-related nature of transactions makes transaction graphs well suited for temporal network analysis \cite{pohlmann2019anomaly}. Studies of money trails report that activities such as phishing, gambling and money laundering show distinct cyclic transfer patterns that can only be identified when the order of transactions is preserved \cite{lal2021money}. Other work shows that suspicious behaviour often appears as rapid transaction bursts, sudden volume changes and short-window interaction patterns that a static graph cannot fully recover \cite{temporal_sampling_ethereum, catalog2024}. Once the graph from Section~\ref{sec:graph} is extended with timestamps, it becomes possible to analyse not only \emph{who} interacts with whom, but also \emph{when}, \emph{how often} and \emph{in which order}.
+
+As discussed in Section~\ref{sec:temporal_networks}, a static aggregation can show that a group of addresses is connected, but it cannot tell a slow, unrelated sequence of transfers apart from a tightly coordinated one that runs within minutes. This matters because coordinated malicious activity is rarely a single transaction. It usually consists of several transfers spread across multiple addresses, for example to hide the origin of funds, redistribute them or imitate legitimate activity.
+
+For this thesis, this has a direct methodological consequence. The graph-theoretic and temporal foundations from the previous sections turn raw transaction histories into higher-level behavioural patterns. Temporal motifs identify recurring, time-local interaction structures, and motif fingerprints make these structures measurable for each address. The result is a representation that is well suited for detecting coordinated behaviour, because coordination is expected to show up not only in who is connected, but in repeated temporal interaction patterns among groups of addresses. Earlier network studies already model Ethereum as a directed transaction network of addresses and transfers \cite{wu2021temporal}. The step taken here is to treat that network as temporal.
+
+This leads to the next step. If Ethereum is treated as a temporal transaction graph, the question is no longer only how addresses are connected, but which forms of coordinated malicious behaviour produce characteristic temporal interaction patterns. The following section therefore looks at coordinated malicious behaviour on Ethereum and describes the main categories considered in this thesis.
+
+\subsection{Types of Coordinated Malicious Behaviour on Ethereum}
+\label{sec:scam_types}
+The Ethereum blockchain hosts a broad range of fraudulent and malicious activities, made possible by the combination of pseudo-anonymity, programmable smart contracts, and the irreversibility of on-chain transactions. A taxonomy of cybercrime on the Ethereum blockchain derived from 5,644 verified malicious addresses identifies 19 distinct categories of fraud, with the total stolen funds across the observation period reaching \$1.65 billion on-chain alone, a figure that exceeds self-reported losses to the U.S. Federal Trade Commission by a factor of almost 16, underscoring the scale of underreporting \citep{hornuf2024cybercrime}. This thesis focuses on the subset of malicious activity that is \emph{coordinated}, meaning it involves multiple addresses interacting in structured, time-local patterns. The following categories are most relevant.
+
+\paragraph{Ponzi Schemes.}
+Ponzi schemes are the largest category of on-chain cybercrime by aggregate stolen value, accounting for approximately 60\% of all funds transferred to verified malicious addresses on Ethereum \citep{hornuf2024cybercrime}. Operators promise high returns to investors and use incoming deposits from new participants to pay earlier ones, creating the appearance of a functioning investment operation \citep{bartoletti2020smart}. On Ethereum, Ponzi logic is often encoded directly in smart contracts, which execute the redistribution of funds automatically and transparently \citep{chen2020survey}. The transaction structure is inherently coordinated: funds flow from many victim addresses into a central contract address, which then redistributes them outward in a pattern that recurs as long as new participants enter. This creates characteristic fan-in and fan-out motif patterns in the transaction graph.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamCoral,  label=above:{Investor 1}] (i1) at (-1.5,2.3) {};
+    \node[scamnode, fill=scamPurple, label=above:{Investor 2}] (i2) at ( 1.5,2.3) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Contract}]   (c)  at ( 0,0)    {};
+    % reciprocal pair between Investor 1 and Contract (deposit, then payout)
+    \draw[scamedge] (i1) to[bend left=20] node[edgelbl,left]  {1} (c);
+    \draw[scamedge] (c)  to[bend left=20] node[edgelbl,right] {3} (i1);
+    % single deposit edge from Investor 2
+    \draw[scamedge] (i2) to[bend right=8] node[edgelbl,right] {2} (c);
+  \end{tikzpicture}
+  \caption[Ponzi temporal motif]{Ponzi scheme. Two deposits arrive (edges~1,~2);
+    the payout to the earlier investor (edge~3) fires only after a fresh deposit,
+    so $t_1 < t_2 < t_3$.}
+  \label{fig:motif-ponzi}
+\end{figure}
+
+\paragraph{Phishing.}
+Phishing attacks involve deceiving users into approving malicious smart contract interactions or transferring funds to attacker-controlled addresses \citep{chen2020phishing}. In the Ethereum context, phishing has evolved beyond simple address impersonation to include signature-based token approval theft, where a victim signs a transaction that grants the attacker unlimited transfer rights over their tokens \citep{hornuf2024cybercrime}. The coordination aspect manifests in the use of drainer contracts: a central attacker-controlled contract collects funds from many victims in rapid succession, often within short time windows, producing a repeated fan-in temporal pattern anchored at the malicious contract address.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamPurple, label=above:{Victim 1}] (v1) at (-2.2,2.2) {};
+    \node[scamnode, fill=scamPurple, label=above:{Victim 2}] (v2) at (-0.6,2.2) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Drainer}]  (d)  at (-1.4,0)   {};
+    \node[scamnode, fill=scamCoral,  label=below:{Attacker}] (a)  at ( 1.6,0)   {};
+    \draw[scamedge] (v1) -- node[edgelbl,left]  {1} (d);
+    \draw[scamedge] (v2) -- node[edgelbl,right] {2} (d);
+    \draw[scamedge] (d)  -- node[edgelbl,above] {3} (a);
+  \end{tikzpicture}
+  \caption[Phishing temporal motif]{Phishing drainer. Victims are drained into a
+    central contract within a tight window (edges~1,~2), which then sweeps the
+    pooled funds to the attacker (edge~3).}
+  \label{fig:motif-phishing}
+\end{figure}
+
+\paragraph{Pump-and-Dump Schemes.}
+Pump-and-dump schemes involve a coordinated group of addresses accumulating a low-liquidity token, artificially inflating its price through simultaneous buy activity, and then selling their holdings once uninformed traders enter the market \citep{li2021cryptocurrency, hornuf2024cybercrime}. The coordination is explicit and time-critical: the buy phase and the sell phase each involve multiple addresses acting within narrow time windows in order to maximize price impact and exit before the market corrects. This produces dense, time-local clusters of transactions among a set of addresses, which are directly recoverable as temporal motifs.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamCoral,  label=below:{Colluder 1}] (c1) at (-2.6,0) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Pool}]       (p)  at ( 0,0)   {};
+    \node[scamnode, fill=scamCoral,  label=below:{Colluder 2}] (c2) at ( 2.6,0) {};
+    \node[scamnode, fill=scamPurple, label=above:{Retail}]     (u)  at ( 0,2)   {};
+    % reciprocal pairs: buy (1,2) then sell (4,5)
+    \draw[scamedge] (c1) to[bend left=25]  node[edgelbl,above] {1} (p);
+    \draw[scamedge] (p)  to[bend left=25]  node[edgelbl,below] {4} (c1);
+    \draw[scamedge] (c2) to[bend right=25] node[edgelbl,above] {2} (p);
+    \draw[scamedge] (p)  to[bend right=25] node[edgelbl,below] {5} (c2);
+    % retail buys the pump, between the two phases
+    \draw[scamedge] (u)  -- node[edgelbl,right] {3} (p);
+  \end{tikzpicture}
+  \caption[Pump-and-dump temporal motif]{Pump-and-dump. Each colluder buys
+    (edges~1,~2) and later sells (edges~4,~5) against the same pool, with the
+    retail victim's buy (edge~3) in between: $\{1,2\} \prec 3 \prec \{4,5\}$.}
+  \label{fig:motif-pumpdump}
+\end{figure}
+
+\paragraph{Rug Pulls and Exit Scams.}
+A rug pull occurs when the developers of a token project attract liquidity, typically by depositing token reserves into a decentralized exchange, and then abruptly withdraw all deposited funds, rendering the token worthless \citep{hornuf2024cybercrime, xia2021rugpull}. Exit scams follow a similar pattern at the level of initial coin offerings: funds raised from investors are transferred out of the project contract to attacker-controlled addresses immediately or within a short period after fundraising closes. Both patterns produce a concentrated outflow from a contract address to a small set of beneficiary addresses within a narrow time window, a temporal interaction structure that differs structurally from ordinary liquidity provision.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamPurple, label=above:{LP 1}]      (l1)  at (-2.2,2.2) {};
+    \node[scamnode, fill=scamPurple, label=above:{LP 2}]      (l2)  at (-0.6,2.2) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Pool}]      (p)   at (-1.4,0)   {};
+    \node[scamnode, fill=scamCoral,  label=below:{Developer}] (dev) at ( 1.6,0)   {};
+    \draw[scamedge]      (l1) -- node[edgelbl,left]  {1} (p);
+    \draw[scamedge]      (l2) -- node[edgelbl,right] {2} (p);
+    \draw[scamedgeheavy] (p)  -- node[edgelbl,above] {3} (dev);
+  \end{tikzpicture}
+  \caption[Rug pull temporal motif]{Rug pull / exit scam. Topologically identical
+    to phishing, but in a larger time window. Liquidity is added gradually (edges~1,~2),
+    then the whole pool is drained in one sudden transfer (edge~3).}
+  \label{fig:motif-rugpull}
+\end{figure}
+
+\paragraph{Money Laundering.}
+Money laundering on Ethereum typically involves moving illicitly obtained funds through a series of intermediate addresses to obscure their origin before depositing them at an exchange or converting them to a less traceable asset \citep{lal2021money}. This process, known as \emph{layering}, produces multi-hop transfer chains in which each hop occurs in rapid succession, as extended delay increases the risk of detection or address flagging. Temporal cycle analysis of Ethereum transactions has shown that money laundering exhibits distinct cyclic transfer patterns not observed in benign activity \citep{lal2021money}, making it a particularly strong candidate for temporal motif-based detection.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamCoral, label=above:{Source}]   (s)  at (-3, 0.6) {};
+    \node[scamnode, fill=scamTeal,  label=below:{Mule 1}]   (m1) at (-1,-0.6) {};
+    \node[scamnode, fill=scamTeal,  label=above:{Mule 2}]   (m2) at ( 1, 0.6) {};
+    \node[scamnode, fill=scamBlue,  label=below:{Exchange}] (e)  at ( 3,-0.6) {};
+    \draw[scamedge] (s)  -- node[edgelbl,above] {1} (m1);
+    \draw[scamedge] (m1) -- node[edgelbl,above] {2} (m2);
+    \draw[scamedge] (m2) -- node[edgelbl,above] {3} (e);
+    % Optional cyclic ("layering loop") variant -- funds return toward the origin:
+    % \draw[scamedge, dashed] (e) to[bend right=55] node[edgelbl,below]{4} (s);
+  \end{tikzpicture}
+  \caption[Money laundering temporal motif]{Money laundering (layering). Funds hop
+    through intermediary nodes rapidly before cashing out (edges~1--3).
+    The chain length~$k$ varies.}
+  \label{fig:motif-laundering}
+\end{figure}
+
+\paragraph{Giveaway Scams.}
+Giveaway scams involve the impersonation of reputable entities such as exchanges, public figures, or projects to solicit cryptocurrency transfers under the false promise of proportional returns \citep{hornuf2024cybercrime}. Structurally, they produce a rapid accumulation of inbound transfers from many victim addresses to a single attacker address within a short window, after which the address is typically abandoned. These constitute the second-largest category of Ethereum cybercrime by aggregate stolen value, with on-chain transfers totalling \$274 million in the period studied \citep{hornuf2024cybercrime}.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamPurple, label=above:{Victim 1}] (v1) at (-2,2.3) {};
+    \node[scamnode, fill=scamPurple, label=above:{Victim 2}] (v2) at ( 0,2.8) {};
+    \node[scamnode, fill=scamPurple, label=above:{Victim 3}] (v3) at ( 2,2.3) {};
+    \node[scamnode, fill=scamCoral]                          (a)  at ( 0,0)   {};
+    \node[font=\small, below=1.5mm of a] (alab) {Attacker};
+    \node[font=\footnotesize\itshape, text=gray, below=0.5mm of alab]
+      {abandoned --- no outflow};
+    \draw[scamedge] (v1) -- node[edgelbl,left]  {1} (a);
+    \draw[scamedge] (v2) -- node[edgelbl,right] {2} (a);
+    \draw[scamedge] (v3) -- node[edgelbl,right] {3} (a);
+  \end{tikzpicture}
+  \caption[Giveaway temporal motif]{Giveaway scam. A single inbound burst from
+    many victims (edges~1--3); the diagnostic feature is the absence of any
+    outgoing edge from the hub within the window.}
+  \label{fig:motif-giveaway}
+\end{figure}
+
+\vspace{0.5em}
+While the categories above differ in their mechanism and intent, they share a common structural property from the perspective of this thesis: all involve multiple addresses interacting in time-local, recurring patterns that leave distinguishable footprints in the temporal transaction graph. Table~\ref{tab:scam_types} summarizes the key characteristics of each category with respect to their temporal interaction structure.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of coordinated malicious behaviour types on Ethereum and their characteristic temporal interaction patterns.}
+\label{tab:scam_types}
+\begin{tabular}{p{3.2cm} p{5.2cm} p{4.8cm}}
+\toprule
+\textbf{Type} & \textbf{Mechanism} & \textbf{Temporal Pattern} \\
+\midrule
+Ponzi Scheme     & Redistribution of new deposits to old investors via contract & Cyclic fan-in / fan-out at contract address \\
+Phishing         & Approval theft or direct transfer to drainer contract         & Rapid fan-in to single attacker address \\
+Pump-and-Dump    & Coordinated buy/sell in narrow time window                    & Dense bidirectional cluster among colluding addresses \\
+Rug Pull         & Liquidity withdrawal from exchange contract                   & Concentrated outflow from contract to beneficiary set \\
+Money Laundering & Multi-hop layering to obscure fund origin                     & Sequential chained transfers with short inter-hop delays \\
+Giveaway Scam    & Impersonation to solicit inbound transfers                    & Short-window fan-in followed by address abandonment \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Summary}
+
+- 5-8 pages
+
+
+
+
+\chapter{Method} 
+\label{ch:method}
+
+\section{System overview}
+architecture diagram
+
+\section{Data acquisition}
+where the data is from, what datasets, describe datasets
+
+\label{sec:data_acquisition}
+
+\subsection{Data Collection Strategy}
+\label{sec:data_collection_strategy}
+
+Studying coordinated malicious behaviour in blockchain networks requires transaction data with reliable labels. Unlike conventional network datasets, blockchain data is pseudonymous: individual transactions are publicly observable on-chain, but the behavioural intent behind a given address can only be established through off-chain investigation, such as court records, exchange reports, or security researcher databases. This creates a fundamental data scarcity problem. \citep{shi2025realcats}.
+
+Three strategies are therefore used. First, an actively maintained, publicly available labelled dataset is used for the primary training and evaluation (HuggingFace Ethereum Fraud Dataset) \cite{fesevu2025ethfraud}. Second, a secondary dataset with known and extreme class imbalance (BLTE) tests whether the pipeline remains robust under realistic prevalence rates \cite{alemari2021labeled}. Third, a large Ethereum transaction dataset with multi-category criminal labels (Real-CATS) is used for cross-validation and temporal range coverage \citep{shi2025realcats}. Finally, a self-made synthetic dataset enables controlled ablation studies, allowing the contribution of individual motif types to be isolated without confounding effects from label noise or class overlap.
+\subsection{Datasets}
+\label{sec:datasets}
+
+\paragraph{HuggingFace Ethereum Fraud Detection Dataset.}
+\label{sec:dataset_hf}
+
+\textit{Source.} The dataset is hosted on Hugging Face Hub \cite{fesevu2025ethfraud} and provides Ethereum transaction records partitioned by calendar month. The pipeline loads the most recently available monthly partition; all experiments reported in this thesis use the August 2025 snapshot.
+
+\textit{Contents.} The August 2025 snapshot contains approximately 1{,}119{,}783 transactions spanning the reference period. Each transaction record includes source and destination address, Unix timestamp, value in wei, transaction hash, block number, a binary contract-creation flag, and the transaction fee in wei. Address-level labels are provided separately: 60{,}086 benign and 54{,}653 fraudulent addresses, resulting in a near-balanced fraud prevalence of approximately 47.6\,\%. This distribution is not usual for real-world blockchains but it suits well for our initial model development and evaluation because it avoids optimisation difficulties that arise in heavily imbalanced data.
+
+\textit{Suitability.} The dataset satisfies all pipeline requirements: raw transactions with timestamps enable temporal graph construction; labels are binary and unambiguous; and the volume of over one million transactions produces dense enough temporal neighbourhoods for motif counting even at short time windows ($\delta \leq 3{,}600$\,s).
+
+\paragraph{BLTE - Benchmark Labeled Transactions of Ethereum.}
+\label{sec:dataset_blte}
+
+\textit{Source.} BLTE was introduced by \citet{alemari2021labeled}; its construction and the prior results on it are described in Section~\ref{sec:relwork_datasets}. For this thesis it is used as obtained from the public GitHub release.
+
+\textit{Contents.} The dataset provides 71{,}250 transactions covering the period October 2017 to December 2019 \citep{alemari2021labeled}. Transactions are labelled at the record level as normal (0) or abnormal (1); the two classes are represented by 57{,}000 normal and 14{,}250 abnormal transactions, corresponding to a 20\,\% abnormal prevalence in the published benchmark configuration. Each record contains 14 cleansed fields from the Ethereum Classic transaction table, including hash, nonce, from/to address, value in wei, gas, gasPrice, block timestamp, block number, and block hash, supplemented by four labelling fields (\texttt{fromScam}, \texttt{toScam}, \texttt{fromCategory}, \texttt{toCategory}) \citep{alemari2021labeled}. Pre-computed per-address graph features, including degree statistics, transaction amounts, timing statistics, and gas price attributes, are distributed alongside the raw transactions and serve as the baseline feature set employed by prior work \citep{sanjalawe2023atd}.
+
+\textit{Class imbalance.} At the raw address level, scam addresses are far rarer than the 20\,\% transaction-level split suggests. The EtherScamDB labels cover only a fraction of all active addresses, reflecting real-world base rates for on-chain fraud. A native classifier that labels every record as benign exploits the class priors without detecting any malicious activity. Supervised experiments on BLTE must therefore use stratified splitting, minority-class re-weighting or SMOTE, and precision-recall metrics rather than accuracy as the primary evaluation criterion.
+
+\textit{Suitability.} BLTE is selected as the secondary evaluation dataset. Its primary value lies not in scale but in the ability to measure detection performance under realistic class imbalance, a dimension the HuggingFace dataset does not cover. The pre-computed graph features also enable a direct ablation: comparing BLTE's hand-crafted features against the pipeline's motif-based fingerprints under identical experimental conditions.
+
+\paragraph{Real-CATS - Real-world Criminal Account Transaction Set.}
+\label{sec:dataset_realcats}
+
+\textit{Source.} Real-CATS was introduced by \citet{shi2025realcats}; its design, label sources and the C3R characteristics are described in Section~\ref{sec:relwork_datasets}. For this thesis it is used as distributed publicly via GitHub, together with the complementary transaction records discussed below.
+
+\textit{Contents.} This thesis uses the Ethereum subset of Real-CATS, which covers 12{,}591 criminal and 16{,}020 benign addresses \citep{shi2025realcats}. Detailed transaction records are provided alongside statistical address profiles. The Ethereum transaction data is organised into five categories per address: normal transactions, internal transactions, and ERC-20, ERC-721, and ERC-1155 token transfers. Each record follows the Etherscan API schema (\texttt{from}, \texttt{to}, \texttt{timeStamp} in Unix seconds, \texttt{hash}, \texttt{value}, \texttt{isError} flag). The pipeline loader maps these to the standard schema (\texttt{from\_address}, \texttt{to\_address}, \texttt{timestamp}, \texttt{value}, \texttt{tx\_hash}) and filters failed transactions (\texttt{isError == "1"}).
+
+\textit{Labels and categories.} The criminal label scheme is multi-class. Categories include Ponzi schemes, phishing, money laundering, ransomware, impersonation scams, and further types as reported by Chainabuse users \citep{shi2025realcats}. For binary classification these are collapsed to criminal\,=\,1. This multi-class structure additionally enables a secondary experiment: whether different fraud archetypes produce statistically distinguishable temporal motif fingerprints (see Section~\ref{sec:detection_methods}).
+
+\textit{Transaction data.} A complementary Kaggle release provides per-address subdirectories containing the five JSON transaction files described above. After extracting normal ETH transfers for all labelled Ethereum addresses, the usable transaction corpus contains approximately 10{,}565{,}321 normal ETH transactions spanning 26{,}486 addresses (10{,}903 criminal and 15{,}583 benign) over the date range August 2015 to September 2024. An additional 2{,}105 addresses have no on-chain activity and are therefore absent from the archive. Because the archive is 12.5\,GB compressed, a preprocessing script selectively extracts only the \texttt{normal\_transactions.json} files for the labelled addresses rather than decompressing the full archive.
+
+\textit{Suitability.} With over 10.5 million transactions spanning nine years (2015-2024), Real-CATS is the largest and temporally broadest dataset available for this thesis. Its multi-category criminal labels allow studying whether different fraud archetypes produce distinguishable temporal motif fingerprints \citep{shi2025realcats}. It is used as the tertiary evaluation dataset, providing cross-validation evidence and temporal generalisation tests beyond the HuggingFace and BLTE sets.
+
+\paragraph{Synthetic Dataset.}
+\label{sec:dataset_synthetic}
+
+\textit{Source.} The synthetic dataset is generated on demand by a dedicated module (\texttt{src/synthetic\_data.py}) with configurable parameters: number of addresses, target fraction of coordinated-cluster addresses, intra-cluster transaction density, and temporal jitter.
+
+\textit{Design rationale.} Ground-truth labels in real blockchain data may be noisy and the coordination patterns are never perfectly clean. A synthetic dataset with explicitly injected coordination patterns allows controlled ablation: motif counts can be measured against a ground truth where the exact temporal structure is known. This isolates the contribution of each motif type and validates that the detection pipeline recovers injected structure before applying it to real data where ground truth is approximate.
+
+\textit{Suitability.} The synthetic dataset is not used for final evaluation; results on synthetic data do not generalise to real fraud. It is used exclusively for ablation studies and pipeline smoke-testing.
+
+% ----------------------------------------------------------
+\subsubsection{Dataset Comparison}
+\label{sec:dataset_comparison}
+
+Table~\ref{tab:dataset_comparison} provides an overview of the four datasets along the dimensions most relevant to the pipeline.
+
+\begin{table}[ht]
+\centering
+\caption{Comparison of datasets used in this thesis.}
+\label{tab:dataset_comparison}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{2.7cm} p{2.2cm} p{1.6cm} p{2.2cm} p{1.9cm}@{}}
+\toprule
+\textbf{Property} & \textbf{HuggingFace ETH Fraud} & \textbf{BLTE} & \textbf{Real-CATS} & \textbf{Synthetic} \\
+\midrule
+Raw transactions       & \checkmark          & \checkmark    & \checkmark\ (Kaggle) & \checkmark \\
+Binary labels          & \checkmark          & \checkmark    & \checkmark\ (collapsed) & \checkmark \\
+Transaction count      & $\approx$1.1\,M     & 71{,}250      & $\approx$10.6\,M    & configurable \\
+Labelled addresses     & $\approx$115\,k     & $\approx$17\,k & $\approx$28.6\,k (ETH) & configurable \\
+Class balance (fraud\%)& $\approx$48\,\%     & $\approx$20\,\% (tx-level) & $\approx$44\,\% criminal & configurable \\
+Date range             & 2025-08             & 2017--2019    & 2015--2024          & n/a \\
+Temporal density       & medium              & low           & high                & controlled \\
+Multi-class labels     & \texttimes          & \texttimes    & \checkmark          & \texttimes \\
+Freely available       & \checkmark          & \checkmark    & requires Kaggle     & \checkmark\ (generated) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ----------------------------------------------------------
+\subsubsection{Dataset Selection and Usage}
+\label{sec:dataset_selection}
+
+\textit{Primary (HuggingFace ETH Fraud).} Selected for model development and main evaluation. The near-balanced class distribution makes metric interpretation straightforward and avoids the need for aggressive re-sampling during initial algorithm selection. The streaming monthly partitions ensure the pipeline can be evaluated on data that post-dates the collection windows of both BLTE and Real-CATS.
+
+\textit{Secondary (BLTE).} Selected to stress-test the pipeline under realistic class imbalance at the transaction level \citep{alemari2021labeled}. Good performance on BLTE requires a method that is genuinely sensitive to minority-class structure rather than one that exploits class priors. This makes BLTE a particularly informative evaluation of the motif fingerprint's discriminative power and motivates the use of SMOTE and precision--recall evaluation throughout.
+
+\textit{Tertiary (Real-CATS).} Selected for temporal breadth (nine years of data) and multi-category labels \citep{shi2025realcats}. Used for cross-validation: a model trained on the HuggingFace dataset is evaluated on Real-CATS to test whether learned motif signatures transfer across datasets and time periods. The multi-class labels additionally enable a secondary analysis of whether Ponzi schemes, phishing addresses, and ransomware operators exhibit statistically different motif fingerprints, as discussed in Section~\ref{sec:detection_methods}.
+
+\textit{Ablation (Synthetic).} Used only for pipeline validation and controlled feature-importance studies. Not included in performance comparisons against real-world fraud detectors.
+
+
+\section{Temporal graph construction}
+
+\subsection{Graph Model}
+
+  The second stage of the pipeline transforms the cleaned transaction
+  DataFrame produced in Stage~1 into a graph representation suitable for
+  structural analysis and, subsequently, temporal motif extraction.
+  Each Ethereum address becomes a node and each transaction becomes a
+  directed, timestamped edge.
+
+  Formally, the transaction network is modelled as a
+  \emph{temporal directed multigraph}
+  $\mathcal{G} = (V, E, \tau, w)$, where
+  \begin{itemize}
+      \item $V \subseteq \mathcal{A}$ is the set of Ethereum addresses
+            appearing in the transaction dataset $\mathcal{A}$;
+      \item $E \subseteq V \times V$ is the multiset of directed edges,
+            where each element $(u, v) \in E$ represents a single
+            transaction from address $u$ to address $v$;
+      \item $\tau : E \to \mathbb{N}$ assigns a Unix timestamp (seconds)
+            to each edge; and
+      \item $w : E \to \mathbb{R}_{\geq 0}$ assigns the transferred
+            value in ETH to each edge.
+  \end{itemize}
+
+  The choice of a \emph{multigraph} is intentional: two addresses may
+  transact multiple times, and collapsing parallel edges into a single
+  weighted edge would destroy the temporal ordering that Stage~3 requires
+  for motif counting.
+  A directed structure is equally necessary because the direction of value
+  flow (sender to receiver)is the primary signal for most
+  behavioural patterns of interest (fan-out distributions, layering
+  chains, fund consolidation).
+
+  \subsection{Construction}
+
+  Graph construction is implemented in
+  \texttt{src/graph\_construction.py} and invoked from the pipeline
+  orchestrator in \texttt{main.py} as Stage~2:
+
+  \begin{lstlisting}[language=Python, caption={Stage~2 pipeline call
+  (\texttt{main.py}).}, label={lst:stage2}]
+  def _stage2_build_graph(txs: pd.DataFrame,
+                          compute_node_features: bool = True):
+      G = build_transaction_graph(txs)
+      node_features = get_node_features(G) if compute_node_features \
+                      else None
+      return G, node_features
+  \end{lstlisting}
+
+  The core construction relies on NetworkX's vectorised edgelist
+  importer, which avoids row-by-row Python iteration and is 20 to 50$\times$
+  faster than explicit loops on large transaction frames:
+
+  \begin{lstlisting}[language=Python, caption={Vectorised graph
+  construction (\texttt{src/graph\_construction.py}).},
+  label={lst:build_graph}]
+  def build_transaction_graph(df: pd.DataFrame) -> nx.MultiDiGraph:
+      candidate_attrs = ["value", "timestamp", "tx_hash"]
+      edge_attrs = [c for c in candidate_attrs if c in df.columns]
+      G = nx.from_pandas_edgelist(
+          df,
+          source="from_address",
+          target="to_address",
+          edge_attr=edge_attrs if edge_attrs else None,
+          create_using=nx.MultiDiGraph,
+      )
+      _compute_node_attributes(G, df)
+      return G
+  \end{lstlisting}
+
+  Each edge in the resulting \texttt{MultiDiGraph} carries three
+  attributes: \texttt{timestamp} (Unix seconds), \texttt{value}
+  (ETH), and \texttt{tx\_hash} (transaction identifier).
+  These attributes are stored directly on the NetworkX edge objects
+  and are consumed by the motif backend in Stage~3.
+
+  \subsection{Per-Node Structural Features}
+
+  Following graph construction, \texttt{get\_node\_features()} computes a
+  set of per-node structural descriptors that are later assembled into
+  the \texttt{aggregates} feature strategy (see Section~\ref{sec:detection_methods}).
+  Table~\ref{tab:node_features} lists the nine features computed for
+  every address node.
+
+  \begin{table}[h]
+  \centering
+  \caption{Per-node structural features computed by
+  \texttt{get\_node\_features()} in Stage~2.}
+  \label{tab:node_features}
+  \small
+  \begin{tabular}{@{}l p{5cm} p{4.3cm}@{}}
+  \toprule
+  \textbf{Feature} & \textbf{Definition} & \textbf{Fraud signal} \\
+  \midrule
+  \texttt{in\_degree}       & Number of incoming edges
+                             & Fund consolidation \\
+  \texttt{out\_degree}      & Number of outgoing edges
+                             & Mass distribution \\
+  \texttt{total\_degree}    & $\text{in} + \text{out}$
+                             & Overall activity \\
+  \texttt{degree\_ratio}    & $\text{in\_degree} /
+                               \max(\text{out\_degree}, 1)$
+                             & Receiver-only accounts \\
+  \texttt{total\_sent}      & $\sum_{e \in E_u^{\text{out}}} w(e)$
+                             & High-value draining \\
+  \texttt{total\_received}  & $\sum_{e \in E_u^{\text{in}}} w(e)$
+                             & Fund accumulation \\
+  \texttt{net\_flow}        & $\text{total\_received} -
+                               \text{total\_sent}$
+                             & Net beneficiary vs.\ distributor \\
+  \texttt{clustering\_coeff}& Fraction of address neighbours
+                               that are mutually connected
+                             & Tightly-knit clusters \\
+  \texttt{pagerank}         & Stationary probability of a
+                               random walk landing at $u$
+                             & Hub addresses \\
+  \bottomrule
+  \end{tabular}
+  \end{table}
+
+  Clustering coefficient and PageRank require a simple directed graph
+  (no parallel edges), they are therefore computed on a collapsed
+  \texttt{DiGraph} projection of the multigraph:
+
+  \begin{lstlisting}[language=Python, caption={Structural features
+  requiring graph simplification
+  (\texttt{src/graph\_construction.py}).},
+  label={lst:node_features}]
+  simple_G = nx.DiGraph(G)          # collapse parallel edges
+  clustering = nx.clustering(simple_G)
+  try:
+      pagerank = nx.pagerank(simple_G)
+  except nx.PowerIterationFailedConvergence:
+      pagerank = {n: 1.0 / len(nodes) for n in nodes}
+  \end{lstlisting}
+
+  The \texttt{degree\_ratio} feature deserves particular attention:
+  a value much greater than one identifies addresses that receive from
+  many counterparties but rarely send, consistent with a money-mule or
+  collection account role in a layering scheme.
+  Conversely, a value close to zero (many outgoing, few incoming)
+  matches the profile of a distribution hub in an airdrop-farming or
+  fan-out fraud pattern.
+
+  \subsection{Static Representation and the Role of Timestamps}
+
+  NetworkX does not model temporal dynamics natively. The
+  \texttt{MultiDiGraph} is a static snapshot of the full observation
+  window.
+  The temporal dimension is preserved, however, through the
+  \texttt{timestamp} attribute attached to every edge.
+  Stage~3 (Section~\ref{sec:motif_extraction}) reads these timestamps directly from the
+  edge attributes to enforce the $\delta$-second co-occurrence window
+  required by the temporal motif counting algorithm.
+  This separation of concerns with NetworkX for structural features and
+  the Raphtory backend for temporal motifs means that Stage~2 need
+  not be repeated when experimenting with different values of $\delta$;
+  only Stage~3 is re-run per $\delta$ in the sweep.
+
+\section{Temporal motif extraction}
+\label{sec:motif_extraction}
+
+\subsection{Motivation and Definition}
+
+  The structural features computed in Stage~2 capture the long-run
+  topology of the transaction network but are blind to \emph{when}
+  edges occur relative to one another.
+  Two addresses may have identical degree and PageRank yet behave
+  fundamentally differently. One may receive funds from many
+  counterparties within minutes and immediately forward them onward
+  (a layering pattern), while the other accumulates the same funds
+  gradually over months (ordinary usage).
+  Temporal motif extraction formalises this distinction.
+
+  Following \citet{paranjape2017motifs}, a \emph{$\delta$-temporal motif}
+  of size $k$ on $l$ nodes is a sequence of $k$ directed edges
+  $M = (e_1, e_2, \ldots, e_k)$ such that
+  \begin{enumerate}
+      \item the induced subgraph on the endpoints spans exactly $l$
+            distinct nodes;
+      \item the edges appear in non-decreasing timestamp order,
+            $\tau(e_1) \leq \tau(e_2) \leq \cdots \leq \tau(e_k)$; and
+      \item the entire sequence fits within the temporal window,
+            $\tau(e_k) - \tau(e_1) \leq \delta$.
+  \end{enumerate}
+
+  This work focuses on two-node and three-node, three-edge motifs
+  ($k = 3$, $l \in \{2, 3\}$), the catalogue studied by
+  \citet{paranjape2017motifs}.
+  For each address $v$ and each motif type $m$, the
+  \emph{per-node participation count} $f_m(v)$ is the number of
+  distinct $\delta$-temporal instances of $m$ in which $v$ appears.
+  Stacking all counts into a vector yields the
+  \emph{temporal motif fingerprint} $\mathbf{f}(v) \in \mathbb{N}^d$,
+  where $d$ depends on the backend: $d = 40$ for Raphtory (default)
+  and $d = 5$ for the NetworkX backend.
+
+  \subsection{Backend Strategy Pattern}
+
+  Three interchangeable motif-counting backends are available, all
+  exposing the same function contract (Listing~\ref{lst:contract}):
+
+  \begin{lstlisting}[language=Python,
+      caption={Shared backend contract (\texttt{src/motifs/base.py}).},
+      label={lst:contract}]
+  def count_per_node_motifs(
+      df: pd.DataFrame,        # from_address, to_address, timestamp, value
+      delta: int,              # temporal window in seconds
+      node_filter: set[str] | None = None,
+  ) -> pd.DataFrame:           # index=address, columns=motif_0..motif_N
+      ...
+  \end{lstlisting}
+
+  The pipeline selects a backend at runtime via \texttt{get\_backend()}
+  and calls the returned function without further branching:
+
+  \begin{lstlisting}[language=Python,
+      caption={Stage~3 dispatch (\texttt{main.py}).},
+      label={lst:stage3}]
+  def _stage3_count_motifs(txs, delta, backend, node_labels):
+      count_motifs = get_backend(backend)          # strategy pattern
+      node_filter  = set(node_labels.index) \
+                     if node_labels is not None else None
+      return count_motifs(txs, delta=delta, node_filter=node_filter)
+  \end{lstlisting}
+
+  The \texttt{node\_filter} parameter is a key efficiency optimisation:
+  in supervised mode, only addresses that carry a ground-truth label
+  need a fingerprint.
+  Passing the label index as a filter avoids computing motif counts for
+  the majority of unlabeled nodes in the transaction graph, which can
+  reduce Stage~3 wall-clock time by an order of magnitude on large
+  datasets such as Real-CATS.
+
+  \subsection{Raphtory Backend (Default)}
+
+  The primary backend wraps Raphtory's
+  \texttt{local\_temporal\_three\_node\_motifs} algorithm, which is
+  implemented in Rust and executes node batches in parallel.
+  The Raphtory graph is constructed by replaying each transaction as a
+  timestamped edge addition.
+
+  \begin{lstlisting}[language=Python,
+      caption={Raphtory graph construction and motif counting
+      (\texttt{src/motifs/raphtory\_backend.py}).},
+      label={lst:raphtory}]
+  g = Graph()
+  for row in df.itertuples(index=False):
+      g.add_edge(int(row.timestamp),
+                 str(row.from_address),
+                 str(row.to_address))
+
+  result = local_temporal_three_node_motifs(g, int(delta))
+  \end{lstlisting}
+
+  The algorithm returns a 40-dimensional integer vector per node,
+  decomposed as follows:
+  \begin{itemize}
+      \item \textbf{36 three-edge motifs on at most three nodes} —
+            following the Paranjape et al.\ catalogue
+            (Section~\ref{sec:motifs}), these comprise 4 two-node,
+            24 star, and 8 triangle motifs, distinguished by the
+            direction and temporal ordering of the three edges.
+      \item \textbf{4 additional per-node counts} — Raphtory reports
+            the two-node motifs from each endpoint's local perspective,
+            bringing the per-node vector to 40.
+            % VERIFY exact 36-vs-40 index layout against the Raphtory docs
+  \end{itemize}
+
+  The six structural classes and their relevance to fraud detection
+  are summarised in Table~\ref{tab:motif_classes}.
+
+  \begin{table}[h]
+  \centering
+  \caption{Structural motif classes (after Paranjape et al.\ 2017) and
+  their behavioural interpretation in Ethereum transaction networks.
+  Each class subsumes several $\delta$-temporal variants that differ in
+  edge ordering.}
+  \label{tab:motif_classes}
+  \begin{tabular}{p{3.5cm} p{4.5cm} p{5cm}}
+  \toprule
+  \textbf{Class} & \textbf{Structure} & \textbf{Fraud interpretation} \\
+  \midrule
+  Two-node, same direction &
+      $A \to B,\; A \to B,\; A \to B$ &
+      Repeated transfers; may indicate instalment-based extraction \\[4pt]
+  Two-node, mixed direction &
+      $A \to B,\; B \to A,\; A \to B$ &
+      Rapid back-and-forth; wash-trading or fee manipulation \\[4pt]
+  Star, all incoming &
+      $B \to A,\; C \to A,\; C \to A$ &
+      Funds consolidating at a single hub; money-mule collection \\[4pt]
+  Star, all outgoing &
+      $A \to B,\; A \to C,\; A \to C$ &
+      Mass distribution from one source; airdrop farming, Ponzi payouts \\[4pt]
+  Star, mixed &
+      $A \to B,\; C \to A,\; A \to C$ &
+      Relay node forwarding funds; layering intermediary \\[4pt]
+  Triangle (closed cycle) &
+      $A \to B,\; B \to C,\; C \to A$ &
+      Circular flow; wash trading, coordinated cycling \\
+  \bottomrule
+  \end{tabular}
+  \end{table}
+
+  The fingerprint columns are labelled \texttt{motif\_0} through
+  \texttt{motif\_39} in the order emitted by Raphtory.
+  For the exact visual catalogue mapping each index to a subgraph
+  diagram, see Figure~2 of \citet{paranjape2017motifs}.
+
+  \subsection{NetworkX Backend (Alternative)}
+
+  The NetworkX backend serves as a dependency-free baseline.
+  It implements a pure-Python sliding-window search over a
+  timestamp-sorted edge list:
+
+  \begin{lstlisting}[language=Python,
+      caption={Sliding-window temporal motif enumeration
+      (\texttt{src/motifs/networkx\_backend.py}).},
+      label={lst:nx_backend}]
+  for i, (src1, dst1, t1, _) in enumerate(edges_with_time):
+      for j in range(i + 1, len(edges_with_time)):
+          src2, dst2, t2, _ = edges_with_time[j]
+          if t2 - t1 > delta:
+              break           # all subsequent edges are outside window
+          ...                 # classify and record motif
+  \end{lstlisting}
+
+  The inner loop breaks as soon as the timestamp difference exceeds
+  $\delta$, exploiting the sorted order to avoid checking the full
+  $O(|E|^2)$ pair space.
+  Motifs are classified into five collapsed types by
+  \texttt{\_classify\_motif\_simple}:
+
+  \begin{itemize}
+      \item \textbf{fan\_out} — one sender, multiple distinct receivers
+            within $\delta$
+      \item \textbf{fan\_in} — multiple distinct senders, one receiver
+            within $\delta$
+      \item \textbf{cycle} — the last edge in the sequence returns to
+            the originator of the first edge
+      \item \textbf{chain} — sequential forwarding: the receiver of
+            edge $i$ becomes the sender of edge $i{+}1$
+      \item \textbf{reciprocal} — a two-node pair with edges in both
+            directions within $\delta$
+  \end{itemize}
+
+  These five types collapse the full 36-class Paranjape taxonomy into
+  coarser but human-interpretable categories, and are used in ablation
+  experiments to assess which structural signals are most predictive
+  independently of temporal ordering.
+
+  \subsection{Output: The Motif Fingerprint Matrix}
+
+  Both backends return a \texttt{pandas} DataFrame indexed by Ethereum
+  address, with one integer column per motif type (5 or 40 depending
+  on the backend).
+  Each cell $\mathbf{F}[v, m]$ contains the count of $\delta$-temporal
+  instances of motif type $m$ in which address $v$ participates.
+  Addresses with no temporal neighbours within any $\delta$-window
+  receive an all-zero row.
+
+  The fingerprint matrix $\mathbf{F} \in \mathbb{N}^{|V| \times d}$
+  is persisted to
+  \texttt{results/<dataset>\_fingerprints\_<backend>\_delta<N>.parquet}
+  and passed to Stage~4, where it is optionally joined with the
+  structural feature matrix from Stage~2 before training.
+
+  \subsection{The $\delta$ Sweep}
+
+  The temporal window $\delta$ governs which co-occurring transactions
+  are considered part of the same motif.
+  A narrow window (e.g.\ $\delta = 3{,}600$\,s, one hour) captures
+  rapid automated coordination such as bot-driven airdrop farms or
+  within-block layering chains; a wide window
+  (e.g.\ $\delta = 604{,}800$\,s, one week) catches slower manual
+  schemes.
+  Because the optimal $\delta$ is unknown before, the pipeline
+  supports a sweep: Stages~3--5 are repeated once per $\delta$ value,
+  each producing its own fingerprint file and result JSON.
+  A comparison table printed at the end of the run shows how F1,
+  ROC-AUC, and PR-AUC vary across window sizes, allowing the choice
+  of $\delta$ to be treated as a hyperparameter selection problem rather
+  than a fixed design decision.
+
+\section{Detection methods}
+\label{sec:detection_methods}
+\subsection{Feature Assembly (Stage 4)}
+
+  Before training or anomaly detection, Stage~4 assembles the per-address
+  feature matrix $\mathbf{X}$ by joining the outputs of Stages~2 and~3
+  according to the \texttt{--features} strategy.
+  Three strategies are available, each designed to answer a different
+  experimental question:
+
+  \begin{table}[h]
+  \centering
+  \caption{Feature assembly strategies and their composition
+  (\texttt{main.py}, \texttt{\_stage4\_assemble\_features}).}
+  \label{tab:feature_strategies}
+  \begin{tabular}{lp{5.5cm}p{4.5cm}}
+  \toprule
+  \textbf{Strategy} & \textbf{Content} & \textbf{Purpose} \\
+  \midrule
+  \texttt{aggregates} &
+      Per-address transaction statistics from Stage~1:
+      tx counts, value aggregates, inter-arrival times
+      (13 columns, $\delta$-independent) &
+      Fast baseline. Tests whether simple activity
+      statistics already separate the classes \\[4pt]
+  \texttt{motifs} &
+      Temporal motif fingerprint from Stage~3 only
+      (5 or 40 columns depending on backend) &
+      Ablation: isolates the contribution of
+      temporal structure \\[4pt]
+  \texttt{full} &
+      Motif fingerprint $\bowtie$ transaction aggregates
+      $\bowtie$ graph structural features from Stage~2
+      (degree, PageRank, clustering, net flow) &
+      Best practical performance; used for all
+      primary evaluation runs \\
+  \bottomrule
+  \end{tabular}
+  \end{table}
+
+  The \texttt{full} strategy is implemented as a sequence of left joins
+  on the address index, with missing values filled as zero:
+
+  \begin{lstlisting}[language=Python,
+      caption={Feature matrix assembly for the \texttt{full} strategy
+      (\texttt{main.py}).},
+      label={lst:stage4}]
+  X = (fingerprints
+       .join(aggregates,     how="left")
+       .join(node_features,  how="left")
+       .fillna(0))
+  \end{lstlisting}
+
+  Before any features are passed to Stage~5, labeled rows are isolated
+  by an inner join with the label series and extreme values are clipped:
+
+  \begin{lstlisting}[language=Python,
+      caption={Label alignment and numerical sanitation
+      (\texttt{main.py}, \texttt{\_prepare\_xy}).},
+      label={lst:prepare_xy}]
+  joined = features.join(node_labels.rename("is_scam"), how="inner")
+  y = joined["is_scam"].astype(int)
+  X = joined.drop(columns=["is_scam"])
+  X = X.replace([np.inf, -np.inf], np.nan).clip(-1e30, 1e30)
+  X = X[X.notna().all(axis=1)]
+  \end{lstlisting}
+
+  The inner join ensures that only addresses present in both the feature
+  matrix and the ground-truth label set contribute to training or
+  evaluation, silently discarding addresses whose labels are unknown.
+
+  \subsection{Supervised Detection}
+
+  \subsubsection{Model Selection}
+
+  Two tree-ensemble classifiers are supported and compared in the
+  experimental evaluation.
+
+  \paragraph{Random Forest.}
+  An ensemble of 100 decision trees trained with bootstrap sampling.
+  The maximum tree depth is capped at 10 to limit overfitting on
+  high-dimensional fingerprint matrices.
+  Class imbalance is corrected by setting
+  \texttt{class\_weight=\allowbreak"balanced"}, which re-weights each
+  sample inversely proportional to its class frequency:
+
+  \begin{lstlisting}[language=Python,
+      caption={Random Forest configuration
+      (\texttt{src/detection.py}).},
+      label={lst:rf}]
+  model = RandomForestClassifier(
+      n_estimators=100,
+      max_depth=10,
+      random_state=RANDOM_STATE,
+      n_jobs=-1,
+      class_weight="balanced",
+  )
+  \end{lstlisting}
+
+  \paragraph{XGBoost.}
+  A gradient-boosted tree ensemble with 100 rounds, maximum depth 6, and
+  a learning rate of 0.1. Class imbalance is handled through
+  \texttt{scale\_pos\_weight}, computed from the training fold as the
+  ratio of negative to positive examples:
+
+  \begin{lstlisting}[language=Python,
+      caption={XGBoost configuration with imbalance correction
+      (\texttt{src/detection.py}).},
+      label={lst:xgb}]
+  pos = int((y_train == 1).sum())
+  neg = int((y_train == 0).sum())
+  scale_pos_weight = (neg / pos) if pos > 0 else 1.0
+
+  model = XGBClassifier(
+      n_estimators=100,
+      max_depth=6,
+      learning_rate=0.1,
+      scale_pos_weight=scale_pos_weight,
+  )
+  \end{lstlisting}
+
+  Both models are trained with all available CPU cores
+  (\texttt{n\_jobs=-1}) and a fixed random seed (\texttt{RANDOM\_STATE=42})
+  for reproducibility.
+
+  \subsubsection{Training Protocol}
+
+  The labeled feature matrix is split into an 80\,\% training set and
+  a 20\,\% held-out test set using stratified sampling, preserving the
+  positive-class proportion in both partitions:
+
+  \begin{lstlisting}[language=Python,
+      caption={Stratified train--test split (\texttt{src/detection.py}).},
+      label={lst:split}]
+  X_train, X_test, y_train, y_test = train_test_split(
+      X, y,
+      test_size=0.2,
+      random_state=RANDOM_STATE,
+      stratify=y,
+  )
+  \end{lstlisting}
+
+  Before fitting the final model on the full training set,
+  five-fold cross-validation is run on the training partition to estimate
+  generalisation performance and detect overfitting:
+
+  \begin{lstlisting}[language=Python,
+      caption={Five-fold cross-validation (\texttt{src/detection.py}).},
+      label={lst:cv}]
+  cv_scores = cross_val_score(model, X_train, y_train,
+                               cv=5, scoring="f1")
+  \end{lstlisting}
+
+  F1 score is used as the cross-validation criterion rather than
+  accuracy, because accuracy is misleading under class imbalance:
+  a trivial classifier that labels every address as benign achieves
+  99.77\,\% accuracy on BLTE while detecting zero fraudulent addresses.
+  F1 balances precision and recall and rewards the classifier only when
+  it correctly identifies the rare positive class.
+
+  \subsection{Unsupervised Detection}
+
+  The unsupervised branch operates without ground-truth labels and is
+  therefore applicable to any dataset, including raw transaction streams
+  with no annotation.
+  It combines anomaly detection with cluster-based coordination
+  discovery in three steps.
+
+  \subsubsection{Feature Normalisation}
+
+  Motif fingerprints and structural features span different numeric
+  ranges. Raw motif counts can reach thousands while PageRank values
+  are in $[0, 1]$.
+  Before distance-based algorithms are applied, the feature matrix is
+  $z$-score normalised using \texttt{StandardScaler}:
+
+  \begin{lstlisting}[language=Python,
+      caption={Feature normalisation for unsupervised methods
+      (\texttt{src/feature\_engineering.py}).},
+      label={lst:scaler}]
+  scaler = StandardScaler()
+  X_scaled = pd.DataFrame(
+      scaler.fit_transform(X),
+      index=X.index, columns=X.columns,
+  )
+  \end{lstlisting}
+
+  \subsubsection{Anomaly Detection}
+
+  Two anomaly detectors are available:
+
+  \paragraph{Isolation Forest.}
+  Isolation Forest \citep{liu2008isolation} constructs an ensemble of
+  random binary trees and scores each point by the average path length
+  required to isolate it.
+  Anomalous addresses, which have unusual temporal motif fingerprints, are isolated in fewer splits and receive a more negative decision
+  score.
+  The contamination parameter is set to 0.1, meaning the algorithm
+  labels the 10\,\% of addresses with the most negative scores as
+  anomalous:
+
+  \begin{lstlisting}[language=Python,
+      caption={Isolation Forest anomaly detection
+      (\texttt{src/detection.py}).},
+      label={lst:iforest}]
+  model = IsolationForest(
+      contamination=0.1,
+      random_state=RANDOM_STATE,
+      n_jobs=-1,
+  )
+  labels = model.fit_predict(X)   # -1 = anomaly, 1 = normal
+  scores = model.decision_function(X)
+  \end{lstlisting}
+
+  \paragraph{DBSCAN.}
+  Density-Based Spatial Clustering of Applications with Noise
+  \citep{ester1996dbscan} groups addresses into dense regions of the
+  feature space and assigns points in low-density regions the noise label
+  $-1$.
+  When used for anomaly detection, DBSCAN is configured with
+  \texttt{eps=0.5} and \texttt{min\_samples=5}; noise points are treated
+  as anomalies.
+
+  \subsubsection{Coordinated Cluster Discovery}
+
+  Beyond per-address anomaly scores, coordinated fraud involves
+  \emph{groups} of addresses acting in concert.
+  A second DBSCAN pass with \texttt{min\_samples=3} clusters the
+  normalised feature space; the resulting groups are then scored by a
+  coordination metric that quantifies intra-cluster fingerprint
+  homogeneity:
+
+  \begin{equation}
+      s_{\text{coord}}(C) = \frac{1}{1 + \overline{\sigma}(C)},
+      \label{eq:coord_score}
+  \end{equation}
+
+  where $\overline{\sigma}(C)$ is the mean per-feature standard
+  deviation across all members of cluster $C$.
+  A score close to 1 indicates that all addresses in the cluster share
+  nearly identical temporal motif profiles, which is the hallmark of
+  programmatic coordination.
+  Clusters below a minimum size of three members are discarded.
+  The implementation is:
+
+  \begin{lstlisting}[language=Python,
+      caption={Coordination score computation
+      (\texttt{src/detection.py}).},
+      label={lst:coord}]
+  feature_std      = cluster_features.std().mean()
+  coordination_score = 1.0 / (1.0 + feature_std)
+  \end{lstlisting}
+
+  The top-10 clusters ranked by coordination score are written to the
+  results JSON alongside their member addresses, size, and mean
+  fingerprint, enabling post-hoc investigation of individual addresses.
+
+  \subsection{Threshold Baseline}
+
+  As a non-ML reference point, the pipeline includes a rule-based
+  detector (\texttt{detect\_threshold\_baseline}) that assigns a
+  weighted risk score to each address based on raw motif type counts:
+
+  \begin{equation}
+      r(v) = \sum_{m \in \mathcal{M}_{\text{sus}}}
+             c_m(v) \cdot w_m,
+      \label{eq:risk_score}
+  \end{equation}
+
+  where $\mathcal{M}_{\text{sus}} = \{\text{fan\_out},
+  \text{fan\_in}, \text{cycle}\}$ are the three motif types considered
+  suspicious, $c_m(v)$ is the count for address $v$, and the weights
+  are $w_{\text{fan\_out}} = w_{\text{fan\_in}} = 1.0$ and
+  $w_{\text{cycle}} = 1.5$ (cycles weighted higher as they indicate
+  closed-loop coordination).
+  An address is flagged if its total suspicious motif count meets or
+  exceeds a threshold $\tau$ (default $\tau = 5$, configurable in
+  \texttt{config.py}).
+  This baseline serves as an interpretable lower bound: if the ML
+  models cannot outperform a simple count threshold, the motif
+  fingerprint lacks discriminative signal.
+
+\section{Evaluation}
+
+\section{Implementation details}
+techstack etc.
+
+\subsection{Language and Runtime}
+
+The pipeline is implemented entirely in \textbf{Python~3.13}.
+Python was chosen for its dominance in the data-science and graph-analytics
+ecosystem: all major libraries used in this work scikit-learn,
+NetworkX, XGBoost, and Raphtory publish first-class Python bindings,
+and the language's interactive tooling (REPL, Jupyter) supports
+exploratory analysis during development.
+
+The minimum supported version is Python~3.11, imposed by Raphtory's
+Rust extension module, which uses the modern \texttt{match} statement
+internally and requires the \texttt{tomllib} standard-library module
+introduced in 3.11 for its build system.
+All experiments reported in this thesis were executed under
+Python~3.13.3 in an isolated virtual environment (\texttt{venv}).
+Dependencies are listed (with minimum-version bounds) in \texttt{requirements.txt} and installed with:
+
+\begin{lstlisting}[language=bash,
+  caption={Environment setup.},
+  label={lst:setup}]
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+\end{lstlisting}
+
+\subsection{Library Dependencies}
+
+Table~\ref{tab:libraries} lists all external dependencies, their
+installed versions, primary role in the pipeline, and the canonical
+installation source.
+
+\begin{table}[h]
+\centering
+% TODO(verify): the Version column below does not come from requirements.txt
+% (which uses lower bounds, e.g. pandas>=2.0). Replace these with your real
+% installed versions from `pip freeze` before submission.
+\caption{External Python libraries used in the pipeline.
+All packages are available on PyPI via \texttt{pip install <name>}
+unless noted otherwise.}
+\label{tab:libraries}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{p{2.8cm} p{1.3cm} p{1.5cm} p{7cm}}
+\toprule
+\textbf{Library} & \textbf{Version} & \textbf{Stage(s)} & \textbf{Role} \\
+\midrule
+
+\textbf{Raphtory} &
+  0.17.0 & 3 &
+  Primary temporal motif backend. Wraps a Rust implementation of
+  \citet{paranjape2017motifs}'s \texttt{local\_temporal\_three\_node\_motifs}
+  algorithm, parallelised across node batches. Produces a 40-dimensional
+  per-node fingerprint. Source: \url{https://pypi.org/project/raphtory} \\
+
+\textbf{NetworkX} &
+  3.6.1 & 2, 3, 6 &
+  Builds the temporal directed multigraph (\texttt{MultiDiGraph}) in
+  Stage~2, computes structural node features (PageRank, clustering
+  coefficient), and renders network visualisations in Stage~6.
+  Also serves as the alternative 5-type motif backend in Stage~3.
+  Source: \url{https://networkx.org} \\
+
+\textbf{pandas} &
+  3.0.2 & 1--5 &
+  Core tabular data structure used throughout the pipeline.
+  Transaction DataFrames, fingerprint matrices, feature matrices,
+  and label series are all \texttt{pandas} objects.
+  Source: \url{https://pandas.pydata.org} \\
+
+\textbf{NumPy} &
+  2.4.4 & 4, 5 &
+  Numerical array operations: clipping extreme values, computing
+  anomaly scores, and array conversions for sklearn estimators.
+  Source: \url{https://numpy.org} \\
+
+\textbf{scikit-learn} &
+  1.8.0 & 5 &
+  Provides the full supervised and unsupervised ML toolkit:
+  \texttt{RandomForestClassifier}, \texttt{IsolationForest},
+  \texttt{DBSCAN}, \texttt{StandardScaler},
+  \texttt{train\_test\_split}, \texttt{cross\_val\_score},
+  and all classification metrics (F1, ROC-AUC, PR-AUC).
+  Source: \url{https://scikit-learn.org} \\
+
+\textbf{XGBoost} &
+  3.2.0 & 5 &
+  Gradient-boosted tree classifier used as the second supervised
+  model. Supports \texttt{scale\_pos\_weight} for native class-imbalance
+  correction and multi-core training via OpenMP.
+  Source: \url{https://xgboost.readthedocs.io} \\
+
+\textbf{matplotlib} &
+  3.10.8 & 6 &
+  Produces all static figures: transaction network plots, motif
+  distribution bar charts, fingerprint heatmaps, ROC and
+  Precision-Recall curves, confusion matrices, and t-SNE cluster
+  projections.
+  Source: \url{https://matplotlib.org} \\
+
+\textbf{PyArrow} &
+  23.0.1 & 3 &
+  Serialises and deserialises motif fingerprint DataFrames to the
+  Parquet columnar format (\texttt{.parquet} files under
+  \texttt{results/}). Enables fast reload of large fingerprint
+  matrices without rerunning Stage~3.
+  Source: \url{https://arrow.apache.org/docs/python} \\
+
+\textbf{datasets} &
+  4.8.4 & 1 &
+  HuggingFace Hub client used to stream the
+  \textit{Ethereum Fraud Dataset} by month.
+  Handles authenticated access (\texttt{huggingface-cli login})
+  and shard-level downloading.
+  Source: \url{https://huggingface.co/docs/datasets} \\
+
+\textbf{zstandard} &
+  0.25.0 & 1 &
+  Decompresses the \texttt{.csv.zst} address-label file
+  (\texttt{addr\_labels\_big.csv.zst}, $\sim$1\,M addresses)
+  distributed with the HuggingFace dataset.
+  Source: \url{https://pypi.org/project/zstandard} \\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Central Configuration}
+
+All tuneable constants are collected in a single file,
+\texttt{config.py}, at the project root.
+This includes default values for every CLI flag, the random seed,
+train/test split ratio, directory paths, and column-name maps for
+external data formats (BigQuery, Etherscan).
+Keeping configuration in one location prevents magic numbers from
+scattering across modules and makes hyperparameter sweeps reproducible:
+
+\begin{lstlisting}[language=Python,
+  caption={Key constants in \texttt{config.py}.},
+  label={lst:config}]
+RANDOM_STATE      = 42
+TEST_SIZE         = 0.2
+DEFAULT_DELTA     = 3600          # seconds
+DEFAULT_DELTAS    = [3600, 86400, 604800]
+DEFAULT_MOTIF_BACKEND     = "raphtory"
+DEFAULT_SUPERVISED_MODEL  = "random_forest"
+DEFAULT_UNSUPERVISED_METHOD = "isolation_forest"
+DEFAULT_MOTIF_THRESHOLD   = 5
+\end{lstlisting}
+
+\subsection{Project Structure and Entry Point}
+
+The pipeline is invoked through a single command-line entry point,
+\texttt{main.py}, which parses arguments with the Python standard
+library's \texttt{argparse} module and orchestrates the six pipeline
+stages.
+Stage functions (\texttt{\_stage1\_load\_and\_clean}, \ldots,
+\texttt{\_stage6\_visualize}) are private module-level functions in
+\texttt{main.py}; all domain logic lives in the \texttt{src/} package:
+
+\begin{lstlisting}[caption={Project layout (abbreviated).},
+  label={lst:layout}]
+bachelor_thesis/
+main.py              CLI entry point; pipeline orchestrator
+config.py            Central constants and directory paths
+requirements.txt     Pinned dependencies
+src/
+ data_loading.py    Dataset loaders (BLTE, HuggingFace, Real-CATS)
+ graph_construction.py  Stage 2: MultiDiGraph + structural features
+ motifs/
+   __init__.py      get_backend() dispatcher
+   raphtory_backend.py  40-type Paranjape counter (Rust)
+   networkx_backend.py  5-type counter (pure Python)
+   snap_backend.py      Placeholder (non-functional)
+ feature_engineering.py  StandardScaler; temporal feature helpers
+ detection.py       RF, XGBoost, IsolationForest, DBSCAN, baseline
+ evaluation.py      Metrics, ROC/PR curves, results export
+ visualization.py   Network plots, heatmaps, t-SNE
+data/raw/            Raw datasets (gitignored)
+results/             Evaluation outputs and figures
+\end{lstlisting}
+
+\subsection{Artifact Persistence}
+
+Three file formats are used for intermediate and final artifacts:
+
+\begin{itemize}
+  \item \textbf{Pickle (\texttt{.pkl})} --- NetworkX graphs are
+        serialised with Python's \texttt{pickle} module after
+        Stage~2 (\texttt{--mode graph}).
+        This avoids rebuilding the graph when iterating on later
+        stages.
+
+  \item \textbf{Parquet (\texttt{.parquet})} --- Motif fingerprint
+        matrices are written via PyArrow after Stage~3
+        (\texttt{--mode motifs}).
+        Parquet is chosen over CSV for its columnar layout (fast
+        column-wise access for feature selection), lossless integer
+        storage (motif counts are exact), and compact size.
+
+  \item \textbf{JSON (\texttt{.json})} --- Evaluation metrics,
+        cluster summaries, and pipeline configuration are written
+        by \texttt{evaluation.export\_results()} using the Python
+        standard library's \texttt{json} module.
+        NumPy scalar types are recursively converted to native
+        Python types before serialisation.
+\end{itemize}
+
+All artifacts are written under \texttt{results/} with a structured
+filename tag that encodes dataset, mode, feature strategy, backend,
+and $\delta$ value, for example:
+
+\begin{lstlisting}[caption={Example result filenames.},
+  label={lst:filenames}]
+results/realcats_fingerprints_raphtory_delta86400.parquet
+results/results_realcats_supervised_full_raphtory_delta86400.json
+results/huggingface_gnn_graph.pkl
+\end{lstlisting}
+
+\subsection{Reproducibility}
+
+Full reproducibility is ensured by three measures.
+First, the random seed \texttt{RANDOM\_STATE = 42} is passed to every
+stochastic component: \texttt{train\_test\_split},
+\texttt{RandomForestClassifier}, \texttt{XGBClassifier},
+\texttt{IsolationForest}, and NumPy operations in synthetic data
+generation.
+Second, all dependencies are listed with minimum-version bounds in
+\texttt{requirements.txt}, so installing into a fresh \texttt{venv}
+reproduces a compatible environment.
+Third, the Raphtory Rust backend is deterministic for a fixed graph
+and $\delta$ value: its parallelism operates over independent node
+batches with no shared mutable state, so results do not vary across
+CPU counts.
+
+
+Develop your hypotheses, describe your mental model for the research question.
+
+
+
+\chapter{Results} What are the findings? Describe the results of your investigation (e.g. hypothesis rejection). Use appropriate visualization (e.g., tables, charts).
+\section{Section 1}\dots
+
+\chapter{Discussion} What does it mean? Discuss the theoretical and practical implications of your findings as well as the limitations of your study.
+\section{Theoretical Implications}\dots
+\section{Limitations}\dots
+
+\chapter{Conclusion \& Outlook} Repeat the problem and its relevance, as well as the contribution (plus quantitative results). Provide an outlook for further research steps.
+
+
+Coordination patterns that flow primarily through smart contract layers (DeFi exploits,
+ contract-mediated Ponzi schemes) are not captured by normal ETH transfers alone. Extending
+ the pipeline to multi-layer temporal motif analysis across transaction types is left for future
+ work.
+
+
+%% ----------------
+%% |   Appendix   |
+%% ----------------
+% IM Style: No additional blank page
+%\cleardoublepage
+
+%Use the appendix.tex file in the text folder to edit
+
+\input{text/appendix} 
+
+
+
+
+%% --------------------
+%% |   Bibliography   |
+%% --------------------
+%%\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{\bibname}
+
+% IM Style
+\bibliographystyle{apalike}
+
+%What research is referred to?
+
+% Informatik-Style
+%\iflanguage{english}
+%{\bibliographystyle{IEEEtranSA}}	% english style
+%{\bibliographystyle{babalpha-fl}}	% german style
+												  
+% Use IEEEtran for numeric references
+%\bibliographystyle{IEEEtranSA})
+
+\bibliography{thesis}
+
+
+\end{document}

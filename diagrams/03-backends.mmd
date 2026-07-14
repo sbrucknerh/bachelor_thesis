@@ -1,0 +1,7 @@
+flowchart TD
+    CALL["_stage3_count_motifs(txs, δ, backend, labels)"] --> GB["get_backend(backend)"]
+    GB --> CONTRACT["count_per_node_motifs(df, delta, node_filter)<br/>→ DataFrame indexed by address"]
+
+    CONTRACT --> NXr["networkx_backend<br/>pure-Python sliding window<br/>cols: motif_fan_out … motif_reciprocal (5)"]
+    CONTRACT --> RAPHr["raphtory_backend<br/>Rust local_temporal_three_node_motifs<br/>cols: motif_0 … motif_39 (40)"]
+    CONTRACT --> SNAPr["snap_backend<br/>raises RuntimeError<br/>(would be motif_0 … motif_35)"]

@@ -1,0 +1,27 @@
+flowchart TD
+    subgraph SRC["Data sources (stage 1 picks one)"]
+        direction LR
+        SYN["Synthetic generator<br/><i>synthetic_data.py</i>"]
+        FILE["Local file<br/>CSV / JSON / Parquet"]
+        BLTE["BLTE<br/>labeled dataset"]
+        HF["HuggingFace<br/>raw stream + GNN subset"]
+    end
+
+    SRC --> S1
+
+    S1["<b>Stage 1</b> · Load &amp; clean transactions<br/>+ per-address labels &amp; tx aggregates<br/><i>data_loading.py · _aggregate_tx_features</i>"]
+    S2["<b>Stage 2</b> · Build MultiDiGraph<br/>+ per-node structural features<br/><i>graph_construction.py</i>"]
+    S3["<b>Stage 3</b> · Temporal motif fingerprints<br/>per node, per δ<br/><i>motifs/ via get_backend()</i>"]
+    S4["<b>Stage 4</b> · Assemble feature matrix<br/>aggregates · motifs · full<br/><i>_stage4_assemble_features</i>"]
+    S5["<b>Stage 5</b> · Train / detect<br/><i>detection.py + evaluation.py</i>"]
+    S6["<b>Stage 6</b> · Visualize<br/><i>visualization.py</i>"]
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+
+    S2 -.->|"--mode graph stops here"| G[("results/&lt;ds&gt;_graph.pkl")]
+    S3 -.->|"--mode motifs stops here"| FP[("results/&lt;ds&gt;_fingerprints_&lt;backend&gt;_delta&lt;N&gt;.parquet")]
+    S5 --> J[("results/results_&lt;tag&gt;.json")]
+    S6 --> FIG[["matplotlib figures"]]
+
+    classDef out fill:#e2f0d9,stroke:#548235;
+    class G,FP,J,FIG out;
