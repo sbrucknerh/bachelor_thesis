@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from src.experiments.datasets import (
+    campaign_group,
+    count_target_activity,
+    extract_target_edges,
+    select_dual_hf_cohorts,
+)
+
+
+def test_campaign_grouping_is_whitelisted():
+    assert campaign_group("Multichain Hack Alert 12; take-action", "0x1") == "campaign:multichain_hack"
+    assert campaign_group("Fake_Phishing3192", "0x2") == "address:0x2"
+    assert campaign_group("Phishing", "0x3") == "address:0x3"
+
+
+def test_activity_counts_self_loop_once_and_extracts_union(tmp_path):
+    source = tmp_path / "edges.parquet"
+    table = pa.table(
+        {
+            "src_id": pa.array([1, 1, 3], type=pa.uint64()),
+            "dst_id": pa.array([1, 2, 1], type=pa.uint64()),
+            "ts": [100, 101, 102],
+            "value_wei": ["1", "2", "3"],
+            "block_number": [1, 2, 3],
+            "tx_hash": ["a", "b", "c"],
+        }
+    )
+    pq.write_table(table, source)
+    activity = count_target_activity(source, [1, 2])
+    assert activity.loc[1] == 3
+    assert activity.loc[2] == 1
+
+    output = tmp_path / "selected.parquet"
+    audit = extract_target_edges(source, [2], output)
+    selected = pd.read_parquet(output)
+    assert audit == {"source_edges": 3, "selected_edges": 1}
+    assert selected.loc[0, "event_signature"] == "b|1|2"
+
+
+def test_activity_and_edge_extraction_respect_exact_row_bound(tmp_path):
+    source = tmp_path / "edges.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "src_id": pa.array([1, 1, 1, 1], type=pa.uint64()),
+                "dst_id": pa.array([2, 2, 3, 4], type=pa.uint64()),
+                "ts": [100, 101, 102, 103],
+                "value_wei": ["1", "2", "3", "4"],
+                "block_number": [1, 2, 3, 4],
+                "tx_hash": ["a", "b", "c", "d"],
+            }
+        ),
+        source,
+        row_group_size=4,
+    )
+
+    activity = count_target_activity(source, [1, 4], batch_size=4, max_rows=3)
+    assert activity.loc[1] == 3
+    assert 4 not in activity.index
+
+    output = tmp_path / "bounded.parquet"
+    audit = extract_target_edges(
+        source, [1], output, batch_size=4, max_rows=3
+    )
+    assert audit == {
+        "source_edges": 4,
+        "source_edges_scanned": 3,
+        "selected_edges": 3,
+    }
+    assert list(pd.read_parquet(output)["tx_hash"]) == ["a", "b", "c"]
+
+
+def test_dual_cohorts_are_disjoint_and_apply_locked_activity_eligibility():
+    rows = []
+    node = 0
+    high_activity_node = None
+    for label in (0, 1):
+        for contract in (0, 1):
+            for quintile in range(5):
+                for offset in range(12):
+                    node += 1
+                    is_high_activity = (
+                        label == 0 and contract == 0 and quintile == 4 and offset == 0
+                    )
+                    if is_high_activity:
+                        high_activity_node = node
+                    rows.append(
+                        {
+                            "node_id": node,
+                            "address": str(node),
+                            "label": label,
+                            "is_contract": contract,
+                            "activity_quintile": quintile,
+                            "activity": 10**9 if is_high_activity else quintile + 1,
+                        }
+                    )
+    rows.append(
+        {"node_id": 9999, "address": "9999", "label": 0, "is_contract": 0,
+         "activity_quintile": pd.NA, "activity": 0}
+    )
+    rows.append(
+        {"node_id": 9998, "address": "9998", "label": 0, "is_contract": 0,
+         "activity_quintile": pd.NA, "activity": 2}
+    )
+    targets = pd.DataFrame(rows)
+    selected, audit = select_dual_hf_cohorts(
+        targets, prevalence_size=20, controlled_per_stratum=2
+    )
+    prevalence = set(selected.loc[selected["cohort"] == "prevalence", "node_id"])
+    controlled = set(selected.loc[selected["cohort"] == "controlled", "node_id"])
+    assert prevalence.isdisjoint(controlled)
+    assert 9999 not in set(selected["node_id"])
+    assert 9998 not in set(selected["node_id"])
+    assert high_activity_node not in set(selected["node_id"])
+    assert audit["inactive_targets"] == 1
+    assert audit["insufficient_activity_targets"] == 97
+    assert audit["high_activity_targets_excluded"] == 1
+    assert audit["minimum_incident_edges"] == 3
+
+
+def test_mixed_blte_timestamp_formats_are_supported(tmp_path):
+    import zipfile
+
+    dataset = tmp_path / "blte"
+    dataset.mkdir()
+    transactions = pd.DataFrame(
+        {
+            "hash": ["a", "b"],
+            "from_address": ["0xa", "0xb"],
+            "to_address": ["0xb", "0xa"],
+            "value": [1, 2],
+            "block_timestamp": ["2017-10-16 05:26:53 UTC", "2017-10-16 08:31:44+00:00"],
+            "block_number": [1, 2],
+            "transaction_index": [0, 1],
+        }
+    )
+    with zipfile.ZipFile(dataset / "Dataset.zip", "w") as archive:
+        archive.writestr("Dataset/Dataset.csv", transactions.to_csv(index=False))
+    pd.DataFrame({"Address": ["0xa", "0xb"], "Scam": [0, 1]}).to_csv(
+        dataset / "Featuers_Extraction.csv", index=False
+    )
+    from src.experiments.datasets import load_blte_for_experiment
+
+    events, labels = load_blte_for_experiment(dataset)
+    assert len(events) == 2
+    assert len(labels) == 2
+    assert events["timestamp"].is_monotonic_increasing

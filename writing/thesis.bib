@@ -194,15 +194,19 @@
   doi       = {10.1126/science.298.5594.824}
 }
 
-@article{Yin2018,
-  author    = {Yin, Haozhe and others},
+%% adjusted during protocol-v3 review: previous entry ("Journal of the ACM,
+%% Vol. 37, No. 4, Article 111, 2018") was placeholder/template metadata that
+%% does not correspond to a real publication. The actual survey is the 2025
+%% arXiv paper below.
+@article{Yin2025,
+  author    = {Yin, Haozhe and Wang, Kai and Zhang, Wenjie and
+               He, Yizhang and Zhang, Ying and Lin, Xuemin},
   title     = {Motif Counting in Complex Networks: A Comprehensive Survey},
-  journal   = {Journal of the ACM},
-  volume    = {37},
-  number    = {4},
-  pages     = {Article 111},
-  year      = {2018},
-  publisher = {ACM}
+  journal   = {arXiv preprint arXiv:2503.19573},
+  year      = {2025},
+  eprint    = {2503.19573},
+  archivePrefix = {arXiv},
+  url       = {https://arxiv.org/abs/2503.19573}
 }
 
 @article{McDonnell2014,
@@ -225,7 +229,10 @@
   url          = {https://ethereum.github.io/yellowpaper/paper.pdf}
 }
 
-@article{wu2021temporal,
+%% adjusted during protocol-v3 review: key renamed wu2021temporal ->
+%% wu2020temporal; the entry's year was already (correctly) 2020, only the key
+%% was mislabeled.
+@article{wu2020temporal,
   author    = {Wu, Jiajing and Liu, Jieli and Zhao, Weili and Zheng, Zibin},
   title     = {Modeling and Understanding {Ethereum} Transaction Records via a Complex Network Approach},
   journal   = {IEEE Transactions on Circuits and Systems II: Express Briefs},
@@ -246,6 +253,10 @@
   doi       = {10.1145/3366423.3380103}
 }
 
+%% VERIFY (protocol-v3 review): publication year is ambiguous -- the PDF below
+%% was hosted in 2019, but indexes report a January 2021 publication with four
+%% authors (Wittek, Wittek, Ionita, Pohlmann). Confirm which version you used;
+%% the text key stays pohlmann2019anomaly until confirmed.
 @article{pohlmann2019anomaly,
   author    = {Wittek, Kevin and Wittek, Neslihan and Pohlmann, Norbert},
   title     = {Statistical Anomaly Detection in {Ethereum} Transaction Graphs},
@@ -279,21 +290,38 @@
   url       = {https://openreview.net/pdf?id=AhyjbXSmUN}
 }
 
-@inproceedings{catalog2024,
-  title     = {{CATALOG}: Exploiting Joint Temporal Dependencies for Phishing Detection in {Ethereum}},
-  booktitle = {OpenReview / ICLR},
-  year      = {2024},
-  url       = {https://openreview.net/pdf?id=POGlYL3YxN}
+%% adjusted during protocol-v3 review: previous entry ("OpenReview / ICLR,
+%% 2024", no authors) was wrong; the paper was published at The Web Conference
+%% (WWW) 2025 with the authors and DOI below.
+@inproceedings{ghoshcatalog2025,
+  author    = {Ghosh, Medhasree and Srivastava, Swapnil and
+               Upadhyaya, Apoorva and Halder, Raju and Chandra, Joydeep},
+  title     = {{CATALOG}: Exploiting Joint Temporal Dependencies for Enhanced
+               Phishing Detection on {Ethereum}},
+  booktitle = {Proceedings of the ACM Web Conference 2025 (WWW '25)},
+  year      = {2025},
+  publisher = {ACM},
+  doi       = {10.1145/3696410.3714903}
 }
 
-@article{hornuf2024cybercrime,
+%% adjusted during protocol-v3 review: previous entry cited the CESifo working
+%% paper (No. 10598, which is from 2023, not 2024); the published version is in
+%% the Journal of Banking & Finance (2025), cited below.
+%% VERIFY: the figures quoted in the thesis ($1.65B on-chain, 19 categories,
+%% ~16x FTC underreporting, $274M giveaways, ~60% Ponzi share) were taken from
+%% the working paper -- re-check them against the journal version.
+@article{hornuf2025cybercrime,
   author    = {Hornuf, Lars and Momtaz, Paul P. and Nam, Rachel J. and Yuan, Ye},
   title     = {Cybercrime on the {Ethereum} Blockchain},
-  journal   = {CESifo Working Paper No. 10598},
-  year      = {2024},
-  url       = {https://www.ifo.de/DocDL/cesifo1_wp10598.pdf}
+  journal   = {Journal of Banking \& Finance},
+  volume    = {175},
+  pages     = {107419},
+  year      = {2025},
+  doi       = {10.1016/j.jbankfin.2025.107419}
 }
 
+%% protocol-v3 review: kept as the published FGCS 2020 version. The arXiv
+%% preprint (1703.03779) is from 2017 -- do not cite it as bartoletti2017smart.
 @article{bartoletti2020smart,
   author    = {Bartoletti, Massimo and Carta, Salvatore and Cimoli, Tiziana and Saia, Roberto},
   title     = {Dissecting {Ponzi} Schemes on {Ethereum}: Identification, Analysis, and Impact},
@@ -358,9 +386,6 @@
   doi       = {10.1007/978-3-030-34223-4_2}
 }
 
-%% ----------------------------------------------------------
-%%  Method references (added during review)
-%% ----------------------------------------------------------
 @inproceedings{liu2008isolation,
   author    = {Liu, Fei Tony and Ting, Kai Ming and Zhou, Zhi-Hua},
   title     = {Isolation Forest},
@@ -383,7 +408,8 @@
   publisher = {AAAI Press}
 }
 
-%% trans2vec is introduced here (NOT in wu2021temporal).
+%% protocol-v3 review: trans2vec is introduced here (published IEEE TSMC 2022,
+%% arXiv preprint 2019). The text cites this key; do not rename to Wu2019phishers.
 @article{wu2020phishers,
   author    = {Wu, Jiajing and Yuan, Qi and Lin, Dan and You, Wei and Chen,
                Weili and Chen, Chuan and Zheng, Zibin},
@@ -398,7 +424,6 @@
   note      = {Introduces trans2vec; preprint arXiv:1911.09259 (2019)}
 }
 
-%% TODO(verify): confirm these two are the exact Chen 2020 papers you intended.
 @article{chen2020phishing,
   author    = {Chen, Liang and Peng, Jiaying and Liu, Yang and Li, Jintang
                and Xie, Fenfang and Zheng, Zibin},
