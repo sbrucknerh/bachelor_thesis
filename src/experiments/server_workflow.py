@@ -184,6 +184,7 @@ def run_thesis_workflow(
         for path in (
             snapshot / "gnn_dataset/edges_all/edges.parquet",
             snapshot / "gnn_dataset/labels/targets_global.parquet",
+            snapshot / "addr_labels_balanced.csv.zst",
             zip_path,
             label_path / "CE.tsv",
         )

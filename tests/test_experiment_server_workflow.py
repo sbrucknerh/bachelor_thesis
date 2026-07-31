@@ -17,6 +17,7 @@ def test_one_command_workflow_prepares_parallel_roots_and_verifies(
     (snapshot / "gnn_dataset/labels/targets_global.parquet").write_bytes(
         b"labels"
     )
+    (snapshot / "addr_labels_balanced.csv.zst").write_bytes(b"descriptions")
     realcats_zip = tmp_path / "real-cats.zip"
     realcats_zip.write_bytes(b"zip")
     realcats_labels = tmp_path / "labels"

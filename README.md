@@ -29,33 +29,75 @@ venv/bin/pip install -r requirements-results.txt
 
 ### 2. Place the datasets
 
-The Hugging Face snapshot must contain:
+#### Hugging Face (RQ1/RQ2)
+
+Source: [Ethereum Fraud Dataset by Activity](https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity)
+
+Download only the three files used by the pipeline into the standard Hugging
+Face cache. This is approximately 21.6 GB, not the complete dataset repository:
+
+```bash
+venv/bin/hf download fesevu/ethereum_fraud_dataset_by_activity \
+  gnn_dataset/edges_all/edges.parquet \
+  gnn_dataset/labels/targets_global.parquet \
+  addr_labels_balanced.csv.zst \
+  --repo-type dataset
+```
+
+The downloaded snapshot must contain:
 
 ```text
 gnn_dataset/edges_all/edges.parquet
 gnn_dataset/labels/targets_global.parquet
+addr_labels_balanced.csv.zst
 ```
 
-The runner automatically searches the local Hugging Face cache. When the
+The runner automatically searches the local Hugging Face cache. "Streaming"
+in this project means that PyArrow reads this local Parquet file in bounded
+batches instead of loading it fully into RAM. It is not remote network
+streaming, so the files must be downloaded once before the run. When the
 snapshot is elsewhere, pass `--hf-snapshot /path/to/snapshot` to the run
 command.
 
-Place the Real-CATS files at:
+#### Real-CATS (RQ3/RQ4)
+
+- Labels: [official Real-CATS GitHub repository](https://github.com/sjdseu/Real-CATS)
+- Transactions: [official Real-CATS Kaggle dataset](https://www.kaggle.com/datasets/lvd312393/real-cats)
+
+Clone the labels repository into the expected location:
+
+```bash
+mkdir -p data/raw/realcats_transactions
+git clone --depth 1 https://github.com/sjdseu/Real-CATS.git \
+  data/raw/realcats_dataset
+```
+
+Download the transaction archive from Kaggle and place it without extracting
+it at:
 
 ```text
 data/raw/realcats_transactions/real-cats.zip
-data/raw/realcats_dataset/CE.tsv
 ```
 
-The smoke test additionally expects:
+The transaction ZIP is read directly. Do not process it with
+`scripts/extract_realcats.py` for the thesis experiments.
+
+#### BLTE (smoke test only)
+
+Source: [authors' labeled Ethereum transaction repository](https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network)
+
+```bash
+git clone --depth 1 \
+  https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network.git \
+  data/raw/ethereum_dataset_labelled
+```
+
+The smoke test reads these two files from that clone:
 
 ```text
 data/raw/ethereum_dataset_labelled/Dataset.zip
 data/raw/ethereum_dataset_labelled/Featuers_Extraction.csv
 ```
-
-The ZIP is read directly. Do not extract it with
-`scripts/extract_realcats.py` for the thesis experiments.
 
 ## Usage
 
