@@ -375,6 +375,8 @@ def execute_realcats(
         }
         write_json_exclusive(paths.metrics / f"realcats_{variant}_results.json", summary)
         variant_summaries.append(summary)
+        if telemetry:
+            telemetry.mark_overall(f"unit:realcats-eval:{variant}")
 
     alpha = float(protocol["alpha"])
     (

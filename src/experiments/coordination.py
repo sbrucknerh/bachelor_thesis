@@ -139,6 +139,10 @@ def execute_parallel(
         runner = Path(__file__).resolve().parents[2] / "scripts" / "run_results.py"
         os.set_inheritable(host_lock.fd, True)
         processes = {}
+        progress_base = int(os.environ.get("THESIS_PROGRESS_POSITION", "0"))
+        progress_stride = (
+            1 if os.environ.get("THESIS_HIDE_ROOT_TOTAL", "0") == "1" else 2
+        )
         for position, (name, root, threads) in enumerate(
             (
                 ("huggingface", hf_root, hf_threads),
@@ -164,7 +168,9 @@ def execute_parallel(
             if resume:
                 command.append("--resume")
             environment = os.environ.copy()
-            environment["THESIS_PROGRESS_POSITION"] = str(position)
+            environment["THESIS_PROGRESS_POSITION"] = str(
+                progress_base + position * progress_stride
+            )
             environment["THESIS_PROGRESS_LABEL"] = name
             processes[name] = subprocess.Popen(
                 command,

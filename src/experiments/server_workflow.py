@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -156,6 +157,7 @@ def run_thesis_workflow(
     resume: bool = False,
 ) -> dict:
     """Run all primary thesis experiments and return verified run locations."""
+    from src.experiments.artifacts import read_locked_protocol
     from src.experiments.datasets import discover_hf_snapshot
     from src.experiments.execution_control import available_threads, execution_state
     from src.experiments.resources import assert_preflight, preflight_runs
@@ -200,6 +202,11 @@ def run_thesis_workflow(
         f"Starting protocol-v{PROTOCOL_VERSION} run {base_run_id}; "
         f"threads={allocated}, mode={execution_mode}"
     )
+    _status(
+        "Initial reference estimate: approximately 3-10 days on 20 CPU threads; "
+        f"this run uses {allocated} threads and a measured total ETA will replace "
+        "the range after preparation"
+    )
     hf_root, realcats_root = _prepare_roots(
         result_path,
         base_run_id,
@@ -237,28 +244,59 @@ def run_thesis_workflow(
     _status(
         f"Resource admission passed; execution={chosen_mode}, states={states}"
     )
-    if chosen_mode == "parallel" and states in {
-        ("fresh", "fresh"),
-        ("interrupted", "interrupted"),
-        ("interrupted_initialization", "interrupted_initialization"),
-    }:
-        from src.experiments.coordination import execute_parallel
+    from src.experiments.progress import (
+        build_execution_progress_plan,
+        workflow_progress_display,
+    )
 
-        parallel_resume = states != ("fresh", "fresh")
-        execute_parallel(
-            hf_root,
-            realcats_root,
-            resume=parallel_resume,
-            host_lock_path=host_lock_path,
-            total_threads=allocated if not parallel_resume or threads is not None else None,
-        )
-    else:
-        _execute_one(hf_root, allocated, host_lock_path)
-        _execute_one(realcats_root, allocated, host_lock_path)
+    plans = {
+        hf_root: build_execution_progress_plan(hf_root, read_locked_protocol(hf_root)[1]),
+        realcats_root: build_execution_progress_plan(
+            realcats_root, read_locked_protocol(realcats_root)[1]
+        ),
+    }
+    progress_environment = {
+        "THESIS_HIDE_ROOT_TOTAL": os.environ.get("THESIS_HIDE_ROOT_TOTAL"),
+        "THESIS_PROGRESS_POSITION": os.environ.get("THESIS_PROGRESS_POSITION"),
+    }
+    os.environ["THESIS_HIDE_ROOT_TOTAL"] = "1"
+    os.environ["THESIS_PROGRESS_POSITION"] = "1"
+    try:
+        with workflow_progress_display(plans):
+            if chosen_mode == "parallel" and states in {
+                ("fresh", "fresh"),
+                ("interrupted", "interrupted"),
+                ("interrupted_initialization", "interrupted_initialization"),
+            }:
+                from src.experiments.coordination import execute_parallel
 
-    _status("Verifying both result roots as thesis-citable")
-    hf_verification = verify_run(hf_root, require_citable=True)
-    realcats_verification = verify_run(realcats_root, require_citable=True)
+                parallel_resume = states != ("fresh", "fresh")
+                execute_parallel(
+                    hf_root,
+                    realcats_root,
+                    resume=parallel_resume,
+                    host_lock_path=host_lock_path,
+                    total_threads=(
+                        allocated
+                        if not parallel_resume or threads is not None
+                        else None
+                    ),
+                )
+            else:
+                _execute_one(hf_root, allocated, host_lock_path)
+                _execute_one(realcats_root, allocated, host_lock_path)
+
+            _status("Verifying both result roots as thesis-citable")
+            hf_verification = verify_run(hf_root, require_citable=True)
+            realcats_verification = verify_run(
+                realcats_root, require_citable=True
+            )
+    finally:
+        for name, value in progress_environment.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
     summary = {
         "schema_version": 1,
         "protocol_version": PROTOCOL_VERSION,

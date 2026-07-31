@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -25,6 +26,180 @@ class RunTelemetry:
         self._write_lock = threading.RLock()
         self._latest_checkpoint: str | None = None
         self._active_bars: list[Any] = []
+        self._overall_items: dict[str, float] = {}
+        self._overall_completed: set[str] = set()
+        self._overall_session_weight = 0.0
+        self._overall_started: float | None = None
+        self._overall_description: str | None = None
+        self._overall_plan_sha256: str | None = None
+        self._overall_bar: Any | None = None
+
+    def configure_overall(
+        self,
+        description: str,
+        work_items: dict[str, float],
+        *,
+        completed_items: set[str] | None = None,
+        plan_sha256: str,
+    ) -> None:
+        """Start a persistent weighted total bar for one execution root."""
+        from tqdm import tqdm
+
+        if self._overall_started is not None:
+            raise RuntimeError("Overall progress is already configured")
+        if not work_items:
+            raise ValueError("Overall progress requires at least one work item")
+        normalized = {str(key): float(value) for key, value in work_items.items()}
+        if any(not math.isfinite(value) or value <= 0 for value in normalized.values()):
+            raise ValueError("Overall progress weights must be finite and positive")
+        completed = set(completed_items or ()) & set(normalized)
+        initial = sum(normalized[key] for key in completed)
+        worker = os.environ.get("THESIS_PROGRESS_LABEL")
+        label = f"{worker}: {description}" if worker else description
+        hidden = os.environ.get("THESIS_HIDE_ROOT_TOTAL", "0") == "1"
+        disabled = os.environ.get("THESIS_DISABLE_TQDM", "0") == "1"
+        position = int(os.environ.get("THESIS_PROGRESS_POSITION", "0"))
+
+        with self._write_lock:
+            self._overall_items = normalized
+            self._overall_completed = completed
+            self._overall_started = monotonic()
+            self._overall_description = description
+            self._overall_plan_sha256 = plan_sha256
+            if not hidden:
+                self._overall_bar = tqdm(
+                    total=sum(normalized.values()),
+                    initial=initial,
+                    desc=f"{label} total",
+                    unit="work",
+                    position=position,
+                    dynamic_ncols=sys.stderr.isatty(),
+                    mininterval=2.0,
+                    leave=True,
+                    disable=disabled,
+                    file=sys.stderr,
+                    bar_format=(
+                        "{desc}: {percentage:3.0f}%|{bar}| "
+                        "{elapsed}<{remaining}"
+                    ),
+                )
+                self._active_bars.append(self._overall_bar)
+            self._write_overall_state_locked(status="running")
+
+    def _overall_payload_locked(
+        self, *, status: str, current_item: str | None = None
+    ) -> dict[str, Any]:
+        if self._overall_started is None:
+            return {}
+        now = monotonic()
+        elapsed = max(0.0, now - self._overall_started)
+        total = float(sum(self._overall_items.values()))
+        completed = float(
+            sum(self._overall_items[key] for key in self._overall_completed)
+        )
+        remaining = max(0.0, total - completed)
+        rate = (
+            self._overall_session_weight / elapsed
+            if elapsed > 0 and self._overall_session_weight > 0
+            else None
+        )
+        eta = 0.0 if remaining == 0 else (remaining / rate if rate else None)
+        completion = (
+            datetime.now(timezone.utc) + timedelta(seconds=eta)
+            if eta is not None
+            else None
+        )
+        return {
+            "schema_version": 1,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "status": status,
+            "description": self._overall_description,
+            "plan_sha256": self._overall_plan_sha256,
+            "completed_items": len(self._overall_completed),
+            "total_items": len(self._overall_items),
+            "completed_weight": round(completed, 6),
+            "total_weight": round(total, 6),
+            "percent_complete": round(100.0 * completed / total, 4),
+            "elapsed_seconds": round(elapsed, 6),
+            "estimated_rate_work_per_second": (
+                round(rate, 9) if rate is not None else None
+            ),
+            "eta_seconds": round(eta, 3) if eta is not None else None,
+            "estimated_completion_utc": (
+                completion.isoformat() if completion is not None else None
+            ),
+            "current_item": current_item,
+        }
+
+    def _write_overall_state_locked(
+        self, *, status: str, current_item: str | None = None
+    ) -> dict[str, Any]:
+        payload = self._overall_payload_locked(
+            status=status, current_item=current_item
+        )
+        if not payload:
+            return payload
+        path = self.root / "overall_progress.json"
+        temporary = self.root / f".overall_progress.{os.getpid()}.tmp"
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(json_ready(payload), handle, sort_keys=True, allow_nan=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(self.root, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        return payload
+
+    def overall_snapshot(self, *, persist: bool = False) -> dict[str, Any]:
+        with self._write_lock:
+            if persist:
+                return self._write_overall_state_locked(status="running")
+            return self._overall_payload_locked(status="running")
+
+    def mark_overall(self, item: str) -> bool:
+        """Mark one named item complete and refresh the total ETA."""
+        with self._write_lock:
+            if item not in self._overall_items or item in self._overall_completed:
+                return False
+            weight = self._overall_items[item]
+            self._overall_completed.add(item)
+            self._overall_session_weight += weight
+            if self._overall_bar is not None:
+                completed_weight = sum(
+                    self._overall_items[key] for key in self._overall_completed
+                )
+                target = min(float(self._overall_bar.total), completed_weight)
+                if target > self._overall_bar.n:
+                    self._overall_bar.update(target - self._overall_bar.n)
+            payload = self._write_overall_state_locked(
+                status="running", current_item=item
+            )
+        self.emit(
+            "execute.overall",
+            "progress",
+            completed_items=payload["completed_items"],
+            total_items=payload["total_items"],
+            percent_complete=payload["percent_complete"],
+            eta_seconds=payload["eta_seconds"],
+            estimated_completion_utc=payload["estimated_completion_utc"],
+            completed_item=item,
+        )
+        return True
+
+    def close_overall(self, status: str) -> None:
+        with self._write_lock:
+            if self._overall_started is None:
+                return
+            self._write_overall_state_locked(status=status)
+            if self._overall_bar is not None:
+                if self._overall_bar in self._active_bars:
+                    self._active_bars.remove(self._overall_bar)
+                self._overall_bar.close()
+                self._overall_bar = None
 
     def set_latest_checkpoint(self, checkpoint_id: str) -> None:
         with self._write_lock:
@@ -72,7 +247,13 @@ class RunTelemetry:
                 print(message, file=sys.stderr, flush=True)
 
     @contextmanager
-    def step(self, stage: str, **details: Any) -> Iterator[None]:
+    def step(
+        self,
+        stage: str,
+        *,
+        overall_key: str | None = None,
+        **details: Any,
+    ) -> Iterator[None]:
         started = monotonic()
         self.emit(stage, "started", **details)
         stopped = threading.Event()
@@ -81,6 +262,7 @@ class RunTelemetry:
             while not stopped.wait(300.0):
                 with self._write_lock:
                     latest = self._latest_checkpoint
+                overall = self.overall_snapshot(persist=True)
                 self.emit(
                     stage,
                     "heartbeat",
@@ -88,6 +270,11 @@ class RunTelemetry:
                     process_threads=threading.active_count(),
                     free_disk_bytes=shutil.disk_usage(self.root).free,
                     latest_checkpoint=latest,
+                    overall_percent_complete=overall.get("percent_complete"),
+                    overall_eta_seconds=overall.get("eta_seconds"),
+                    overall_estimated_completion_utc=overall.get(
+                        "estimated_completion_utc"
+                    ),
                 )
 
         thread = threading.Thread(
@@ -113,6 +300,8 @@ class RunTelemetry:
         stopped.set()
         thread.join(timeout=1.0)
         self.emit(stage, "completed", elapsed_seconds=monotonic() - started, **details)
+        if overall_key is not None:
+            self.mark_overall(overall_key)
 
     def progress(self, stage: str, **details: Any) -> None:
         self.emit(stage, "progress", **details)
@@ -134,6 +323,8 @@ class RunTelemetry:
         worker = os.environ.get("THESIS_PROGRESS_LABEL")
         label = f"{worker}: {description}" if worker else description
         position = int(os.environ.get("THESIS_PROGRESS_POSITION", "0"))
+        if self._overall_bar is not None:
+            position += 1
         disabled = os.environ.get("THESIS_DISABLE_TQDM", "0") == "1"
         bar = tqdm(
             total=total,

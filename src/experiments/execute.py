@@ -279,23 +279,37 @@ def execute_experiment(
             from src.experiments.telemetry import RunTelemetry
 
             telemetry = RunTelemetry(root)
-            telemetry.emit(
-                "execute",
-                "started",
-                attempt_id=attempt.attempt_id,
-                resumed=resume,
-                threads=locked_threads,
-            )
-            base_identity = {
-                "protocol_sha256": protocol_sha,
-                "execution_definition_sha256": attempt.definition_sha256,
-            }
-            stages = StageManager(paths, attempt.attempt_id, base_identity, telemetry)
-            checkpoints = CheckpointStore(
-                root, base_identity, attempt.attempt_id, telemetry
-            )
             results: dict = {}
             try:
+                from src.experiments.progress import (
+                    build_execution_progress_plan,
+                    completed_progress_items,
+                )
+
+                progress_plan = build_execution_progress_plan(root, protocol)
+                telemetry.configure_overall(
+                    progress_plan.description,
+                    dict(progress_plan.items),
+                    completed_items=completed_progress_items(root, progress_plan),
+                    plan_sha256=progress_plan.digest,
+                )
+                telemetry.emit(
+                    "execute",
+                    "started",
+                    attempt_id=attempt.attempt_id,
+                    resumed=resume,
+                    threads=locked_threads,
+                )
+                base_identity = {
+                    "protocol_sha256": protocol_sha,
+                    "execution_definition_sha256": attempt.definition_sha256,
+                }
+                stages = StageManager(
+                    paths, attempt.attempt_id, base_identity, telemetry
+                )
+                checkpoints = CheckpointStore(
+                    root, base_identity, attempt.attempt_id, telemetry
+                )
                 from threadpoolctl import threadpool_limits
 
                 from src.experiments.secondary import (
@@ -376,6 +390,7 @@ def execute_experiment(
 
                 inventory, inventory_sha = write_inventory(root)
                 verify_inventory(root)
+                telemetry.mark_overall("finalize:inventory")
                 citable, citable_reasons = _derive_citable(
                     root, protocol, validation_result, generated_audit
                 )
@@ -402,10 +417,12 @@ def execute_experiment(
                     "results": results,
                 }
                 manifest = _write_execution_manifest(root, manifest_payload)
+                telemetry.mark_overall("finalize:manifest")
                 finish_attempt(attempt, "completed")
                 telemetry.emit(
                     "execute", "completed", manifest="execution_manifest.json"
                 )
+                telemetry.close_overall("completed")
                 return manifest
             except BaseException as error:
                 finish_attempt(attempt, "failed", error)
@@ -416,4 +433,5 @@ def execute_experiment(
                     error_type=type(error).__name__,
                     error=str(error),
                 )
+                telemetry.close_overall("failed")
                 raise

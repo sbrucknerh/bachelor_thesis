@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from src.experiments.artifacts import protocol_digest
 from src.experiments.server_workflow import run_thesis_workflow
 
 
@@ -29,15 +30,13 @@ def test_one_command_workflow_prepares_parallel_roots_and_verifies(
     def fake_prepare(results_root, run_id, rqs, **_kwargs):
         root = Path(results_root) / run_id
         root.mkdir(parents=True)
-        (root / "protocol.json").write_text(
-            json.dumps(
-                {
-                    "protocol_version": 5,
-                    "research_questions": sorted(rqs),
-                    "execution_profile": "thesis",
-                }
-            )
-        )
+        protocol = {
+            "protocol_version": 5,
+            "research_questions": sorted(rqs),
+            "execution_profile": "thesis",
+        }
+        (root / "protocol.json").write_text(json.dumps(protocol))
+        (root / "protocol.sha256").write_text(protocol_digest(protocol) + "\n")
         states[str(root)] = "fresh"
         prepared_scopes[run_id] = set(rqs)
         return root

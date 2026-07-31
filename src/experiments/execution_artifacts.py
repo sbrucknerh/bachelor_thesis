@@ -153,6 +153,7 @@ class StageManager:
             publish_stage(self.run_paths.root, committed, manifest)
             if self.telemetry:
                 self.telemetry.progress("execute.stage", stage_id=stage_id, reused=True)
+                self.telemetry.mark_overall(f"stage:{stage_id}")
             yield StageWorkspace(
                 stage_id,
                 committed,
@@ -181,6 +182,7 @@ class StageManager:
             publish_stage(self.run_paths.root, committed, manifest)
             if self.telemetry:
                 self.telemetry.progress("execute.stage", stage_id=stage_id, reused=False)
+                self.telemetry.mark_overall(f"stage:{stage_id}")
         except BaseException:
             # Private staging is deliberately retained for audit and ignored by resume.
             raise
@@ -267,6 +269,7 @@ class CheckpointStore:
             if self.telemetry:
                 self.telemetry.set_latest_checkpoint(checkpoint_id)
                 self.telemetry.progress("execute.checkpoint", checkpoint_id=checkpoint_id, reused=True)
+                self.telemetry.mark_overall(f"checkpoint:{checkpoint_id}")
             return frame
 
         staging = self.private / f"checkpoint-{checkpoint_id}"
@@ -293,6 +296,7 @@ class CheckpointStore:
         if self.telemetry:
             self.telemetry.set_latest_checkpoint(checkpoint_id)
             self.telemetry.progress("execute.checkpoint", checkpoint_id=checkpoint_id, reused=False)
+            self.telemetry.mark_overall(f"checkpoint:{checkpoint_id}")
         return verified
 
     @staticmethod

@@ -32,7 +32,16 @@ class RaphtoryExperimentGraph:
 
         self.source_label = "dataframe"
         stage = f"motifs.graph_load.{self.source_label}.{ordering_variant}"
-        context = telemetry.step(stage, events=len(events), source="dataframe") if telemetry else nullcontext()
+        context = (
+            telemetry.step(
+                stage,
+                overall_key=f"step:{stage}",
+                events=len(events),
+                source="dataframe",
+            )
+            if telemetry
+            else nullcontext()
+        )
         with context:
             ordered = order_events(events, ordering_variant)
             edge_columns = ordered.loc[:, ["timestamp", "from_address", "to_address"]]
@@ -65,7 +74,12 @@ class RaphtoryExperimentGraph:
         source_label = path.stem
         stage = f"motifs.graph_load.{source_label}.{ordering_variant}"
         context = (
-            telemetry.step(stage, events=event_count, source=str(path))
+            telemetry.step(
+                stage,
+                overall_key=f"step:{stage}",
+                events=event_count,
+                source=str(path),
+            )
             if telemetry
             else nullcontext()
         )

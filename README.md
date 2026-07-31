@@ -10,7 +10,7 @@ detecting malicious Ethereum addresses with temporal motifs.
 
 - Python 3.11 or newer
 - Git and an internet connection for the initial setup
-- A Kaggle account and API token for downloading Real-CATS
+- A Kaggle account and API token for the Real-CATS transaction archive
 - A local filesystem with enough free space for prepared data and checkpoints
 
 The thesis environment is pinned in `requirements-results.txt`. Raphtory motif
@@ -27,7 +27,8 @@ cd bachelor_thesis
 
 ### Option A: Installation Script (recommended)
 
-Create a token on the
+The Hugging Face dataset is public and requires no Hugging Face token.
+Real-CATS transactions are hosted on Kaggle, so create a Kaggle token on the
 [Kaggle API settings page](https://www.kaggle.com/settings/api), then run:
 
 ```bash
@@ -160,8 +161,15 @@ explicit ID is recommended because it is needed for simple recovery after an
 interruption.
 
 Run the command inside `tmux` or another persistent server session. The
-terminal displays `tqdm` progress bars with elapsed time and ETA. Detailed,
-fsynced events and five-minute heartbeats are written to `run_log.jsonl`.
+terminal keeps a persistent **total execution** bar above the current-step
+`tqdm` bar. The initial 3-10 day planning range is shown during preparation;
+after the locked event counts are available, the total ETA is recalibrated from
+measured weighted throughput. It becomes more stable as motif windows finish.
+
+Each run root writes the current percentage, ETA, and estimated completion time
+to `overall_progress.json`. Detailed, fsynced events and five-minute heartbeats
+with the same total-ETA fields are written to `run_log.jsonl`. These estimates
+are operational guidance, not experimental results.
 
 ### Step 3: Monitor the run
 
