@@ -20,6 +20,16 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 
+def _save_figure(fig, output: str | Path) -> None:
+    metadata = {
+        "Creator": "bachelor-thesis protocol v5",
+        "Producer": "matplotlib",
+        "CreationDate": None,
+        "ModDate": None,
+    }
+    fig.savefig(output, dpi=200, bbox_inches="tight", metadata=metadata)
+
+
 def plot_delta_performance(metrics: pd.DataFrame, output: str | Path, title: str) -> None:
     frame = metrics.sort_values("delta")
     fig, axis = plt.subplots(figsize=(7.2, 4.4))
@@ -40,7 +50,7 @@ def plot_delta_performance(metrics: pd.DataFrame, output: str | Path, title: str
     axis.set_title(title)
     axis.legend(frameon=False)
     fig.tight_layout()
-    fig.savefig(output, dpi=200, bbox_inches="tight")
+    _save_figure(fig, output)
     plt.close(fig)
 
 
@@ -54,7 +64,7 @@ def plot_ablation(metrics: dict[str, float], output: str | Path, title: str) -> 
     axis.set_ylim(0, 1)
     axis.set_title(title)
     fig.tight_layout()
-    fig.savefig(output, dpi=200, bbox_inches="tight")
+    _save_figure(fig, output)
     plt.close(fig)
 
 
@@ -76,7 +86,7 @@ def plot_confusion(
             axis.text(column, row, str(matrix[row, column]), ha="center", va="center", fontsize=8)
     fig.colorbar(image, ax=axis)
     fig.tight_layout()
-    fig.savefig(output, dpi=200, bbox_inches="tight")
+    _save_figure(fig, output)
     plt.close(fig)
 
 
@@ -98,7 +108,7 @@ def plot_fingerprint_heatmap(
     axis.set_ylabel("Exact Real-CATS label")
     fig.colorbar(image, ax=axis, label="Mean Hellinger component")
     fig.tight_layout()
-    fig.savefig(output, dpi=200, bbox_inches="tight")
+    _save_figure(fig, output)
     plt.close(fig)
 
 
@@ -112,8 +122,8 @@ def plot_label_delta_curves(scores: pd.DataFrame, output: str | Path) -> None:
     axis.set_ylim(0, 1)
     axis.set_xlabel("Temporal window delta (seconds, log scale)")
     axis.set_ylabel("One-vs-rest average precision")
-    axis.set_title("RQ3 label-specific temporal-window sensitivity")
+    axis.set_title("RQ4 category-specific temporal-window sensitivity")
     axis.legend(frameon=False, fontsize=7, ncol=2)
     fig.tight_layout()
-    fig.savefig(output, dpi=200, bbox_inches="tight")
+    _save_figure(fig, output)
     plt.close(fig)

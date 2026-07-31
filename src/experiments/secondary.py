@@ -92,10 +92,10 @@ def execute_synthetic_validation(
     paths, telemetry: RunTelemetry | None = None
 ) -> dict:
     role_checks = []
-    for role_index in range(32):
+    for role_index in range(40):
         fixture = fixture_for_role(role_index)
         graph = RaphtoryExperimentGraph(fixture, telemetry=telemetry)
-        counts = graph.count(2, ["A"])
+        counts = graph.count_all(2, ["A"])
         vector = counts.iloc[0].to_numpy()
         role_checks.append(
             {

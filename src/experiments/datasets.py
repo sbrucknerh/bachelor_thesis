@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import nullcontext
 import math
 from pathlib import Path
 from typing import Iterable
@@ -71,38 +72,52 @@ def count_target_activity(
     total_batches = max(1, math.ceil(rows_to_scan / batch_size))
     rows_scanned = 0
 
-    for batch_number, batch in enumerate(
-        parquet.iter_batches(
-            batch_size=batch_size, columns=["src_id", "dst_id"], use_threads=True
-        ),
-        start=1,
-    ):
-        remaining = rows_to_scan - rows_scanned
-        if remaining <= 0:
-            break
-        if len(batch) > remaining:
-            batch = batch.slice(0, remaining)
-        src = batch.column(0)
-        dst = batch.column(1)
-        src_mask = pc.is_in(src, value_set=value_set)
-        dst_mask = pc.and_(pc.is_in(dst, value_set=value_set), pc.not_equal(src, dst))
-        for selected in (pc.filter(src, src_mask), pc.filter(dst, dst_mask)):
-            values = selected.to_numpy(zero_copy_only=False)
-            if not len(values):
-                continue
-            unique, frequencies = np.unique(values, return_counts=True)
-            for node_id, frequency in zip(unique, frequencies, strict=True):
-                counts[int(node_id)] += int(frequency)
-        rows_scanned += len(batch)
-        if telemetry and (batch_number % 100 == 0 or batch_number == total_batches):
-            telemetry.progress(
-                "prepare.hf.activity_scan",
-                batches_complete=batch_number,
-                batches_total=total_batches,
-                rows_scanned=rows_scanned,
-                rows_total=rows_to_scan,
-                source_rows=source_rows,
+    progress_context = (
+        telemetry.task_progress("HF activity scan", total_batches, unit="batch")
+        if telemetry
+        else nullcontext(lambda _count=1: None)
+    )
+    with progress_context as advance:
+        for batch_number, batch in enumerate(
+            parquet.iter_batches(
+                batch_size=batch_size,
+                columns=["src_id", "dst_id"],
+                use_threads=True,
+            ),
+            start=1,
+        ):
+            remaining = rows_to_scan - rows_scanned
+            if remaining <= 0:
+                break
+            if len(batch) > remaining:
+                batch = batch.slice(0, remaining)
+            src = batch.column(0)
+            dst = batch.column(1)
+            src_mask = pc.is_in(src, value_set=value_set)
+            dst_mask = pc.and_(
+                pc.is_in(dst, value_set=value_set),
+                pc.not_equal(src, dst),
             )
+            for selected in (pc.filter(src, src_mask), pc.filter(dst, dst_mask)):
+                values = selected.to_numpy(zero_copy_only=False)
+                if not len(values):
+                    continue
+                unique, frequencies = np.unique(values, return_counts=True)
+                for node_id, frequency in zip(unique, frequencies, strict=True):
+                    counts[int(node_id)] += int(frequency)
+            rows_scanned += len(batch)
+            advance()
+            if telemetry and (
+                batch_number % 100 == 0 or batch_number == total_batches
+            ):
+                telemetry.progress(
+                    "prepare.hf.activity_scan",
+                    batches_complete=batch_number,
+                    batches_total=total_batches,
+                    rows_scanned=rows_scanned,
+                    rows_total=rows_to_scan,
+                    source_rows=source_rows,
+                )
 
     result = pd.Series(counts, dtype="int64", name="activity")
     result.index.name = "node_id"
@@ -269,38 +284,56 @@ def extract_target_edges(
     rows_to_scan = min(source_rows, max_rows) if max_rows is not None else source_rows
     total_batches = max(1, math.ceil(rows_to_scan / batch_size))
     rows_scanned = 0
+    progress_context = (
+        telemetry.task_progress("HF incident-edge extraction", total_batches, unit="batch")
+        if telemetry
+        else nullcontext(lambda _count=1: None)
+    )
     try:
-        for batch_number, batch in enumerate(
-            parquet.iter_batches(batch_size=batch_size, columns=columns, use_threads=True),
-            start=1,
-        ):
-            remaining = rows_to_scan - rows_scanned
-            if remaining <= 0:
-                break
-            if len(batch) > remaining:
-                batch = batch.slice(0, remaining)
-            src = batch.column(0)
-            dst = batch.column(1)
-            mask = pc.or_(
-                pc.is_in(src, value_set=value_set), pc.is_in(dst, value_set=value_set)
-            )
-            if pc.sum(pc.cast(mask, pa.int64())).as_py() != 0:
-                table = _hf_output_table(batch, mask)
-                if writer is None:
-                    writer = pq.ParquetWriter(output, table.schema, compression="zstd")
-                writer.write_table(table)
-                selected_rows += len(table)
-            rows_scanned += len(batch)
-            if telemetry and (batch_number % 100 == 0 or batch_number == total_batches):
-                telemetry.progress(
-                    "prepare.hf.edge_extraction",
-                    batches_complete=batch_number,
-                    batches_total=total_batches,
-                    rows_scanned=rows_scanned,
-                    rows_total=rows_to_scan,
-                    source_rows=source_rows,
-                    selected_rows=selected_rows,
+        with progress_context as advance:
+            for batch_number, batch in enumerate(
+                parquet.iter_batches(
+                    batch_size=batch_size,
+                    columns=columns,
+                    use_threads=True,
+                ),
+                start=1,
+            ):
+                remaining = rows_to_scan - rows_scanned
+                if remaining <= 0:
+                    break
+                if len(batch) > remaining:
+                    batch = batch.slice(0, remaining)
+                src = batch.column(0)
+                dst = batch.column(1)
+                mask = pc.or_(
+                    pc.is_in(src, value_set=value_set),
+                    pc.is_in(dst, value_set=value_set),
                 )
+                if pc.sum(pc.cast(mask, pa.int64())).as_py() != 0:
+                    table = _hf_output_table(batch, mask)
+                    if writer is None:
+                        writer = pq.ParquetWriter(
+                            output,
+                            table.schema,
+                            compression="zstd",
+                        )
+                    writer.write_table(table)
+                    selected_rows += len(table)
+                rows_scanned += len(batch)
+                advance()
+                if telemetry and (
+                    batch_number % 100 == 0 or batch_number == total_batches
+                ):
+                    telemetry.progress(
+                        "prepare.hf.edge_extraction",
+                        batches_complete=batch_number,
+                        batches_total=total_batches,
+                        rows_scanned=rows_scanned,
+                        rows_total=rows_to_scan,
+                        source_rows=source_rows,
+                        selected_rows=selected_rows,
+                    )
     finally:
         if writer is not None:
             writer.close()

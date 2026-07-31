@@ -7,12 +7,10 @@ import importlib.metadata
 import json
 import os
 import platform
+import secrets
 import sys
 from pathlib import Path
 from typing import Any, Iterable
-
-import numpy as np
-import pandas as pd
 
 from src.experiments.types import RunPaths
 
@@ -25,12 +23,13 @@ def json_ready(value: Any) -> Any:
         return [json_ready(item) for item in value]
     if isinstance(value, Path):
         return str(value)
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, np.integer):
-        return int(value)
-    if isinstance(value, np.floating):
-        return float(value)
+    # Avoid importing numerical libraries before execution thread limits are set.
+    module = type(value).__module__
+    if module == "numpy":
+        if hasattr(value, "tolist"):
+            return value.tolist()
+        if hasattr(value, "item"):
+            return value.item()
     return value
 
 
@@ -93,34 +92,72 @@ def resume_run_paths(results_root: str | Path, run_id: str) -> RunPaths:
     return paths
 
 
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _atomic_link_commit(temporary: Path, destination: Path) -> None:
+    """Commit a fully fsynced temporary file without permitting replacement."""
+    try:
+        os.link(temporary, destination)
+        _fsync_directory(destination.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def atomic_write_bytes_exclusive(path: str | Path, payload: bytes) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.parent / f".{destination.name}.{secrets.token_hex(8)}.tmp"
+    with temporary.open("xb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    _atomic_link_commit(temporary, destination)
+
+
 def write_json_exclusive(path: str | Path, payload: dict) -> None:
+    formatted = json.dumps(
+        json_ready(payload), indent=2, sort_keys=True, allow_nan=False
+    ).encode("utf-8") + b"\n"
+    atomic_write_bytes_exclusive(path, formatted)
+
+
+def write_parquet_exclusive(path: str | Path, frame: Any) -> None:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("x", encoding="utf-8") as handle:
-        json.dump(json_ready(payload), handle, indent=2, sort_keys=True, allow_nan=False)
-        handle.write("\n")
+    temporary = destination.parent / f".{destination.stem}.{secrets.token_hex(8)}{destination.suffix}"
+    try:
+        frame.to_parquet(temporary, index=False)
+        with temporary.open("rb") as handle:
+            os.fsync(handle.fileno())
+        _atomic_link_commit(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
-def write_parquet_exclusive(path: str | Path, frame: pd.DataFrame) -> None:
+def write_csv_exclusive(path: str | Path, frame: Any) -> None:
     destination = Path(path)
-    if destination.exists():
-        raise FileExistsError(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_parquet(destination, index=False)
-
-
-def write_csv_exclusive(path: str | Path, frame: pd.DataFrame) -> None:
-    destination = Path(path)
-    if destination.exists():
-        raise FileExistsError(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(destination, index=False)
+    temporary = destination.parent / f".{destination.name}.{secrets.token_hex(8)}.tmp"
+    try:
+        with temporary.open("x", encoding="utf-8", newline="") as handle:
+            frame.to_csv(handle, index=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _atomic_link_commit(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def write_locked_protocol(paths: RunPaths, protocol: dict) -> str:
     digest = protocol_digest(protocol)
     write_json_exclusive(paths.protocol, protocol)
-    paths.protocol_hash.write_text(f"{digest}\n", encoding="ascii")
+    atomic_write_bytes_exclusive(paths.protocol_hash, f"{digest}\n".encode("ascii"))
     return digest
 
 
@@ -163,9 +200,14 @@ def runtime_manifest() -> dict:
                 "pyarrow",
                 "duckdb",
                 "scikit-learn",
+                "scipy",
+                "joblib",
+                "threadpoolctl",
                 "xgboost",
                 "raphtory",
                 "matplotlib",
+                "zstandard",
+                "datasets",
             )
         ),
         "source_sha256": {

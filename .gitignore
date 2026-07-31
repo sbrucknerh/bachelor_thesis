@@ -1,5 +1,14 @@
 # Data files
 data/raw/
+.env
+venv-snap
+
+# Trained models
+models/
+
+# Prepared and executed experiment artifacts
+results/experiments/
+results/smoke/
 
 # Python
 __pycache__/

@@ -7,7 +7,11 @@ import pandas as pd
 import pytest
 
 import src.experiments.realcats as realcats
-from src.experiments.realcats import convert_realcats_zip, normalize_record
+from src.experiments.realcats import (
+    convert_realcats_zip,
+    load_criminal_labels,
+    normalize_record,
+)
 
 
 def _record(tx_hash: str, source: str, destination: str, **extra):
@@ -26,6 +30,17 @@ def _record(tx_hash: str, source: str, destination: str, **extra):
 def test_failed_and_incomplete_records_are_rejected():
     assert normalize_record("normal", _record("x", "a", "b", isError="1")) is None
     assert normalize_record("normal", _record("x", "", "b")) is None
+
+
+def test_conflicting_duplicate_labels_are_rejected(tmp_path):
+    pd.DataFrame(
+        {
+            "address": ["0xa", "0xA"],
+            "label": ["Hack Scam", "Phishing Scam"],
+        }
+    ).to_csv(tmp_path / "CE.tsv", sep="\t", index=False)
+    with pytest.raises(ValueError, match="conflicting criminal labels"):
+        load_criminal_labels(tmp_path)
 
 
 def test_ego_copy_dedup_preserves_maximum_token_multiplicity(tmp_path):
@@ -52,6 +67,20 @@ def test_ego_copy_dedup_preserves_maximum_token_multiplicity(tmp_path):
     assert len(normal_events) == 1
     assert len(token_events) == 2
     assert audit["duplicate_copies_removed"] == 2
+    for layer in ("internal", "erc721", "erc1155"):
+        empty = pd.read_parquet(output / f"{layer}.parquet")
+        assert empty.empty
+        assert list(empty.columns) == [
+            "from_address",
+            "to_address",
+            "timestamp",
+            "value",
+            "tx_hash",
+            "block_number",
+            "transaction_index",
+            "event_signature",
+            "layer",
+        ]
 
 
 def test_conversion_resumes_only_before_protocol_lock(monkeypatch, tmp_path):

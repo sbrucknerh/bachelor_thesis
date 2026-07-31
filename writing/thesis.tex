@@ -35,6 +35,8 @@
 \DeclareGraphicsExtensions{.pdf,.png,.jpg}
 \graphicspath{{./figures/}} %Use curly braces for each path to add and don't
 % forget trailing slash '/'
+\providecommand{\ResGraphic}[2]{\IfFileExists{figures/#2.pdf}{\includegraphics[width=#1\linewidth]{#2}}{\framebox[#1\linewidth][c]{\rule[-1.1cm]{0pt}{2.4cm}\emph{figure pending}}}}
+\providecommand{\ResPendingTable}[2]{\begin{table}[ht]\centering\caption{#1}\label{#2}\emph{To be completed from the full run.}\end{table}}
 % \usepackage{epstopdf} %Nice to automatically convert eps figures to pdf
 % format  (from inkscape, etc)
 \usepackage[natbibapa]{apacite}
@@ -295,20 +297,15 @@ Detecting these patterns requires a method that explicitly models the temporal o
 
 Temporal motifs are a natural way to close this gap. A temporal motif is a recurring, time-ordered subgraph pattern, where a set of edges occurs among a group of nodes within a bounded time window \citep{kovanen2011temporal, paranjape2017motifs}. Applied to the Bitcoin transaction graph, temporal motif counts already reveal structural anomalies that static analysis cannot detect. For example, cyclic triangle motifs are far more frequent in Bitcoin than in any communication network, which reflects the recirculation that is typical of mixing and layering \citep{paranjape2017motifs}. Despite this, using temporal motifs as features for the supervised detection of coordinated malicious behaviour across multiple addresses is still largely unexplored. This thesis addresses that gap directly.
 
-TODO: research question(s)
-
 This thesis investigates the following research questions:
 
 \begin{description}
-    \item[RQ1 (Added value).] Do temporal motifs improve the detection of
+    \item[RQ1.] Do temporal motifs improve the detection of
           malicious Ethereum addresses compared to transaction aggregates
           and static graph features alone?
-    \item[RQ2 (Time scale).] At what time scale $\delta$ does coordinated
-      behaviour become most visible in motif fingerprints?
-    \item[RQ3 (Pattern specificity).] Do different categories of coordinated
-      malicious behaviour produce distinct temporal-motif fingerprints, and
-      does the time scale $\delta$ at which each becomes most visible differ
-      between categories?
+    \item[RQ2.] Which temporal window size ($\delta$) maximizes the usefulness of temporal motif fingerprints for detecting coordinated malicious behaviour?
+    \item[RQ3.] Do different categories of coordinated malicious behaviour exhibit distinct temporal motif fingerprints?
+    \item[RQ4.] Does the temporal window that best captures these fingerprints differ across behaviour categories?
 \end{description}
 
 \chapter{Related Work} 
@@ -862,8 +859,6 @@ Giveaway Scam    & Impersonation to solicit inbound transfers                   
 \section{System overview}
 \label{sec:system_overview}
 
-% architecture / pipeline diagram to be added here
-
 This chapter describes how the detection approach is put into practice. The
 method is implemented as a single program that turns raw Ethereum transaction
 records into a decision about whether each address behaves maliciously. The
@@ -877,11 +872,13 @@ divided into a development set and a test set. An \emph{execution} phase then ca
 out the actual detection on top of these prepared data. Keeping the two apart
 means that the data and the evaluation setup are settled before any model is
 trained, so the reported results cannot be shaped, even by accident, by later
-changes to the data or the settings.
+changes to the data or the settings. The execution phase is checkpointed as
+well. After an expensive motif count has been committed successfully, an
+interrupted run verifies and reuses it instead of starting that count again.
 
-Overall the program moves from raw transactions to results in eight steps. The
-first two belong to the preparation phase, the remaining six to the execution
-phase.
+Overall the program moves from raw transactions to results in eight steps, shown
+in Figure~\ref{fig:method_steps}. The first two belong to the preparation phase,
+the remaining six to the execution phase.
 
 \begin{enumerate}
   \item \textbf{Loading the data.} The program reads the transaction records and
@@ -907,12 +904,14 @@ phase.
         because their number and their order are what the motifs are built from.
         This step is described in Section~\ref{sec:graph_construction}.
 
-  \item \textbf{Counting the motifs.} For each address the program counts how
+  \item \textbf{Counting the motifs.} The program first runs exact synthetic
+        fixtures as a correctness gate. It then counts for each address how
         often each temporal motif occurs among the transactions around it.
         Because a motif only counts when its transactions fall close enough
         together in time, the counting is repeated for a range of time windows,
         from five minutes up to one week. This step is described in
-        Section~\ref{sec:motif_extraction}.
+        Section~\ref{sec:motif_extraction}. Each completed count is stored as an
+        immutable checkpoint before the next one begins.
 
   \item \textbf{Building the fingerprints.} The motif counts of an address form
         its fingerprint, a short list of numbers that records how often the
@@ -927,17 +926,18 @@ phase.
         trains a classifier to tell malicious and benign addresses apart. It
         uses the development set to choose the time window that works best and
         then measures how well the classifier performs on the untouched test
-        set. For RQ3 the same idea is used, except that the classifier sorts
-        criminal addresses into their behaviour category rather than making a
-        malicious-or-benign decision. The features and models are described in
+        set. For RQ3 and RQ4 the same idea is used, except that the classifier
+        sorts criminal addresses into their behaviour category rather than making
+        a malicious-or-benign decision. The features and models are described in
         Section~\ref{sec:detection_methods}.
 
   \item \textbf{Analysing the results.} The program then answers the research
         questions. It compares the three views to see whether the motif
         fingerprint improves detection over the simpler features (RQ1) and which
-        time window makes coordinated behaviour most visible (RQ2), and it checks
+        time window makes coordinated behaviour most visible (RQ2). It then checks
         whether different categories of malicious behaviour have distinct
-        fingerprints and their own best time windows (RQ3). Each comparison is
+        fingerprints (RQ3), and whether the window that shows a category best
+        differs from one category to the next (RQ4). Each comparison is
         supported by statistical tests, so that a difference is not mistaken for
         chance, and the whole run is repeated under several orderings of
         transactions that share the same timestamp, to confirm that the outcome
@@ -947,13 +947,22 @@ phase.
   \item \textbf{Visualising the results.} Finally the program writes the tables
         and figures used in the Results chapter, including the comparison of the
         three views, the performance curve across the different time windows, and,
-        for RQ3, how the motif fingerprints and best windows differ between
-        behaviour categories.
+        for RQ3 and RQ4, how the motif fingerprints and the best windows differ
+        between behaviour categories.
 \end{enumerate}
 
-The first two research questions run on the main binary dataset and the third on
-the category-labelled dataset. The following sections describe the most important
-of these steps in more detail, starting with the data.
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{0.75}{05-method-steps}
+  \caption{The eight steps of the pipeline. The first two make up the preparation
+  phase, and the remaining six the execution phase, shown here as its
+  representation, detection, and analysis stages.}
+  \label{fig:method_steps}
+\end{figure}
+
+The first two research questions run on the main binary dataset and the last two
+on the category-labelled dataset. The following sections describe the most
+important of these steps in more detail, starting with the data.
 
 \section{Data acquisition}
 \label{sec:data_acquisition}
@@ -1034,6 +1043,9 @@ headline result, and the imbalance is handled by weighting the classes during
 training. The pre-computed features are deliberately left aside, so that every
 dataset is described by the same behavioural features, computed in the same way,
 which keeps the comparison with the main dataset fair.
+BLTE is prepared and executed as a separate optional run. Its inclusion or
+exclusion does not determine whether the primary HF and Real-CATS runs are
+citable.
 
 \paragraph{Real-CATS, Real-world Criminal Account Transaction Set.}
 \label{sec:dataset_realcats}
@@ -1055,16 +1067,18 @@ rather than a single malicious flag. The categories are:
   \item Rug Pull Scam, NFT Airdrop Scam, and Pigbutchering Scam.
 \end{itemize}
 
-\textit{Suitability.} Real-CATS is the dataset used for RQ3. Its detailed
-categories are what make that question possible, because they allow the motif
+\textit{Suitability.} Real-CATS is the dataset used for RQ3 and RQ4. Its detailed
+categories are what make both questions possible, because they allow the motif
 fingerprints of different kinds of coordinated behaviour to be compared directly,
 rather than only a single malicious-versus-benign split. The labels are also
 independent of the main dataset, since they come from public abuse reports
 instead of the process behind the HuggingFace release. The categories are very
 unevenly filled, with phishing and impersonation together accounting for most of
-the criminal addresses, so RQ3 is limited to the categories that have enough
-addresses to support a fair comparison and treats the smaller ones as
-descriptive only.
+the criminal addresses, so RQ3 and RQ4 are limited to the categories that have
+enough addresses to support a fair comparison and treat the smaller ones as
+descriptive only. The catch-all category \emph{Other} is excluded as well, even
+though it is large enough to qualify, because it collects unrelated reports and
+therefore does not describe one kind of behaviour.
 
 \paragraph{Synthetic fixtures.}
 \label{sec:dataset_synthetic}
@@ -1073,9 +1087,10 @@ small graph of exactly three transfers, built by hand to represent one known
 motif.
 
 \textit{Contents.} The fixtures contain no real transactions. Together they
-cover every motif pattern that the pipeline keeps, along with the boundary cases
-where transactions fall exactly on the edge of a time window or share the same
-timestamp.
+cover all 40 positions in Raphtory's returned catalogue, including the eight
+triangle roles that are checked and then excluded from the target-incident
+experiments. They also cover the boundary cases where transactions fall exactly
+on the edge of a time window or share the same timestamp.
 
 \textit{Suitability.} These graphs are used only to confirm that the motif
 counting is correct, meaning that a known pattern is recognised as the motif it
@@ -1100,7 +1115,7 @@ Labelled addresses & 114{,}739     & 73{,}034 active  & 28{,}591      & n/a \\
 Malicious share    & 47.6\,\%      & 0.23\,\%         & 44.0\,\%      & n/a \\
 Date range         & 2015--2025    & 2017--2019       & per release   & controlled \\
 Category labels    & no            & no               & yes (9)       & no \\
-Role               & RQ1, RQ2      & RQ1 (secondary)  & RQ3           & validation \\
+Role               & RQ1, RQ2      & RQ1 (secondary)  & RQ3, RQ4      & validation \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1307,7 +1322,7 @@ baseline of Section~\ref{sec:graph_construction}. How the fingerprint and the ba
 combined into the feature sets compared in RQ1 is described in
 Section~\ref{sec:detection_methods}.
 
-RQ3 keeps the five Real-CATS layers separate. Because the layers differ greatly
+RQ3 and RQ4 keep the five Real-CATS layers separate. Because the layers differ greatly
 in how many transfers they contain, comparing raw counts would let the busiest
 layer dominate. Instead, within each layer the counts are turned into proportions by dividing each
 count by the layer total, and the square root of each proportion is taken. This is
@@ -1337,8 +1352,8 @@ which correspond to five minutes, 30 minutes, one hour, six hours, one day, thre
 days, and one week. All windows use the same addresses and the same train and
 test split, and the window is chosen only on the development data, as described
 in Section~\ref{sec:evaluation_protocol}. RQ2 studies how detection changes
-across this grid, and RQ3 additionally asks whether different categories of
-behaviour are best seen at different windows.
+across this grid, and RQ4 asks whether different categories of behaviour are
+best seen at different windows.
 
 \section{Detection methods}
 \label{sec:detection_methods}
@@ -1348,7 +1363,8 @@ non-motif baseline of Section~\ref{sec:graph_construction} and the motif
 fingerprint of Section~\ref{sec:motif_extraction}. This section describes how
 those descriptions are turned into a detector and which models are used. The
 binary detection for RQ1 and RQ2 is kept apart from the category detection for
-RQ3, because the two ask different questions and use different datasets.
+RQ3 and RQ4, because the two groups ask different questions and use different
+datasets.
 
 \subsection{The three feature views}
 
@@ -1403,12 +1419,12 @@ summarises all three models.
 \midrule
 RQ1 and RQ2 (main) &
 Random forest &
-100 trees, depth 10, balanced class weights, a fixed seed, all CPU cores \\[2pt]
+100 trees, depth 10, balanced class weights, a fixed seed, allocated CPU threads \\[2pt]
 RQ1 (robustness) &
 Gradient-boosted trees (XGBoost) &
 100 rounds, depth 6, learning rate 0.1, positive-class weight from the training
 split, a fixed seed \\[2pt]
-RQ3 &
+RQ3 and RQ4 &
 Multinomial logistic regression &
 Standardised features, balanced class weights, up to 2{,}000 iterations, a fixed
 seed \\
@@ -1416,11 +1432,13 @@ seed \\
 \end{tabular}
 \end{table}
 
-\subsection{Classifier for RQ3}
+\subsection{Classifier for RQ3 and RQ4}
 
-RQ3 does not separate malicious from benign addresses. It sorts criminal
+RQ3 and RQ4 do not separate malicious from benign addresses. They sort criminal
 addresses into their behaviour category, so the model has one class per category
-rather than two. Only categories with at least 100 addresses take part, because the categories are
+rather than two. Both questions are answered from the same model on the same
+data, and they are therefore always prepared and run together as one analysis.
+Only categories with at least 100 addresses take part, because the categories are
 very unevenly filled, as explained in Section~\ref{sec:data_acquisition}, and
 categories are never merged into larger groups.
 
@@ -1434,11 +1452,15 @@ is a simple model with few parameters. This tests whether the motif proportions
 alone can separate the categories, without a more complex model that might overfit
 the smaller categories.
 
-To answer both halves of RQ3, two kinds of window are selected on the development
-data. A single global window is chosen to separate all categories as well as
-possible at once, and a separate window is chosen for each category to see it at
-its best. The final model is refitted on all development addresses and gives each address in
-the test set one probability per category.
+Two kinds of window are selected on the development data, one for each question. A
+single global window is chosen to separate all categories as well as possible at
+once, and this is the window RQ3 uses to ask whether the categories have distinct
+fingerprints at all. In addition, a separate window is chosen for each category,
+the one at which that category is recognised best. Whether these category-specific
+windows actually beat the single global window is what RQ4 tests. Both kinds of
+window are chosen on the development data only. The final model is refitted on all
+development addresses and gives each address in the test set one probability per
+category.
 
 \subsection{Handling class imbalance}
 
@@ -1495,7 +1517,10 @@ it really is. Known campaign families are therefore kept together as one group,
 and every split keeps a whole group on a single side. Each cohort is divided about
 80 to 20 into a development set and a test set with a group-aware, stratified
 split, and the development set is divided again into repeated five-fold splits,
-under different random seeds, for choosing the time window. RQ3 uses its own 80 to
+under different random seeds, for choosing the time window. Cohort membership is
+included in the stratification, while campaign assignments are made across both
+cohorts together; a campaign represented in both cohorts therefore remains on
+the same side and in the same validation fold. RQ3 and RQ4 share their own 80 to
 20 split, stratified by category, again keeping only categories with at least 100
 addresses and never merging them.
 
@@ -1506,16 +1531,16 @@ ranks malicious addresses above benign ones across all decision thresholds. It
 suits imbalanced data because it focuses on the rarer positive class. F1,
 precision, and recall are reported as secondary measures at a fixed threshold of
 0.5, which is never tuned on the test set, and ROC-AUC is reported alongside them.
-For RQ3 the matching measures are the macro-averaged and per-category average
-precision, the macro F1, and a confusion matrix.
+For RQ3 and RQ4 the matching measures are the macro-averaged and per-category
+average precision, the macro F1, and a confusion matrix.
 
-The time window for RQ1 is chosen on the development data alone. Each window is
-scored by cross-validation, and the choice follows the one-standard-error rule:
-take the window with the best average score, then pick the shortest window whose
-score is still within one standard error of it. This prefers the shortest window
-that scores as well as the best within the margin of error, rather than the single
-highest-scoring window, whose lead may be noise. The test set plays no part in this
-choice.
+The time window is chosen on the development data alone. Each window is scored by
+cross-validation, and the window with the highest average score is taken. If
+several windows share that score, the shortest of them is used, so that the choice
+is decided in advance rather than by chance. As a check on how firm that choice is,
+the shortest window whose score is still within one standard error of the best is
+recorded alongside it, which shows whether a shorter window would have done
+essentially as well. The test set plays no part in either.
 
 \subsection{Statistical tests}
 
@@ -1535,13 +1560,21 @@ $p$-values are adjusted for multiple testing with the Benjamini--Hochberg
 procedure, and a window is declared the single best only if it still beats every
 alternative afterwards.
 
-For RQ3 two things are tested. The first is whether the categories can be separated
-at all. The true category labels are shuffled at random 10{,}000 times, and if the
-model does no better on the real labels than on the shuffled ones, the fingerprints
-carry no signal about the category. The second is whether a category is seen better
-at its own best window than at the shared one. This is checked for each category
-with a bootstrap, and because it is repeated for every category, the results are
-again adjusted for multiple testing.
+RQ3 asks whether the categories can be separated at all. The true category labels
+are shuffled at random 10{,}000 times, and if the model does no better on the real
+labels than on the shuffled ones, the fingerprints carry no signal about the
+category.
+
+RQ4 asks whether the categories are better served by their own windows than by one
+shared window. The two settings are compared on the test set in two ways. The first
+is an overall comparison: the model using each category's own window is set against
+the model using the single global window, and the difference in macro-averaged
+average precision is measured with a paired bootstrap. The second looks at each
+category on its own, comparing its own window with the global one, and because this
+is repeated for every category the results are adjusted for multiple testing. The
+number of distinct windows the categories select is reported alongside, since
+category-specific windows can only help if the categories do not all choose the
+same one.
 
 \subsection{Robustness to event ordering}
 
@@ -1564,7 +1597,9 @@ run reproducible.
 The pipeline is written in Python, with the temporal motif counting carried out by
 Raphtory's Rust extension. Everything runs on the CPU, so no graphics card is
 needed, and Raphtory, DuckDB, the random forest, and XGBoost are all set up to use
-the available CPU cores. Development and validation used
+the thread allocation recorded for the run. Native thread limits are set before
+the numerical libraries are imported, so two coordinated workers cannot each
+claim every core. Development and validation used
 Python~3.13 in an isolated virtual environment. The exact interpreter and package
 versions of each run are recorded in its protocol, and that record, rather than the
 environment described here, is what counts for the final numbers.
@@ -1601,7 +1636,8 @@ Table~\ref{tab:libraries} lists the main libraries and their role.
 \textbf{pandas} &
   3.0.2 &
   Holds the address-level targets, fingerprints, model matrices, predictions, and
-  metrics. The large event tables are never held in pandas. \\
+  metrics. The primary HF and Real-CATS event tables are not materialised
+  together in pandas; the much smaller BLTE table is. \\
 
 \textbf{NumPy} &
   2.4.4 &
@@ -1636,8 +1672,14 @@ The repository keeps the exploratory and the evidence-producing code apart. The
 interactive \texttt{main.py} is for development and inspection, while the thesis
 results come only from \texttt{scripts/run\_results.py}, whose \texttt{prepare} and
 \texttt{execute} subcommands call the separate \texttt{src/experiments} package.
+The same entry point provides read-only \texttt{preflight} and \texttt{verify}
+commands, execution \texttt{--resume}, and a coordinated
+\texttt{execute-parallel} command for running the HF and Real-CATS roots on one
+server.
 Keeping the two apart stops exploratory shortcuts, such as row limits or changed
-defaults, from leaking into the results. The main files are shown below.
+defaults, from leaking into the results. The main files are shown below, and
+Figure~\ref{fig:pipeline_architecture} shows how they connect across the two
+phases of a run.
 
 \begin{lstlisting}[caption={Project layout (abbreviated).},
   label={lst:layout}]
@@ -1645,6 +1687,7 @@ bachelor_thesis/
 main.py              CLI entry point, pipeline orchestrator
 config.py            Exploratory defaults only
 requirements.txt     Environment definition
+requirements-results.txt Exact numerical Results environment
 scripts/run_results.py  Locked Results prepare/execute CLI
 src/
  experiments/
@@ -1659,13 +1702,18 @@ src/
    statistics.py    Metrics, permutations, bootstrap, BH correction
    splits.py        Group-aware and stratified partition construction
    rq_binary.py     RQ1/RQ2 execution and persistence
-   rq_multiclass.py RQ3 execution and persistence
+   rq_multiclass.py RQ3/RQ4 execution and persistence
    secondary.py     Conditional BLTE and synthetic validation
    synthetic_fixtures.py  Deterministic motif-role and boundary fixtures
    execute.py       Verification and RQ orchestration
+   execution_control.py Locks, attempts, threads, state transitions
+   execution_artifacts.py Checkpoints, stages, result inventory
+   coordination.py  Same-host HF/Real-CATS coordination
+   verify.py        Read-only integrity and citability checks
+   validation.py    Prepared-data and result-schema guards
    artifacts.py     Exclusive writes, hashes, runtime provenance
-   resources.py     Memory projection and preflight rejection
-   telemetry.py     Console and append-only JSONL timing
+   resources.py     Read-only RAM/disk projection and admission
+   telemetry.py     Fsynced JSONL timing and five-minute heartbeat
    types.py         Shared data contracts (dataclasses)
    visualization.py Chapter-ready PDF figures
  graph_construction.py  Exploratory NetworkX graph features
@@ -1674,12 +1722,24 @@ data/raw/            Raw datasets (gitignored)
 results/experiments/ Locked run directories
 \end{lstlisting}
 
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{1.0}{01-pipeline}
+  \caption{The locked Results pipeline. The preparation phase fixes the cohorts
+  and writes the locked artifacts, and the execution phase then computes the
+  motifs, trains the models, and runs the statistical tests. Italic labels name
+  the source modules in \texttt{src/experiments}.}
+  \label{fig:pipeline_architecture}
+\end{figure}
+
 \subsection{Engineering challenges}
 
 The final design came out of an audit of the earlier exploratory pipeline against
-what the three research questions actually need. The audit turned up both speed
+what the four research questions actually need. The audit turned up both speed
 bottlenecks and risks to the validity of the results, and the decisions below
 address them.
+
+\subsubsection{Locating the bottleneck}
 
 The largest data problem is the size of the HuggingFace source, which is never
 held in memory as a whole. The preparation phase scans the locally cached table in
@@ -1687,23 +1747,60 @@ small batches, measures how active each target is, and writes out only the
 transfers that touch a selected address. This keeps the memory demand low, and it is
 exact for the star and two-node motifs, though not for triangles, which is why
 those are excluded (Section~\ref{sec:graph_construction}) rather than recorded as
-zeros.
+zeros. Keeping the source locally removes download time and network failures, but
+does not remove these complete local scans.
 
-The motif counting itself is sped up by building one Raphtory graph per ordering
-and reusing it for all seven windows, instead of rebuilding it for every window as
-the earlier code did. For Real-CATS the same reuse is done one layer at
-a time, so a finished layer can be released before the next is loaded, which keeps
-peak memory down without changing what is counted.
+Timing the earlier pipeline showed that reading the data and fitting the models
+were not the main cost. The dominant operation is Raphtory's local temporal motif
+routine. The complete HF protocol requires seven windows under seven timestamp
+orderings, and Real-CATS repeats the same grid within five layers. The graph is
+therefore built once per ordering (and, for Real-CATS, per layer and ordering)
+and reused across its seven windows, instead of being rebuilt for each window.
+
+\subsubsection{Alternatives considered}
+
+Three possible reductions were considered. First, counting only the motif roles
+suggested by the scam examples would appear to save work. Raphtory~0.17.0,
+however, exposes the 40-role counter as one operation; it cannot be instructed to
+compute only selected roles. The pipeline consequently verifies the full output
+and retains the 24 star and eight two-node roles. Avoiding the eight triangle
+calculations would require a separate verified Rust implementation and was not
+introduced during this study.
+
+Second, replacing pandas with Spark would not accelerate the actual counter,
+because the Raphtory graph still lives in one process. Pandas is used only after
+aggregation, for address-level targets, fingerprints, model matrices,
+predictions, and metrics. PyArrow performs bounded source scans and DuckDB
+performs the baseline query and external event sorting. A distributed dataframe
+rewrite would add another execution system without removing the single-process
+motif bottleneck.
+
+Third, reducing the transaction types was considered. The HF graph already
+contains ordinary transaction edges only. For RQ3 and RQ4, in contrast, the separation
+of normal, internal, ERC-20, ERC-721, and ERC-1155 histories is part of the
+question: an exploit or rug pull may differ precisely in which layer carries its
+activity. Dropping layers would change the fingerprint definition. The five
+layers are therefore kept, but loaded sequentially so that only one layer graph
+sets the Real-CATS peak memory demand.
+
+\subsubsection{Long-run execution}
 
 The workflow runs on a single machine, because the Raphtory graph has to live in
-one process. A distributed rewrite, for example with Spark, was considered but not
-adopted, since it would not remove that single-process memory limit. Instead, a
-run checks in advance whether the graph is likely to fit in the available memory,
-from the size of the prepared file. If it will not fit, the run stops
-before producing any result rather than quietly shrinking the experiment, because
-dropping addresses or capping campaigns would silently change what was locked. The
-same run can then be repeated on a larger machine, as long as the recorded data
-and versions are reproduced.
+one process. A read-only preflight estimates graph expansion, DuckDB memory,
+model matrices, checkpoint staging, sort spill, and a per-filesystem reserve.
+This is an admission budget rather than an enforceable Raphtory memory limit. If
+the budget does not fit, execution stops before creating an attempt instead of
+quietly shrinking the locked cohort.
+
+Each expensive motif call is committed independently, at ordering--window level
+for HF and layer--ordering--window level for Real-CATS. A resumed execution
+rechecks a canonical content hash and reuses valid commits; an invalid committed
+checkpoint stops the run and is never replaced. HF and Real-CATS can also run in
+parallel on one server through a coordinator that gives them disjoint thread
+allocations and admits their combined RAM and disk demand. If one worker fails,
+the other is allowed to finish. These changes do not reduce the number of motif
+calculations in the scientific protocol, but they prevent an interruption late
+in a week-long run from discarding earlier verified work.
 
 \subsection{Reproducibility}
 
@@ -1715,7 +1812,7 @@ protocol when preparation finishes. The main ones are shown below.
 \begin{lstlisting}[language=Python,
   caption={Selected locked experiment constants.},
   label={lst:config}]
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 5
 RANDOM_SEED = 42
 CV_SEEDS = (42, 43, 44)
 DELTAS = (300, 1800, 3600, 21600,
@@ -1740,7 +1837,39 @@ if the code, the data, the versions, or the settings differ from what was locked
 the cohort sampling, the folds, and the resampling repeatable, and the
 deterministic synthetic fixtures of Section~\ref{sec:data_acquisition} check that
 the motif counter assigns the roles it should, including right at the edge of a
-time window.
+time window. The thesis profile fixes all settings above. A separate development
+profile may reduce only the numbers of permutation and bootstrap repetitions and
+is always marked non-citable.
+
+Before execution, a read-only preflight checks the recorded RAM and disk budget
+without creating a lock, log record, temporary directory, or timestamp change in
+the run. Execution then creates an immutable
+\texttt{execution\_definition.json}. This second definition separates operational
+choices---the thread allocation, direct or coordinated mode, coordinator
+identity, and concrete worker thread settings---from the analytical model
+parameters in the protocol. A resumed run must use the same allocation. The
+thread limits are set before importing NumPy, scikit-learn, or the native
+libraries, which prevents numerical thread pools from silently exceeding that
+allocation.
+
+Exact equality is required for integer motif counts, address order, splits,
+selected windows, and hypothesis decisions. Independently recomputed floating
+probabilities and metrics are compared within a numerical tolerance because
+BLAS, XGBoost, and Parquet encoders need not be byte-identical under different
+thread allocations. Reusing an existing verified checkpoint or stage, in
+contrast, is byte-preserving. PDF timestamps are removed so their hashes do not
+change only because of generation time.
+
+Scientific guards run before finalisation. They reject overlapping or duplicate
+targets, campaign groups that cross a split, inconsistent folds, missing
+classes, negative motif counts, non-finite features or metrics, duplicate
+prediction rows, probabilities outside $[0,1]$, and multi-class probability
+vectors that do not sum to one within numerical tolerance. Conflicting
+duplicate labels in Real-CATS are rejected, while identical duplicates are
+collapsed and counted in the preparation audit. All five layer files are
+required even when one is empty. Checkpoint content is hashed from a fixed
+Arrow representation with named columns, 64-bit integer counts, and addresses
+sorted by their UTF-8 bytes, independently of its Parquet storage encoding.
 
 \subsection{Result artifacts}
 
@@ -1748,20 +1877,52 @@ Each run has its own directory that is never overwritten, so results from
 different runs cannot be mixed, and a run may only create a file that does not yet
 exist. Prepared edges, fingerprints, and test-set predictions are stored as
 Parquet, the protocol and the test summaries as JSON, the chapter tables as CSV,
-and the figures as PDF. A single running log, \texttt{run\_log.jsonl}, is the only
-file that is appended to, and it records the status and duration of each stage.
-While a Real-CATS preparation is still in progress, its SQLite index and partial
-files hold the work done so far and survive an interruption, so such a preparation
-may be resumed rather than restarted, but only before the protocol is written and
-only when its inputs still match. A finished
-protocol can never be resumed or changed. The output layout is shown below.
+and the figures as PDF. Output files are first fully written and synchronised in
+a private attempt directory. Files are committed without replacement, and a
+multi-file stage is published by an atomic directory rename after its manifest is
+written last. The public \texttt{features}, \texttt{metrics}, and related
+directories contain hard links to verified stage payloads, preserving the
+filenames consumed by the Results chapter.
+
+Preparation and execution have separate resume rules. During Real-CATS
+preparation, the SQLite index records each completed address and can be resumed
+only before the protocol is locked. During protocol-v4 execution, every attempt
+has its own ID and scratch directory. HF commits one motif checkpoint for every
+ordering and window; Real-CATS commits one for every layer, ordering, and
+window. A new attempt may reuse earlier valid commits. A completed run rejects
+both a fresh execution and a resume.
+
+The integrity chain is acyclic. The locked protocol and prepared data identify
+the execution definition; those identify every checkpoint and stage; the
+result inventory hashes the committed stage manifests and public files; and the
+execution manifest records the inventory hash. Each inventory and manifest has
+a separate checksum file and does not include itself. The final
+\texttt{verify} command checks this chain and the scientific schemas without
+writing to the run. Ordinary verification distinguishes a valid non-citable
+development or smoke run from corruption. Final thesis acceptance additionally
+requires \texttt{--require-citable}.
+
+\texttt{run\_log.jsonl} is the only appended file. Its writes are thread-safe
+and synchronised to disk. A native operation that runs for several minutes
+emits a heartbeat every five minutes with its elapsed time, allocated threads,
+free disk, and latest committed checkpoint. The output layout is shown below.
 
 \begin{lstlisting}[caption={Locked Results artifact layout.},
   label={lst:filenames}]
 results/experiments/<run-id>/
   preparation_state.json
-  protocol.json
-  protocol.sha256
+  protocol.json / protocol.sha256
+  execution_definition.json / execution_definition.sha256
+  attempts/<attempt-id>/
+    started.json, completed.json or failed.json
+    scratch/duckdb/
+    staging/
+  checkpoints/<checkpoint-id>/
+    counts.parquet
+    metadata.json
+  stages/<stage-id>/
+    payload/
+    stage_manifest.json
   run_log.jsonl
   data/
   features/
@@ -1769,33 +1930,172 @@ results/experiments/<run-id>/
   metrics/
   figures/
   tables/
-  execution_manifest.json
+  result_artifacts.json / result_artifacts.sha256
+  execution_manifest.json / execution_manifest.sha256
 \end{lstlisting}
 
 
 Develop your hypotheses, describe your mental model for the research question.
 
 
-\chapter{Results} What are the findings? Describe the results of your investigation (e.g. hypothesis rejection). Use appropriate visualization (e.g., tables, charts).
+\chapter{Results}
 \label{ch:results}
 
-\section{Data Integrity and Cohort Construction}
+\IfFileExists{generated/results_macros.tex}{%
+  \input{generated/results_provenance}%
+  \input{generated/results_macros}%
+  \input{generated/results_validation}%
+}{%
+  \newcommand{\ResPreliminaryBanner}{\begin{center}\emph{Results are not yet generated. Run the experiments and \texttt{scripts/results\_to\_latex.py} to fill in this chapter.}\end{center}}%
+  \newcommand{\ResCohortLabelled}{--}%
+  \newcommand{\ResCohortInactive}{--}%
+  \newcommand{\ResCohortEligible}{--}%
+  \newcommand{\ResPrevalenceN}{--}%
+  \newcommand{\ResControlledN}{--}%
+  \newcommand{\ResHFSourceEdges}{--}%
+  \newcommand{\ResHFSelectedEdges}{--}%
+  \newcommand{\ResSyntheticRoles}{--}%
+  \newcommand{\ResSyntheticBoundary}{is pending}%
+  \newcommand{\ResSyntheticOutcome}{is pending}%
+  \newcommand{\ResBLTEDelta}{--}%
+  \newcommand{\ResBLTEBaselineAP}{--}%
+  \newcommand{\ResBLTEMotifsAP}{--}%
+  \newcommand{\ResBLTECombinedAP}{--}%
+}
 
+\ResPreliminaryBanner
+
+This chapter reports the findings for the four research questions. RQ1 and RQ2
+are evaluated on the two HuggingFace cohorts, and RQ3 and RQ4 on the Real-CATS
+criminal categories, all following the protocol fixed in
+Section~\ref{sec:evaluation_protocol}. Every table and figure is produced directly
+from the locked run artifacts.
+
+\section{Data Integrity and Cohort Construction}
+\label{sec:results_provenance}
+
+The HuggingFace target set begins with \ResCohortLabelled\ labelled addresses. Of
+these, \ResCohortInactive\ take part in no transfer within the collected graph and
+so cannot form a motif, and after the minimum-activity and top-tail rules of
+Section~\ref{sec:evaluation_protocol} \ResCohortEligible\ addresses remain
+eligible. From this eligible population the study draws a prevalence cohort of
+\ResPrevalenceN\ addresses and a disjoint controlled cohort of \ResControlledN\
+addresses. Table~\ref{tab:res_cohorts} records the full attrition.
+
+\IfFileExists{generated/results_cohorts.tex}{\input{generated/results_cohorts}}{\ResPendingTable{HuggingFace cohort attrition.}{tab:res_cohorts}}
+
+The graph actually built for these cohorts consists of \ResHFSelectedEdges\
+transfers, the subset of the \ResHFSourceEdges\ source transfers that touch a
+target address (Section~\ref{sec:graph_construction}).
 
 \section{RQ1: Incremental Signal of Temporal Motifs}
 
+RQ1 asks whether the temporal-motif fingerprint improves detection over the
+non-motif baseline. For each cohort the three feature views of
+Section~\ref{sec:detection_methods} are compared on identical addresses and folds.
+Figure~\ref{fig:res_rq1_ablation} shows the average precision of the three views,
+and Table~\ref{tab:res_rq1} reports the combined-minus-baseline difference with its
+confidence interval, the permutation $p$-value, and the resulting decision.
+
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{0.48}{rq1_ablation_controlled}
+  \ResGraphic{0.48}{rq1_ablation_prevalence}
+  \caption{RQ1 ablation: average precision of the baseline, motifs, and combined
+  views for the controlled (left) and prevalence (right) cohorts.}
+  \label{fig:res_rq1_ablation}
+\end{figure}
+
+\IfFileExists{generated/results_rq1.tex}{\input{generated/results_rq1}}{\ResPendingTable{RQ1 feature-view comparison.}{tab:res_rq1}}
 
 \section{RQ2: Sensitivity to the Temporal Window}
 
+RQ2 asks at which time window coordinated behaviour is most visible.
+Figure~\ref{fig:res_rq2_delta} traces the combined-view average precision across
+the seven windows, with the baseline as a flat reference, and
+Table~\ref{tab:res_rq2} compares the selected window against every alternative
+after the Benjamini--Hochberg correction.
 
-\section{RQ3: Exact Fraud Labels and Label-Specific Windows}
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{0.48}{rq2_delta_performance_controlled}
+  \ResGraphic{0.48}{rq2_delta_performance_prevalence}
+  \caption{RQ2 temporal-window sensitivity for the controlled (left) and
+  prevalence (right) cohorts.}
+  \label{fig:res_rq2_delta}
+\end{figure}
 
+\IfFileExists{generated/results_rq2.tex}{\input{generated/results_rq2}}{\ResPendingTable{RQ2 selected window against alternatives.}{tab:res_rq2}}
+
+\section{RQ3: Distinct Motif Fingerprints per Category}
+
+RQ3 asks whether the criminal categories have distinct motif fingerprints.
+Table~\ref{tab:res_rq3_global} reports how well the categories can be told apart
+overall, together with the permutation test that checks the result against chance,
+and Table~\ref{tab:res_rq3_labels} gives the detection for each category on its
+own. Figure~\ref{fig:res_rq3} shows the mean fingerprint of each category and the
+confusion between them.
+
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{0.9}{rq3_fingerprint_heatmap}\\[4pt]
+  \ResGraphic{0.6}{rq3_confusion_matrix}
+  \caption{RQ3: mean motif fingerprint per category (top) and the confusion matrix
+  between categories (bottom).}
+  \label{fig:res_rq3}
+\end{figure}
+
+\IfFileExists{generated/results_rq3_global.tex}{\input{generated/results_rq3_global}}{\ResPendingTable{RQ3 overall category separability.}{tab:res_rq3_global}}
+\IfFileExists{generated/results_rq3_labels.tex}{\input{generated/results_rq3_labels}}{\ResPendingTable{RQ3 per-category detection.}{tab:res_rq3_labels}}
+
+\section{RQ4: Category-Specific Temporal Windows}
+
+RQ4 asks whether the window that shows a category best differs from one category
+to the next. Each category is given the window at which it is recognised best on
+the development data, and these category-specific windows are then compared with
+the single global window on the test set. Table~\ref{tab:res_rq4_global} reports
+that overall comparison, including how many distinct windows the categories chose,
+and Table~\ref{tab:res_rq4_categories} breaks it down by category.
+Figure~\ref{fig:res_rq4} shows how the detection of each category changes across
+the windows.
+
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{0.75}{rq4_label_delta_curves}
+  \caption{RQ4: detection of each category across the seven temporal windows.}
+  \label{fig:res_rq4}
+\end{figure}
+
+\IfFileExists{generated/results_rq4_global.tex}{\input{generated/results_rq4_global}}{\ResPendingTable{RQ4 category-specific versus global temporal windows.}{tab:res_rq4_global}}
+\IfFileExists{generated/results_rq4_categories.tex}{\input{generated/results_rq4_categories}}{\ResPendingTable{RQ4 per-category temporal-window comparisons.}{tab:res_rq4_categories}}
 
 \section{Robustness and Validation}
 
+\paragraph{Ordering robustness.} Each result is recomputed under all seven orderings
+of Section~\ref{sec:evaluation_protocol}, and a conclusion is retained only when its
+direction and decision agree across all of them. The per-ordering decisions are
+collected in Section~\ref{sec:results_hypotheses}.
+
+\paragraph{Counter validation.} The deterministic synthetic fixtures confirm that
+the motif counter is correct. All \ResSyntheticRoles\ catalogue positions covered
+by the selected validation run were recovered. The current protocol extends this gate to the
+triangle positions excluded from the experiment features. The window-boundary
+check \ResSyntheticBoundary, and the overall validation \ResSyntheticOutcome.
+
+\paragraph{BLTE replication.} On the secondary, highly imbalanced BLTE dataset the
+combined view reaches an average precision of \ResBLTECombinedAP\ at the
+\ResBLTEDelta\ window, against \ResBLTEBaselineAP\ for the baseline and
+\ResBLTEMotifsAP\ for motifs alone. BLTE is reported only as a robustness check,
+because only 169 of its active addresses are labelled as scams
+(Section~\ref{sec:data_acquisition}).
 
 \section{Summary of Hypothesis Decisions}
+\label{sec:results_hypotheses}
 
+Table~\ref{tab:res_hypothesis} collects the decision for each research question
+across all orderings.
+
+\IfFileExists{generated/results_hypothesis.tex}{\input{generated/results_hypothesis}}{\ResPendingTable{Summary of hypothesis decisions.}{tab:res_hypothesis}}
 
 \chapter{Discussion} What does it mean? Discuss the theoretical and practical implications of your findings as well as the limitations of your study.
 
@@ -1853,4 +2153,3 @@ Coordination patterns that flow primarily through smart contract layers (DeFi ex
 
 
 \end{document}
-

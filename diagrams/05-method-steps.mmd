@@ -1,0 +1,38 @@
+%% The eight steps of the Method system overview (Section 4.1). The two phases of
+%% the text (preparation, execution) run top to bottom, with the execution phase
+%% split into its representation, detection, and analysis stages.
+flowchart TD
+
+    subgraph PREP["Phase 1 &middot; Preparation"]
+        direction LR
+        S1["<b>1 &middot; Loading the data</b><br/>read the transactions and labels,<br/>reading the large table in batches"]
+        S2["<b>2 &middot; Preparing the data</b><br/>keep active-enough addresses, set aside<br/>hubs, split development and test,<br/>store per-address transactions"]
+        S1 --> S2
+    end
+
+    subgraph EXEC["Phase 2 &middot; Execution"]
+        direction TB
+
+        subgraph REP["Building the representation"]
+            direction LR
+            S3["<b>3 &middot; Building the temporal graph</b><br/>addresses as nodes, transfers as<br/>directed, timestamped edges"]
+            S4["<b>4 &middot; Counting the motifs</b><br/>count each motif per address, across<br/>seven windows (5 min to 1 week)"]
+            S5["<b>5 &middot; Building the fingerprints</b><br/>the motif fingerprint plus simpler<br/>features, as three views"]
+            S3 --> S4 --> S5
+        end
+
+        subgraph DET["Detection"]
+            S6["<b>6 &middot; Running the detection</b><br/>train a classifier per view, pick the<br/>window on development, measure on test"]
+        end
+
+        subgraph ANA["Analysis and reporting"]
+            direction LR
+            S7["<b>7 &middot; Analysing the results</b><br/>compare views (RQ1), windows (RQ2),<br/>categories (RQ3), with statistical<br/>tests and orderings"]
+            S8["<b>8 &middot; Visualising the results</b><br/>write the tables and figures<br/>for the Results chapter"]
+            S7 --> S8
+        end
+
+        REP --> DET --> ANA
+    end
+
+    PREP --> EXEC

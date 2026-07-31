@@ -1,27 +1,55 @@
+%% Locked Results pipeline for the thesis experiments.
+%% Entry point: scripts/run_results.py (prepare / execute subcommands).
+%% Phases are stacked top-to-bottom; components within a phase run left-to-right.
 flowchart TD
-    subgraph SRC["Data sources (stage 1 picks one)"]
+
+    subgraph SRC["Data sources"]
         direction LR
-        SYN["Synthetic generator<br/><i>synthetic_data.py</i>"]
-        FILE["Local file<br/>CSV / JSON / Parquet"]
-        BLTE["BLTE<br/>labeled dataset"]
-        HF["HuggingFace<br/>raw stream + GNN subset"]
+        HF["HuggingFace ETH Fraud<br/>binary labels &middot; RQ1, RQ2"]
+        RC["Real-CATS<br/>criminal categories &middot; RQ3"]
+        BL["BLTE<br/>appendix replication"]
+        SY["Synthetic fixtures<br/>counter validation"]
+        HF ~~~ RC ~~~ BL ~~~ SY
     end
 
-    SRC --> S1
+    subgraph P1["Phase 1 &middot; Preparation &mdash; run_results.py prepare"]
+        direction LR
+        L["Load &amp; stream<br/>raw sources<br/><i>datasets.py &middot; realcats.py</i>"]
+        A["Measure activity +<br/>eligibility rules<br/><i>datasets.py</i>"]
+        C["Select cohorts /<br/>category targets<br/><i>datasets.py &middot; realcats.py</i>"]
+        S["Dev/test split +<br/>CV folds<br/><i>splits.py</i>"]
+        E["Incident edges /<br/>dedup + layer export<br/><i>datasets.py &middot; realcats.py</i>"]
+        L --> A --> C --> S --> E
+    end
 
-    S1["<b>Stage 1</b> · Load &amp; clean transactions<br/>+ per-address labels &amp; tx aggregates<br/><i>data_loading.py · _aggregate_tx_features</i>"]
-    S2["<b>Stage 2</b> · Build MultiDiGraph<br/>+ per-node structural features<br/><i>graph_construction.py</i>"]
-    S3["<b>Stage 3</b> · Temporal motif fingerprints<br/>per node, per δ<br/><i>motifs/ via get_backend()</i>"]
-    S4["<b>Stage 4</b> · Assemble feature matrix<br/>aggregates · motifs · full<br/><i>_stage4_assemble_features</i>"]
-    S5["<b>Stage 5</b> · Train / detect<br/><i>detection.py + evaluation.py</i>"]
-    S6["<b>Stage 6</b> · Visualize<br/><i>visualization.py</i>"]
+    LOCK[["Locked artifacts &middot; data boundary<br/>protocol.json + SHA-256 &middot; Parquet cohorts, folds, edges<br/><i>prepare.py &middot; artifacts.py</i>"]]
 
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    subgraph P2["Phase 2 &middot; Execution &mdash; run_results.py execute"]
+        direction LR
+        V["Verify protocol,<br/>code &amp; data hashes<br/><i>execute.py</i>"]
+        G["Build temporal graph<br/>7 event orderings<br/><i>ordering.py &middot; motifs.py</i>"]
+        M["Count motifs, 7 windows<br/>then fingerprints<br/><i>motifs.py &middot; features.py</i>"]
+        F["Baseline + 3 feature views<br/>baseline / motifs / combined<br/><i>features.py</i>"]
+        T["Train classifiers<br/>RF &middot; XGBoost &middot; logistic<br/><i>modeling.py &middot; rq_binary.py &middot; rq_multiclass.py</i>"]
+        ST["Statistical tests +<br/>ordering robustness<br/><i>statistics.py</i>"]
+        V --> G --> M --> F --> T --> ST
+    end
 
-    S2 -.->|"--mode graph stops here"| G[("results/&lt;ds&gt;_graph.pkl")]
-    S3 -.->|"--mode motifs stops here"| FP[("results/&lt;ds&gt;_fingerprints_&lt;backend&gt;_delta&lt;N&gt;.parquet")]
-    S5 --> J[("results/results_&lt;tag&gt;.json")]
-    S6 --> FIG[["matplotlib figures"]]
+    subgraph OUT["Outputs"]
+        direction LR
+        FIG[("Figures (PDF)")]
+        TAB[("Tables (CSV)")]
+        MET[("Metrics &middot; predictions")]
+        MAN[("execution_manifest.json")]
+        FIG ~~~ TAB ~~~ MET ~~~ MAN
+    end
 
+    SRC --> P1
+    P1 --> LOCK
+    LOCK --> P2
+    P2 --> OUT
+
+    classDef lock fill:#f2dede,stroke:#a94442,stroke-width:1.5px;
     classDef out fill:#e2f0d9,stroke:#548235;
-    class G,FP,J,FIG out;
+    class LOCK lock;
+    class FIG,TAB,MET,MAN out;

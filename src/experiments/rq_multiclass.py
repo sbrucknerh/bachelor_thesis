@@ -1,4 +1,4 @@
-"""RQ3 exact-label and label-specific temporal-window evaluation."""
+"""RQ3 category separability and RQ4 category-specific window evaluation."""
 
 from __future__ import annotations
 
@@ -15,11 +15,13 @@ from src.experiments.features import (
     motif_coverage,
 )
 from src.experiments.modeling import make_multiclass_model, select_multiclass_deltas
-from src.experiments.motifs import count_layer_parquets
+from src.experiments.constants import MOTIF_ROLE_NAMES
+from src.experiments.motifs import RaphtoryExperimentGraph, count_layer_parquets
 from src.experiments.statistics import (
     benjamini_hochberg,
     multiclass_metrics,
     permute_multiclass_labels,
+    stratified_paired_bootstrap_macro_ap_delta,
     stratified_paired_bootstrap_delta,
 )
 from src.experiments.telemetry import RunTelemetry
@@ -56,8 +58,110 @@ def _fit_multiclass(
     return model, probabilities, classes
 
 
+def _aggregate_realcats_results(
+    summaries: list[dict], alpha: float
+) -> tuple[dict, list[dict], list[dict], list[dict], list[dict]]:
+    rq3_decisions = [
+        summary["global_label_permutation"]["p_value_one_sided"] < alpha
+        for summary in summaries
+    ]
+    rq4_decisions = [
+        bool(summary["category_delta_macro_bootstrap"]["reject_h0"])
+        for summary in summaries
+    ]
+    sensitivity = {
+        "ordering_robust_global_separability": all(rq3_decisions),
+        "decisions": rq3_decisions,
+        "global_deltas": [summary["global_delta"] for summary in summaries],
+        "per_label_deltas": [summary["per_label_delta"] for summary in summaries],
+        "rq4_ordering_robust_category_specific_windows": all(rq4_decisions),
+        "rq4_decisions": rq4_decisions,
+    }
+    rq3_global_rows: list[dict] = []
+    rq3_label_rows: list[dict] = []
+    rq4_global_rows: list[dict] = []
+    rq4_category_rows: list[dict] = []
+    for summary in summaries:
+        rq3_global_rows.append(
+            {
+                "ordering_variant": summary["variant"],
+                "global_delta": summary["global_delta"],
+                "macro_average_precision": summary["shape_metrics"][
+                    "macro_average_precision"
+                ],
+                "macro_f1": summary["shape_metrics"]["macro_f1"],
+                "permutation_p_value": summary["global_label_permutation"][
+                    "p_value_one_sided"
+                ],
+                "reject_h0": summary["global_label_permutation"][
+                    "p_value_one_sided"
+                ]
+                < alpha,
+            }
+        )
+        comparisons = {
+            item["label"]: item for item in summary["label_delta_comparisons"]
+        }
+        for label, average_precision in summary["shape_metrics"][
+            "per_label_average_precision"
+        ].items():
+            comparison = comparisons[label]
+            rq3_label_rows.append(
+                {
+                    "ordering_variant": summary["variant"],
+                    "label": label,
+                    "average_precision": average_precision,
+                    # Retained for compatibility; RQ4 owns the inference.
+                    "selected_delta": summary["per_label_delta"][label],
+                }
+            )
+            rq4_category_rows.append(
+                {
+                    "ordering_variant": summary["variant"],
+                    "label": label,
+                    "global_delta": comparison["global_delta"],
+                    "category_delta": comparison["label_delta"],
+                    "global_average_precision": average_precision,
+                    "category_average_precision": (
+                        average_precision + comparison["observed_delta_ap"]
+                    ),
+                    "observed_delta_ap": comparison["observed_delta_ap"],
+                    "ci_lower": comparison["ci_95"][0],
+                    "ci_upper": comparison["ci_95"][1],
+                    "p_value": comparison["p_value_one_sided"],
+                    "p_value_bh": comparison["p_value_bh"],
+                    "reject_h0": comparison["reject_h0"],
+                }
+            )
+        omnibus = summary["category_delta_macro_bootstrap"]
+        rq4_global_rows.append(
+            {
+                "ordering_variant": summary["variant"],
+                "global_delta": summary["global_delta"],
+                "unique_category_deltas": len(
+                    set(summary["per_label_delta"].values())
+                ),
+                "observed_delta_macro_ap": omnibus["observed_delta_macro_ap"],
+                "ci_lower": omnibus["ci_95"][0],
+                "ci_upper": omnibus["ci_95"][1],
+                "p_value": omnibus["p_value_one_sided"],
+                "reject_h0": omnibus["reject_h0"],
+            }
+        )
+    return (
+        sensitivity,
+        rq3_global_rows,
+        rq3_label_rows,
+        rq4_global_rows,
+        rq4_category_rows,
+    )
+
+
 def execute_realcats(
-    paths, protocol: dict, telemetry: RunTelemetry | None = None
+    paths,
+    protocol: dict,
+    telemetry: RunTelemetry | None = None,
+    precomputed_counts_by_variant: dict[str, dict[int, pd.DataFrame]] | None = None,
 ) -> dict:
     dataset = protocol["datasets"]["realcats"]
     targets = pd.read_parquet(paths.root / dataset["artifacts"]["targets"])
@@ -80,13 +184,17 @@ def execute_realcats(
             telemetry.progress(
                 "realcats.ordering_variants", variant=variant, status_detail="starting"
             )
-        counts_by_delta = count_layer_parquets(
-            layer_paths,
-            indexed.index,
-            protocol["deltas"],
-            variant,
-            temporary_directory=paths.data / "duckdb_tmp" / "realcats" / variant,
-            telemetry=telemetry,
+        counts_by_delta = (
+            precomputed_counts_by_variant[variant]
+            if precomputed_counts_by_variant is not None
+            else count_layer_parquets(
+                layer_paths,
+                indexed.index,
+                protocol["deltas"],
+                variant,
+                temporary_directory=paths.data / "duckdb_tmp" / "realcats" / variant,
+                telemetry=telemetry,
+            )
         )
         long_counts = pd.concat(
             [counts.reset_index().assign(delta=delta, variant=variant) for delta, counts in counts_by_delta.items()],
@@ -175,6 +283,34 @@ def execute_realcats(
         adjusted = benjamini_hochberg(item["p_value_one_sided"] for item in comparisons)
         for comparison, adjusted_p in zip(comparisons, adjusted, strict=True):
             comparison["p_value_bh"] = float(adjusted_p)
+            comparison["reject_h0"] = bool(
+                comparison["label_delta"] != comparison["global_delta"]
+                and comparison["observed_delta_ap"] > 0
+                and adjusted_p < float(protocol["alpha"])
+            )
+
+        category_specific_scores = np.column_stack(
+            [
+                probabilities_by_delta[per_label_delta[label]][:, column]
+                for column, label in enumerate(classes)
+            ]
+        )
+        category_delta_macro = stratified_paired_bootstrap_macro_ap_delta(
+            test_labels,
+            classes,
+            global_probabilities,
+            category_specific_scores,
+            iterations=int(protocol["bootstraps"]),
+            seed=int(protocol["random_seed"]),
+        )
+        category_delta_macro["heterogeneous_selected_deltas"] = (
+            len(set(per_label_delta.values())) > 1
+        )
+        category_delta_macro["reject_h0"] = bool(
+            category_delta_macro["heterogeneous_selected_deltas"]
+            and category_delta_macro["observed_delta_macro_ap"] > 0
+            and category_delta_macro["p_value_one_sided"] < float(protocol["alpha"])
+        )
 
         predictions = pd.DataFrame(
             {
@@ -222,6 +358,10 @@ def execute_realcats(
                 cv_scores,
                 paths.figures / "rq3_label_delta_curves.pdf",
             )
+            plot_label_delta_curves(
+                cv_scores,
+                paths.figures / "rq4_label_delta_curves.pdf",
+            )
 
         summary = {
             "variant": variant,
@@ -231,46 +371,202 @@ def execute_realcats(
             "count_sensitivity_metrics": count_sensitivity,
             "global_label_permutation": permutation,
             "label_delta_comparisons": comparisons,
+            "category_delta_macro_bootstrap": category_delta_macro,
         }
         write_json_exclusive(paths.metrics / f"realcats_{variant}_results.json", summary)
         variant_summaries.append(summary)
 
     alpha = float(protocol["alpha"])
-    decisions = [
-        summary["global_label_permutation"]["p_value_one_sided"] < alpha
-        for summary in variant_summaries
-    ]
-    sensitivity = {
-        "ordering_robust_global_separability": len(set(decisions)) == 1 and all(decisions),
-        "decisions": decisions,
-        "global_deltas": [summary["global_delta"] for summary in variant_summaries],
-        "per_label_deltas": [summary["per_label_delta"] for summary in variant_summaries],
-    }
-    global_rows = []
-    label_rows = []
-    for summary in variant_summaries:
-        global_rows.append(
-            {
-                "ordering_variant": summary["variant"],
-                "global_delta": summary["global_delta"],
-                "macro_average_precision": summary["shape_metrics"]["macro_average_precision"],
-                "macro_f1": summary["shape_metrics"]["macro_f1"],
-                "permutation_p_value": summary["global_label_permutation"]["p_value_one_sided"],
-                "reject_h0": summary["global_label_permutation"]["p_value_one_sided"] < alpha,
-            }
-        )
-        for label, average_precision in summary["shape_metrics"][
-            "per_label_average_precision"
-        ].items():
-            label_rows.append(
-                {
-                    "ordering_variant": summary["variant"],
-                    "label": label,
-                    "average_precision": average_precision,
-                    "selected_delta": summary["per_label_delta"][label],
-                }
-            )
-    write_csv_exclusive(paths.tables / "rq3_global_results.csv", pd.DataFrame(global_rows))
-    write_csv_exclusive(paths.tables / "rq3_label_results.csv", pd.DataFrame(label_rows))
+    (
+        sensitivity,
+        rq3_global_rows,
+        rq3_label_rows,
+        rq4_global_rows,
+        rq4_category_rows,
+    ) = _aggregate_realcats_results(variant_summaries, alpha)
+    write_csv_exclusive(
+        paths.tables / "rq3_global_results.csv", pd.DataFrame(rq3_global_rows)
+    )
+    write_csv_exclusive(
+        paths.tables / "rq3_label_results.csv", pd.DataFrame(rq3_label_rows)
+    )
+    write_csv_exclusive(
+        paths.tables / "rq4_global_results.csv", pd.DataFrame(rq4_global_rows)
+    )
+    write_csv_exclusive(
+        paths.tables / "rq4_category_results.csv", pd.DataFrame(rq4_category_rows)
+    )
     write_json_exclusive(paths.metrics / "realcats_ordering_sensitivity.json", sensitivity)
+    write_json_exclusive(
+        paths.metrics / "realcats_rq4_ordering_sensitivity.json",
+        {
+            "ordering_robust_category_specific_windows": sensitivity[
+                "rq4_ordering_robust_category_specific_windows"
+            ],
+            "decisions": sensitivity["rq4_decisions"],
+            "global_deltas": sensitivity["global_deltas"],
+            "per_category_deltas": sensitivity["per_label_deltas"],
+        },
+    )
+    return sensitivity
+
+
+def execute_realcats_v5(
+    paths,
+    protocol: dict,
+    stage_manager,
+    checkpoints,
+    scratch_directory: Path,
+    telemetry: RunTelemetry | None = None,
+) -> dict:
+    """Run RQ3/RQ4 with shared layer/order/window motif checkpoints."""
+    import json
+    import pyarrow.parquet as pq
+
+    dataset = protocol["datasets"]["realcats"]
+    targets = pd.read_parquet(paths.root / dataset["artifacts"]["targets"])
+    targets = targets.loc[targets["inference_eligible"]].copy()
+    targets["address"] = targets["address"].astype(str)
+    target_index = pd.Index(targets["address"], name="address")
+    counts_by_variant: dict[str, dict[int, pd.DataFrame]] = {}
+
+    for variant in protocol["ordering_variants"]:
+        combined = {int(delta): pd.DataFrame(index=target_index) for delta in protocol["deltas"]}
+        for layer, relative in sorted(dataset["artifacts"]["layers"].items()):
+            layer_path = paths.root / relative
+            row_count = int(pq.ParquetFile(layer_path).metadata.num_rows)
+            graph = None
+            checkpoint_ids = [
+                f"realcats-{layer}-{variant}-delta-{int(delta)}"
+                for delta in protocol["deltas"]
+            ]
+            if row_count and not all(
+                (checkpoints.root / checkpoint_id).exists()
+                for checkpoint_id in checkpoint_ids
+            ):
+                graph = RaphtoryExperimentGraph.from_parquet(
+                    layer_path,
+                    variant,
+                    scratch_directory / "realcats" / variant / layer,
+                    telemetry=telemetry,
+                )
+            progress_context = (
+                telemetry.task_progress(
+                    f"Real-CATS {layer} motif windows ({variant})",
+                    len(protocol["deltas"]),
+                    unit="window",
+                )
+                if telemetry
+                else nullcontext(lambda _count=1: None)
+            )
+            with progress_context as advance:
+                for delta in protocol["deltas"]:
+                    checkpoint_id = (
+                        f"realcats-{layer}-{variant}-delta-{int(delta)}"
+                    )
+
+                    def compute(delta=int(delta), graph=graph):
+                        if graph is None:
+                            return pd.DataFrame(
+                                0,
+                                index=target_index,
+                                columns=MOTIF_ROLE_NAMES,
+                                dtype="int64",
+                            )
+                        return graph.count(delta, target_index)
+
+                    counts = checkpoints.get_or_compute(
+                        checkpoint_id,
+                        {
+                            "dataset": "realcats",
+                            "layer": layer,
+                            "ordering_variant": variant,
+                            "delta": int(delta),
+                            "targets_sha256": dataset["artifacts"][
+                                "targets_sha256"
+                            ],
+                            "events_sha256": dataset["artifacts"][
+                                "layers_sha256"
+                            ][layer],
+                        },
+                        compute,
+                    )
+                    combined[int(delta)] = combined[int(delta)].join(
+                        counts.add_prefix(f"{layer}__"),
+                        how="left",
+                    )
+                    advance()
+            del graph
+        counts_by_variant[variant] = {
+            delta: frame.fillna(0).astype("int64") for delta, frame in combined.items()
+        }
+
+    stage_id = "realcats-ordering-evaluation"
+    stage_result = None
+    with stage_manager.stage(stage_id) as stage:
+        if not stage.reused:
+            stage_result = execute_realcats(
+                stage.paths,
+                protocol,
+                telemetry=telemetry,
+                precomputed_counts_by_variant=counts_by_variant,
+            )
+            # Cross-order products form the next integrity link and are committed
+            # separately from per-ordering evaluation outputs.
+            for path in (
+                stage.paths.tables / "rq3_global_results.csv",
+                stage.paths.tables / "rq3_label_results.csv",
+                stage.paths.tables / "rq4_global_results.csv",
+                stage.paths.tables / "rq4_category_results.csv",
+                stage.paths.metrics / "realcats_ordering_sensitivity.json",
+                stage.paths.metrics / "realcats_rq4_ordering_sensitivity.json",
+            ):
+                path.unlink()
+
+    summaries = [
+        json.loads(
+            (paths.metrics / f"realcats_{variant}_results.json").read_text(encoding="utf-8")
+        )
+        for variant in protocol["ordering_variants"]
+    ]
+    alpha = float(protocol["alpha"])
+    (
+        sensitivity,
+        rq3_global_rows,
+        rq3_label_rows,
+        rq4_global_rows,
+        rq4_category_rows,
+    ) = _aggregate_realcats_results(summaries, alpha)
+    with stage_manager.stage("realcats-cross-order-aggregation") as stage:
+        if not stage.reused:
+            write_csv_exclusive(
+                stage.paths.tables / "rq3_global_results.csv",
+                pd.DataFrame(rq3_global_rows),
+            )
+            write_csv_exclusive(
+                stage.paths.tables / "rq3_label_results.csv",
+                pd.DataFrame(rq3_label_rows),
+            )
+            write_csv_exclusive(
+                stage.paths.tables / "rq4_global_results.csv",
+                pd.DataFrame(rq4_global_rows),
+            )
+            write_csv_exclusive(
+                stage.paths.tables / "rq4_category_results.csv",
+                pd.DataFrame(rq4_category_rows),
+            )
+            write_json_exclusive(
+                stage.paths.metrics / "realcats_ordering_sensitivity.json", sensitivity
+            )
+            write_json_exclusive(
+                stage.paths.metrics / "realcats_rq4_ordering_sensitivity.json",
+                {
+                    "ordering_robust_category_specific_windows": sensitivity[
+                        "rq4_ordering_robust_category_specific_windows"
+                    ],
+                    "decisions": sensitivity["rq4_decisions"],
+                    "global_deltas": sensitivity["global_deltas"],
+                    "per_category_deltas": sensitivity["per_label_deltas"],
+                },
+            )
     return sensitivity

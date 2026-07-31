@@ -86,10 +86,13 @@ class RaphtoryExperimentGraph:
         instance.source_label = source_label
         return instance
 
-    def count(self, delta: int, targets: Iterable[str]) -> pd.DataFrame:
+    def _count(
+        self, delta: int, targets: Iterable[str], *, retain_triangles: bool
+    ) -> pd.DataFrame:
         from raphtory.algorithms import local_temporal_three_node_motifs
 
         target_index = pd.Index([str(target) for target in targets], name="address")
+        threads = max(1, int(os.environ.get("THESIS_MODEL_THREADS", "1")))
         stage = (
             f"motifs.count.{self.source_label}.{self.ordering_variant}.delta_{int(delta)}"
         )
@@ -98,7 +101,7 @@ class RaphtoryExperimentGraph:
                 stage,
                 events=self.event_count,
                 targets=len(target_index),
-                threads=max(1, os.cpu_count() or 1),
+                threads=threads,
             )
             if self.telemetry
             else nullcontext()
@@ -107,7 +110,7 @@ class RaphtoryExperimentGraph:
             result = local_temporal_three_node_motifs(
                 self.graph,
                 int(delta),
-                threads=max(1, os.cpu_count() or 1),
+                threads=threads,
             )
             records: list[dict] = []
             target_set = set(target_index)
@@ -130,7 +133,16 @@ class RaphtoryExperimentGraph:
         else:
             frame = pd.DataFrame(index=target_index, columns=ALL_MOTIF_ROLE_NAMES).fillna(0)
         frame = frame.reindex(target_index, fill_value=0)
-        return frame.loc[:, MOTIF_ROLE_NAMES].astype("int64")
+        columns = ALL_MOTIF_ROLE_NAMES if retain_triangles else MOTIF_ROLE_NAMES
+        return frame.loc[:, columns].astype("int64")
+
+    def count(self, delta: int, targets: Iterable[str]) -> pd.DataFrame:
+        """Return the 32 roles valid on a target-incident experiment graph."""
+        return self._count(delta, targets, retain_triangles=False)
+
+    def count_all(self, delta: int, targets: Iterable[str]) -> pd.DataFrame:
+        """Return all 40 roles for exact full-neighbourhood validation fixtures."""
+        return self._count(delta, targets, retain_triangles=True)
 
     def sweep(self, deltas: Iterable[int], targets: Iterable[str]) -> dict[int, pd.DataFrame]:
         target_values = tuple(str(target) for target in targets)

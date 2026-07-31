@@ -34,10 +34,29 @@ def two_node_fixture(role_index: int, start: int = 100, step: int = 1) -> pd.Dat
     return _events(edges, start, step, f"two_{role_index}")
 
 
+def triangle_fixture(role_index: int, start: int = 100, step: int = 1) -> pd.DataFrame:
+    """Create exactly one triangle role in Raphtory indices 32..39 at node A."""
+    if not 32 <= role_index < 40:
+        raise ValueError("triangle role_index must be in 32..39")
+    edges_by_role = {
+        32: [("B", "A"), ("C", "A"), ("B", "C")],
+        33: [("B", "A"), ("C", "A"), ("C", "B")],
+        34: [("B", "A"), ("A", "C"), ("B", "C")],
+        35: [("B", "A"), ("A", "C"), ("C", "B")],
+        36: [("A", "B"), ("C", "A"), ("B", "C")],
+        37: [("A", "B"), ("C", "A"), ("C", "B")],
+        38: [("A", "B"), ("A", "C"), ("B", "C")],
+        39: [("A", "B"), ("A", "C"), ("C", "B")],
+    }
+    return _events(edges_by_role[role_index], start, step, f"triangle_{role_index}")
+
+
 def fixture_for_role(role_index: int, start: int = 100, step: int = 1) -> pd.DataFrame:
     if role_index < 24:
         return star_fixture(role_index, start, step)
-    return two_node_fixture(role_index, start, step)
+    if role_index < 32:
+        return two_node_fixture(role_index, start, step)
+    return triangle_fixture(role_index, start, step)
 
 
 def _events(

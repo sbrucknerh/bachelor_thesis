@@ -205,6 +205,68 @@ def stratified_paired_bootstrap_delta(
     }
 
 
+def stratified_paired_bootstrap_macro_ap_delta(
+    y_true: Iterable[str],
+    classes: Iterable[str],
+    reference_scores: np.ndarray,
+    category_specific_scores: np.ndarray,
+    iterations: int = 10_000,
+    seed: int = 42,
+) -> dict:
+    """Compare one global window with development-selected category windows."""
+    y = np.asarray(y_true)
+    class_values = np.asarray(list(classes))
+    reference = np.asarray(reference_scores, dtype=float)
+    category_specific = np.asarray(category_specific_scores, dtype=float)
+    expected_shape = (len(y), len(class_values))
+    if reference.shape != expected_shape or category_specific.shape != expected_shape:
+        raise ValueError(
+            "Multiclass score matrices must have shape "
+            f"{expected_shape}, got {reference.shape} and {category_specific.shape}"
+        )
+    class_indices = {
+        label: np.flatnonzero(y == label) for label in class_values
+    }
+    if any(len(indices) == 0 for indices in class_indices.values()):
+        raise ValueError("Every class must occur in the bootstrap sample")
+
+    def macro_ap(indices: np.ndarray) -> float:
+        encoded = label_binarize(y[indices], classes=class_values)
+        reference_aps = [
+            average_precision_score(encoded[:, column], reference[indices, column])
+            for column in range(len(class_values))
+        ]
+        category_aps = [
+            average_precision_score(
+                encoded[:, column], category_specific[indices, column]
+            )
+            for column in range(len(class_values))
+        ]
+        return float(np.mean(category_aps) - np.mean(reference_aps))
+
+    full = np.arange(len(y))
+    observed = macro_ap(full)
+    rng = np.random.default_rng(seed)
+    deltas = np.empty(iterations, dtype=float)
+    for iteration in range(iterations):
+        sample = np.concatenate(
+            [
+                rng.choice(indices, size=len(indices), replace=True)
+                for indices in class_indices.values()
+            ]
+        )
+        deltas[iteration] = macro_ap(sample)
+    lower, upper = np.quantile(deltas, [0.025, 0.975])
+    p_value = (1 + int(np.sum(deltas <= 0))) / (iterations + 1)
+    return {
+        "observed_delta_macro_ap": observed,
+        "ci_95": [float(lower), float(upper)],
+        "p_value_one_sided": float(p_value),
+        "iterations": iterations,
+        "seed": seed,
+    }
+
+
 def permute_multiclass_labels(
     y_true: Iterable[str],
     probabilities: np.ndarray,

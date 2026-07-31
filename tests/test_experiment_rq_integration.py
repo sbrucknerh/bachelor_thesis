@@ -123,9 +123,16 @@ def test_rq3_orchestration_uses_exact_labels_and_layer_features(tmp_path):
     }
     result = execute_realcats(paths, protocol)
     assert result["ordering_robust_global_separability"] in {True, False}
+    assert result["rq4_ordering_robust_category_specific_windows"] in {
+        True,
+        False,
+    }
     output = pd.read_parquet(paths.predictions / "realcats_canonical.parquet")
     assert set(output["true_label"]) == set(exact_labels)
     assert (paths.figures / "rq3_label_delta_curves.pdf").exists()
+    assert (paths.figures / "rq4_label_delta_curves.pdf").exists()
+    assert (paths.tables / "rq4_global_results.csv").exists()
+    assert (paths.tables / "rq4_category_results.csv").exists()
 
 
 def test_blte_stops_before_models_when_motif_coverage_is_too_low(tmp_path):

@@ -11,6 +11,7 @@ bachelor_thesis/
 ├── main.py                        Entry point — orchestrates the pipeline
 ├── config.py                      Central configuration and parameters
 ├── requirements.txt               Python dependencies
+├── requirements-results.txt       Exact protocol-v5 numerical environment
 ├── src/
 │   ├── data_loading.py            Load transactions from CSV / JSON / Parquet / HuggingFace
 │   ├── synthetic_data.py          Generate synthetic datasets with injected patterns
@@ -31,7 +32,8 @@ bachelor_thesis/
 ├── models/                        Saved trained models (gitignored)
 ├── results/                       Evaluation outputs and figures
 ├── notebooks/                     Jupyter notebooks for exploration (empty placeholder)
-├── scripts/run_results.py         Prepare/execute entry point for thesis Results runs
+├── scripts/run_results.py         Prepare/execute/resume/verify Results entry point
+├── scripts/results_to_latex.py    Verified-run tables/macros for the thesis
 └── tests/                         Unit and miniature end-to-end experiment tests
 ```
 
@@ -54,22 +56,30 @@ Real-CATS SQLite conversion substantially slower.
 
 | Resource | Practical minimum | Recommended full-run server | Notes |
 |---|---:|---:|---|
-| CPU | 16 modern physical cores | 24-32 physical cores | Raphtory uses all available cores inside one motif call. More cores reduce counting time, but the runner does not execute order variants or datasets concurrently. |
-| RAM | 32 GB if the locked preflight accepts it | 64 GB; 128 GB for additional margin | A 16 GB machine is insufficient for the existing large HF artifact. Do not treat swap as usable graph memory. The actual requirement is run-dependent and the preflight is authoritative. |
+| CPU | 16 modern physical cores | 20-32 physical cores | A direct run receives the selected thread budget. The coordinated launcher splits logical CPUs between HF and Real-CATS, with an odd extra thread assigned to HF. |
+| RAM | 32 GB for an admitted sequential run | 64 GB sequential; 128 GB for coordinated parallel execution | Parallel admission sums the HF peak and the largest sequential Real-CATS layer peak. Do not treat swap as usable graph memory. The read-only preflight is authoritative. |
 | Free local SSD for RQ1/RQ2 | 100 GB | 150 GB | Includes the approximately 21 GB HF cache, prepared incident edges, DuckDB spill space, fingerprints, and outputs. |
-| Free local SSD for RQ3 | 120 GB | 200 GB | The Real-CATS ZIP is approximately 12 GB and lists about 72 GB of uncompressed per-address JSON in total; RQ3 reads the criminal-address subset. Peak usage includes SQLite, layer Parquets, and sort spill. |
+| Free local SSD for RQ3/RQ4 | 120 GB | 200 GB | The Real-CATS ZIP is approximately 12 GB and lists about 72 GB of uncompressed per-address JSON in total; RQ3/RQ4 share the criminal-address subset and motif checkpoints. Peak usage includes SQLite, layer Parquets, and sort spill. |
 | Free local SSD for all retained runs | 250 GB | 350 GB or more on a 500 GB volume | Assumes both raw sources and both locked run directories remain available. Keep at least 20% of the filesystem free for temporary work. |
 | GPU | Not required | Not required | The locked estimators use CPU implementations. |
 | Network | Required only for initial downloads | Not required during prepare/execute | HuggingFace "streaming" means bounded reads from the locally cached Parquet, not repeated remote access. |
 
 Cloud vendors usually advertise SMT threads as vCPUs rather than physical
-cores. In that terminology, target approximately 32-64 dedicated vCPUs and
-avoid heavily oversubscribed burst instances.
+cores. Avoid heavily oversubscribed burst instances.
+
+The supervisor-provided server is suitable for the full run:
+
+| Provided hardware | Pipeline use |
+|---|---|
+| 20 CPU cores | Used fully. The one-command launcher normally runs HF and Real-CATS concurrently with 10 Raphtory threads each. |
+| 48 GPU cores, approximately RTX 5070 class | Not used. Raphtory motif counting is CPU-only, and enabling GPU execution for one small XGBoost robustness fit would not materially reduce total runtime. |
+| 128 GB shared system RAM/VRAM | Suitable for coordinated execution when preflight passes. Because memory is shared, do not run a separate GPU workload during the thesis run. |
+| 4 TB storage | More than sufficient. Keep at least 20% free because the locked admission rule reserves 20% per filesystem for staging and external sorts. |
 
 The 32 GB RAM figure is a floor, not a guarantee. As a concrete sizing anchor,
 the existing local HF preparation contains about 140 million incident edges;
 the current conservative preflight projects approximately 14.1 GiB peak and
-rejects a 16 GB machine because execution would exceed the 80% memory safety
+rejects a 16 GB machine because execution would exceed the 85% memory safety
 limit. A newly prepared protocol may select a different edge volume. Always run
 the preflight on the intended server, and use its decision instead of the table
 when they differ.
@@ -78,37 +88,41 @@ Recommended server profile for the complete thesis evaluation:
 
 ```text
 Linux x86-64 recommended; otherwise verify all pinned wheels first
-24-32 physical CPU cores
+20-32 physical CPU cores
 64-128 GB RAM
 500 GB local NVMe SSD
 Python and dependency versions exactly matching protocol.json
 No GPU required
 ```
 
-Run RQ1/RQ2 and RQ3 sequentially. Starting both executions at once competes for
-RAM, SSD bandwidth, and all CPU cores, and makes both slower.
+RQ1/RQ2 and RQ3/RQ4 may run sequentially or through the coordinated parallel
+launcher. Do not start two ordinary `execute` commands manually: each assumes
+exclusive host ownership. `execute-parallel` allocates disjoint thread budgets,
+checks their combined RAM and per-device disk demand, and owns one host lock
+while both workers run.
 
 ### Approximate full-run time
 
 The following ranges are capacity-planning estimates, not guaranteed runtimes.
 They assume that the datasets are already downloaded, local NVMe storage, no
-other heavy workload, and a 24-32-core server with 64-128 GB RAM. The first
-complete protocol-v3 run should be used to replace these estimates with the
+other heavy workload, and a 20-32-core server with 64-128 GB RAM. The first
+complete protocol-v5 run should be used to replace these estimates with the
 measured durations from `run_log.jsonl`.
 
 | Stage | Approximate time | Main cost |
 |---|---:|---|
 | Synthetic validation | Under 5 minutes | Small exact Raphtory fixtures and artifact checks |
-| Hybrid internal smoke run | Target under 1 hour; 67.9 seconds observed locally | Bounded real HF and Real-CATS data, full BLTE, all RQ orchestration, and synthetic validation |
+| Hybrid internal smoke run | Target under 1 hour; 76.4 seconds observed locally | Bounded real HF and Real-CATS data, full BLTE, all RQ orchestration, and synthetic validation |
 | HuggingFace RQ1/RQ2 preparation | 10-45 minutes | Three full local reads of the approximately 21 GB edge Parquet: activity, extraction, and SHA-256 |
-| Real-CATS RQ3 preparation | 3-12 hours | ZIP JSON parsing, durable SQLite deduplication, checkpoint commits, and five Parquet exports |
+| Real-CATS RQ3/RQ4 preparation | 3-12 hours | ZIP JSON parsing, durable SQLite deduplication, checkpoint commits, and five Parquet exports |
 | HuggingFace RQ1/RQ2 execution | 2-7 days | Seven graph builds and 49 full Raphtory motif calls: seven order variants times seven delta values |
-| Real-CATS RQ3 execution | 2-7 days | Five layers processed for seven order variants and seven delta values, followed by exact-label inference |
-| Both primary executions, sequentially | About 4-14 days | Depends mainly on prepared event counts, graph density, CPU memory bandwidth, and motif-window density |
+| Real-CATS RQ3/RQ4 execution | 2-7 days | Five layers processed for seven order variants and seven delta values, followed by shared exact-label inference |
+| Both primary executions, sequentially | About 4-14 days | Conservative option when the server cannot admit both graphs together |
+| Both primary executions, coordinated in parallel on 20 CPU cores | About 3-10 days | Requires combined admission; storage bandwidth contention and per-delta variation can reduce the ideal speed-up |
 
 On an 8-core laptop, preparation remains feasible when storage is sufficient,
 but execution can take roughly one to three weeks and may fail the RAM
-preflight. Renting a 24-32-core, 64-128 GB RAM server is the more predictable
+preflight. A 20-core, 128 GB RAM server is a substantially more predictable
 option. Increasing GPU capacity will not shorten the current pipeline.
 
 The model fits are not the main bottleneck. The dominant stage is Raphtory's
@@ -131,8 +145,8 @@ cd bachelor_thesis
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies (includes Raphtory for the default motif backend)
-pip install -r requirements.txt
+# Install the pinned thesis-results environment
+pip install -r requirements-results.txt
 ```
 
 ### HuggingFace datasets
@@ -152,7 +166,7 @@ data/raw/realcats_transactions/real-cats.zip
 data/raw/realcats_dataset/CE.tsv
 ```
 
-The Results runner reads all five transaction layers directly from the ZIP and globally deduplicates overlapping address histories. Do not run `scripts/extract_realcats.py` for RQ3; that script extracts only normal transactions for the exploratory `main.py` workflow.
+The Results runner reads all five transaction layers directly from the ZIP and globally deduplicates overlapping address histories. Do not run `scripts/extract_realcats.py` for RQ3/RQ4; that script extracts only normal transactions for the exploratory `main.py` workflow.
 
 All five layers are retained intentionally. Normal and internal transfers describe native-ETH and contract-mediated flows, while ERC-20, ERC-721, and ERC-1155 transfers are needed for type-specific behavior such as liquidity exits and NFT airdrops. Motifs are counted separately per layer, so unlike token standards are not mixed into one event sequence.
 
@@ -171,6 +185,56 @@ The `snap` motif backend (Paranjape et al.'s original C++ implementation via SNA
 Use `--motif-backend raphtory` (default) or `--motif-backend networkx` instead. The SNAP code path raises a clear `RuntimeError` if invoked.
 
 ## Usage
+
+### Professor/server: complete thesis run with one command
+
+After installing `requirements-results.txt` and placing the local Hugging Face
+snapshot and Real-CATS files as described above, the complete citable workflow
+is:
+
+```bash
+venv/bin/python scripts/run_results.py run-thesis \
+  --run-id thesis_final_20260731 \
+  --threads 20
+```
+
+`--run-id` is optional for this command; if omitted, a UTC timestamped protocol-v5
+ID is generated and printed. Supplying it explicitly makes restart and handover
+easier. The command performs all of the following without manual intervention:
+
+1. validates that both source datasets exist locally;
+2. prepares and locks separate `thesis_final_20260731_hf` and
+   `thesis_final_20260731_realcats` roots;
+3. runs read-only combined RAM and disk admission;
+4. uses coordinated parallel execution when admitted, splitting 20 threads as
+   10 for HF and 10 for Real-CATS;
+5. falls back to sequential 20-thread execution if only sequential memory
+   admission succeeds;
+6. executes synthetic validation, RQ1/RQ2, and the shared RQ3/RQ4 analysis;
+7. verifies both roots with the thesis-citable requirement before returning
+   success.
+
+The terminal displays `tqdm` progress bars with elapsed time, throughput, and
+rolling ETA for HF scan batches, Real-CATS address conversion, and every
+seven-window motif sweep. ETA becomes informative only after at least one
+comparable unit has completed; different deltas and transaction layers can have
+substantially different costs. `run_log.jsonl` remains the authoritative,
+fsynced audit log and records five-minute heartbeats during a single long native
+Raphtory call.
+
+For an SSH session, run the command inside `tmux` or another persistent job
+session. After an interruption, use the same ID and hardware allocation:
+
+```bash
+venv/bin/python scripts/run_results.py run-thesis \
+  --run-id thesis_final_20260731 \
+  --threads 20 \
+  --resume
+```
+
+Committed checkpoints are verified and reused. The command resumes the
+incomplete root directly if its peer already completed. It never overwrites an
+existing result or silently replaces an invalid checkpoint.
 
 ### One-hour internal smoke test
 
@@ -191,16 +255,17 @@ The default output root is `results/smoke/<run-id>`, never
   controlled targets per label × contract × activity-quintile stratum;
 - 20 bounded archive-backed addresses from each of `Phishing Scam`,
   `Impersonation Scam`, and `Hack Scam`, with all five Real-CATS layers;
-- the complete small BLTE release and all deterministic 32-role validation
-  fixtures;
+- the complete small BLTE release and deterministic fixtures for all 40
+  Raphtory catalogue positions (32 retained roles and 8 excluded triangles);
 - three delta values (5 minutes, 1 hour, and 1 week), canonical/reverse/one
   seeded timestamp order, five-fold CV, and 100 permutation/bootstrap draws;
 - baseline and motif features, Random Forest, XGBoost, multinomial logistic
   regression, statistical-test code, figures, tables, predictions, protocol
   verification, and the final manifest.
 
-On the current 8-core M1 Pro with 16 GB RAM, the verified hybrid run completed
-in 67.9 seconds, created 90 files, and occupied 63 MB. Treat that as a local
+On the current 8-core M1 Pro with 16 GB RAM, the final protocol-v5 verification
+run completed in 76.4 seconds, created 508 filesystem entries including stage
+payloads and their public hard links, and occupied 65 MB. Treat that as a local
 reference rather than a runtime guarantee; source revisions and machine load
 can change it.
 
@@ -218,6 +283,9 @@ Every smoke directory contains `SMOKE_ONLY.txt`, and both `protocol.json` and
 `false`. Smoke metrics are implementation diagnostics, not thesis findings.
 They do not validate full-dataset memory consumption, full-run runtime, final
 cohort composition, seven-order robustness, or 10,000-iteration inference.
+Smoke admission keeps a fixed 2 GiB filesystem reserve; thesis and development
+profiles retain the full-run reserve of 20% of the filesystem or 20 GiB,
+whichever is larger.
 
 The 60-minute limit is an SLA rather than a force-kill. If the bounded run
 exceeds it, the current native operation is allowed to finish so DuckDB,
@@ -229,131 +297,244 @@ resuming or overwriting one.
 
 ### Thesis Results experiments
 
-The thesis workflow is separate from `main.py`. It has two required stages:
+The evidence-producing workflow is separate from `main.py` and uses protocol
+version 5. Preparation locks the scientific definition and prepared data.
+Execution creates an immutable operational definition, commits resumable motif
+checkpoints and result stages, and finishes with a verifiable integrity chain.
+`verify` is read-only and is the final authority for integrity and citability.
 
-1. `prepare` reads raw data, locks cohorts and folds, and creates auditable data artifacts.
-2. `execute` verifies the locked protocol and artifacts before computing any feature or metric.
+Protocol v5 reflects the four current research questions. RQ2 reports the δ
+with the highest mean combined-model average precision on the persisted
+development CV folds; exact numerical ties choose the smaller δ. The shorter
+window within one standard error is retained and reported only as a secondary
+parsimony analysis. RQ3 tests global multiclass category separability above
+chance. RQ4 selects global and category-specific windows on development data,
+then compares category-specific scores against the global-window scores on the
+untouched test set using an omnibus paired bootstrap plus Benjamini-Hochberg
+adjusted per-category comparisons.
 
-The protocol and prepared inputs are immutable after `protocol.json` is written. Execution may create previously absent result artifacts and append `run_log.jsonl`, but it never overwrites an existing output. Never edit a protocol, fold file, prepared Parquet file, or result in place; use a new run ID.
+A run ID is only the directory name below the selected results root. It has no
+statistical meaning. Use a unique, descriptive value such as
+`hf_rq12_20260721_v5`; omitting `--run-id` from `prepare` or `smoke` is an error,
+and reusing an existing ID is rejected.
 
-#### 1. Verify the installation
+#### 1. Install and run the bounded smoke profile
 
-Run the exact synthetic motif fixtures before a full dataset preparation:
+Use the exact numerical environment for thesis work:
 
 ```bash
-python scripts/run_results.py prepare \
-  --run-id validation_20260715 \
-  --rq validation
-python scripts/run_results.py execute \
-  results/experiments/validation_20260715
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements-results.txt
+python scripts/run_results.py smoke \
+  --run-id smoke_$(date +%Y%m%d_%H%M%S) \
+  --sla-minutes 60
+python scripts/run_results.py verify results/smoke/<run-id>
 ```
 
-The validation must report `"passed": true` in
-`results/experiments/validation_20260715/execution_manifest.json`.
+Normal verification returns zero when schemas and integrity are valid even
+though smoke is deliberately non-citable. This command must fail:
 
-#### 2. Prepare RQ1 and RQ2
+```bash
+python scripts/run_results.py verify \
+  results/smoke/<run-id> --require-citable
+```
 
-The HuggingFace preparation makes two analytical passes over the complete 380,566,661-edge Parquet: one for target activity and one for incident-edge extraction. A separate bytewise pass records the source SHA-256 digest. It does not load a monthly head sample. Before cohort sampling, targets must have at least three incident events and addresses above the 99.5th activity percentile within each label × contract-type × activity-quintile stratum are excluded. These rules are fixed before modeling, independent of observed performance, and locked in `protocol.json`; exact attrition is recorded by stratum. The prevalence cohort therefore represents the eligible non-extreme population, not every labelled address.
+#### 2. Prepare the primary runs
+
+Prepare HF and Real-CATS as separate roots so they can run sequentially or under
+the coordinated launcher. The `thesis` profile is the default and fixes all
+10,000 resamples. `development` may only reduce permutation and bootstrap
+counts and can never become citable.
 
 ```bash
 python scripts/run_results.py prepare \
-  --run-id hf_rq12_20260715_v3 \
+  --run-id hf_rq12_20260721_v5 \
+  --profile thesis \
   --rq rq1 rq2
-```
 
-Preparation is complete only when both files exist:
-
-```bash
-test -f results/experiments/hf_rq12_20260715_v3/protocol.json
-test -f results/experiments/hf_rq12_20260715_v3/protocol.sha256
-```
-
-#### 3. Prepare RQ3
-
-Run RQ3 separately because checkpoint resume is intentionally limited to an RQ3-only preparation:
-
-```bash
 python scripts/run_results.py prepare \
-  --run-id realcats_rq3_20260715_v3 \
-  --rq rq3
+  --run-id realcats_rq34_20260721_v5 \
+  --profile thesis \
+  --rq rq3 rq4
 ```
 
-Real-CATS preparation can run for hours. Before `protocol.json` is created, it writes `preparation_state.json`, a WAL-backed SQLite event index, per-address checkpoints, and source audit counters. If the command is interrupted, rerun the same command with `--resume` and identical arguments:
+HF preparation scans the complete 380,566,661-edge local source for activity
+and incident-edge extraction. Only the target-incident subgraph is used for
+motif counting. “Streaming” means bounded local Parquet batches, not remote
+network access. Downloading the dataset first is therefore required and avoids
+network instability, but it does not remove the full local scans. Split and CV
+assignments are group-aware across both HF cohorts, so a known campaign cannot
+land on different sides through separate cohort assignment.
+
+Real-CATS preparation exports all five transaction layers. Empty layers still
+receive schema-correct Parquets. Identical duplicate labels are audited and
+collapsed; conflicting labels abort preparation. An interrupted RQ3/RQ4 preparation
+before `protocol.json` exists may be resumed with the identical command plus
+`--resume`. This preparation resume is separate from execution resume.
+
+Behaviour categories are exact non-`Other` CE.tsv labels with at least 100 active
+addresses; labels are not merged after inspecting results. Real-CATS does not
+provide a separate ground-truth coordination flag. The pipeline therefore
+tests whether dataset-defined malicious behaviour categories exhibit
+coordination-related temporal fingerprints; it must not be described as a
+directly supervised coordination classifier.
+
+#### 3. Run read-only admission
+
+Preflight creates no lock, telemetry, attempt, or temporary file:
 
 ```bash
-python scripts/run_results.py prepare \
-  --run-id realcats_rq3_20260715_v3 \
-  --rq rq3 \
+python scripts/run_results.py preflight \
+  results/experiments/hf_rq12_20260721_v5
+
+python scripts/run_results.py preflight \
+  results/experiments/hf_rq12_20260721_v5 \
+  results/experiments/realcats_rq34_20260721_v5
+```
+
+One root checks sequential admission. Multiple roots check concurrent RAM and
+sum scratch/staging demand by filesystem device, applying the disk reserve once
+per device. The report is a conservative recorded budget, not an OS-enforced
+Raphtory memory cap. A rejection never trims the cohort.
+
+#### 4. Execute directly or in parallel
+
+For sequential execution, optionally set a fixed thread count:
+
+```bash
+python scripts/run_results.py execute \
+  results/experiments/hf_rq12_20260721_v5 --threads 20
+python scripts/run_results.py execute \
+  results/experiments/realcats_rq34_20260721_v5 --threads 20
+```
+
+For coordinated same-host execution:
+
+```bash
+python scripts/run_results.py execute-parallel \
+  results/experiments/hf_rq12_20260721_v5 \
+  results/experiments/realcats_rq34_20260721_v5 \
+  --threads 20
+```
+
+Fresh parallel execution splits available logical CPUs, assigning an odd extra
+thread to HF. The coordinator holds the per-user host lock and passes proof of
+that lock to both workers. Each worker has a separate run lock and attempt
+scratch directory. `--threads 20` fixes the combined budget before the 10/10
+split. Raphtory receives each worker's concrete thread count. If one fails, the
+other is allowed to finish.
+
+Every expensive motif call is committed separately: HF uses one checkpoint per
+ordering and delta; Real-CATS uses one per layer, ordering, and delta. After an
+interruption, resume a direct run with:
+
+```bash
+python scripts/run_results.py execute \
+  results/experiments/hf_rq12_20260721_v5 --resume
+```
+
+The locked thread count is reused. Supplying `--threads` on resume is optional;
+if supplied, it must match exactly. Parallel resume is allowed only when both
+roots are interrupted and the host can provide their combined locked threads:
+
+```bash
+python scripts/run_results.py execute-parallel \
+  results/experiments/hf_rq12_20260721_v5 \
+  results/experiments/realcats_rq34_20260721_v5 \
+  --threads 20 \
   --resume
 ```
 
-Resume is rejected when the run is already locked, source checksums changed, code or dependency versions changed, command arguments differ, or SQLite integrity validation fails. Do not repair or reuse a rejected index for thesis results. Preserve it under another name and start a new run ID:
+Mixed fresh/interrupted/completed pairs are rejected. Resume the one incomplete
+root directly when its peer is complete. A committed artifact that fails its
+hash or schema check is never replaced; start a new run rather than repairing it.
+
+BLTE is optional and separate from the primary roots and their citability:
 
 ```bash
-mv results/experiments/realcats_rq3_20260715_v3 \
-   results/experiments/realcats_rq3_20260715_v3_abandoned
+python scripts/run_results.py prepare \
+  --run-id blte_rq1_20260721_v5 --profile thesis --rq blte
+python scripts/run_results.py execute \
+  results/experiments/blte_rq1_20260721_v5
 ```
 
-Runs created before protocol version 3 use the superseded in-memory execution path and must not be cited or resumed. This includes the local incomplete `primary_realcats_v1`.
+#### 5. Verify and inspect
 
-#### 4. Execute a locked run
-
-Execution is allowed only after preparation has written and hashed the protocol:
+Final thesis acceptance requires:
 
 ```bash
-python scripts/run_results.py execute \
-  results/experiments/hf_rq12_20260715_v3
-
-python scripts/run_results.py execute \
-  results/experiments/realcats_rq3_20260715_v3
+python scripts/run_results.py verify \
+  results/experiments/hf_rq12_20260721_v5 --require-citable
+python scripts/run_results.py verify \
+  results/experiments/realcats_rq34_20260721_v5 --require-citable
 ```
 
-The runner checks protocol, prepared-artifact, source-code, model-parameter, Python, dependency, and execution-backend definitions before loading experiment data. Large event Parquets are externally sorted by DuckDB and streamed to Raphtory as Arrow record batches; pandas is used only for address-level feature matrices, predictions, metrics, and model input. The preflight therefore estimates the sorted Raphtory graph footprint rather than a pandas copy of the raw event table. If it rejects the machine, no metrics are written and the cohort is not trimmed or replaced. Copy the entire locked run directory and exact repository revision to a machine with more memory, recreate the recorded dependency versions, and execute there.
+Protocol v1-v4 runs support limited read-only inspection only. They cannot be
+executed, resumed, or accepted as citable.
 
-This removes the largest avoidable RAM copy but does not remove the principal compute cost. Raphtory 0.17.0 exposes one local three-node motif call that always computes all 40 roles for every graph node. The runner retains the scientifically usable 24 star and 8 two-node roles and discards the 8 triangle roles after counting; it cannot ask Raphtory to skip those triangle calculations. Each of the seven temporal windows and seven equal-timestamp order variants is still evaluated as locked in the protocol.
+#### 6. Generate the thesis tables
 
-Do not lower `--permutations` or `--bootstraps` from their default 10,000 for thesis runs. Smaller values are appropriate only for tests.
+After both primary roots pass `--require-citable`, generate the LaTeX inputs
+from those exact directories. Add the optional BLTE root only after it has also
+completed and verified:
 
-#### 5. Inspect artifacts
+```bash
+python scripts/results_to_latex.py writing/generated \
+  results/experiments/hf_rq12_20260721_v5 \
+  results/experiments/realcats_rq34_20260721_v5 \
+  results/experiments/blte_rq1_20260721_v5
+```
 
-Each run uses the following layout:
+The exporter performs read-only verification of every completed input. It
+never takes metrics from an unexecuted preparation and never combines cohort
+metadata with results owned by another run. Non-citable or incomplete inputs
+produce a visible preliminary banner; they are suitable only for checking the
+chapter layout. Upload `writing/generated/*.tex` and the referenced PDFs from
+the verified runs' `figures/` directories to Overleaf.
 
 ```text
 results/experiments/<run-id>/
-├── preparation_state.json   Resume definition before protocol locking
-├── protocol.json            Locked experimental definition and provenance
-├── protocol.sha256          Protocol integrity digest
-├── run_log.jsonl            Append-only step status, progress, and elapsed time
-├── data/                    Cohorts, folds, and prepared event Parquets
-├── features/                Baselines and per-window motif fingerprints
-├── predictions/             Held-out address-level scores
-├── metrics/                 CV scores, tests, confidence intervals, coverage
-├── figures/                 PDF chapter figures
-├── tables/                  Long-form CSV chapter tables
-└── execution_manifest.json  Completion status and runtime provenance
+├── preparation_state.json
+├── protocol.json / protocol.sha256
+├── execution_definition.json / execution_definition.sha256
+├── attempts/<attempt-id>/
+│   ├── started.json and completed.json or failed.json
+│   ├── scratch/duckdb/
+│   └── staging/
+├── checkpoints/<checkpoint-id>/
+│   ├── counts.parquet
+│   └── metadata.json
+├── stages/<stage-id>/
+│   ├── payload/
+│   └── stage_manifest.json
+├── features/ predictions/ metrics/ figures/ tables/
+├── result_artifacts.json / result_artifacts.sha256
+├── execution_manifest.json / execution_manifest.sha256
+└── run_log.jsonl
 ```
 
-Useful checks while working manually:
+`stages/` is the immutable source of truth. Public result directories contain
+no-overwrite hard links with the same filenames used by earlier pipeline
+versions. The integrity order is protocol/prepared data, execution definition,
+checkpoints and stages, result inventory, then execution manifest. Inventory
+and manifest do not hash themselves.
+
+Operational monitoring:
 
 ```bash
-du -sh results/experiments/<run-id>
 tail -f results/experiments/<run-id>/run_log.jsonl
-jq '.protocol_version, .research_questions, .datasets' \
-  results/experiments/<run-id>/protocol.json
-jq '.status, .results' \
-  results/experiments/<run-id>/execution_manifest.json
-```
-
-Every long operation writes a `started`, periodic `progress`, and `completed` or `failed` JSON record. The same concise records are printed to stderr while the command runs. To inspect the most recent completed timings manually:
-
-```bash
 jq -r 'select(.status == "completed") | [.stage, .elapsed_seconds] | @tsv' \
   results/experiments/<run-id>/run_log.jsonl | tail -n 30
+du -sh results/experiments/<run-id>
 ```
 
-During HF preparation, progress is emitted every 100 Parquet batches for the activity scan and incident-edge extraction. Real-CATS conversion reports every 250 newly checkpointed addresses and times each layer export. Execution times the resource preflight, aggregate query, external sort and graph load, every motif window, cross-validation, model evaluation, and statistical-test block. A `failed` record contains the exception type and message; rerun with `--resume` only for an incomplete RQ3 preparation, following the restrictions above.
-
-Use `main.py` only for exploration. Its `results/results_*.json` files are not thesis findings.
+Long native calls emit a fsynced heartbeat every five minutes with elapsed
+time, thread count, free disk, and latest checkpoint. A heartbeat proves
+liveness, not percentage complete. Interactive runs also show `tqdm` elapsed
+time and ETA for bounded scan, conversion, and motif-window units. Use
+`main.py` only for exploration; its `results/results_*.json` files are not
+thesis findings.
 
 ### Exploratory pipeline
 

@@ -1,47 +1,43 @@
+%% System overview: how the research questions map to datasets, through the
+%% shared locked pipeline, to the reported results.
+%% The pipeline itself is detailed in 01-pipeline.
 flowchart TD
-    subgraph SRC["Data sources — stage 1 selects one"]
+
+    subgraph RQ["Research questions"]
         direction LR
-        SYN["Synthetic<br/><i>synthetic_data.py</i>"]
-        FILE["Local file<br/>CSV / JSON / Parquet"]
-        BLTE["BLTE<br/>labeled"]
-        HF["HuggingFace<br/>raw + GNN"]
+        Q1["RQ1<br/>Do motifs add signal<br/>over the baseline?"]
+        Q2["RQ2<br/>At which time<br/>window &delta;?"]
+        Q3["RQ3<br/>Do categories differ in<br/>motifs and time scale?"]
+        Q1 ~~~ Q2 ~~~ Q3
     end
 
-    CFG["config.py<br/>constants · COLUMN_MAPS"]
-
-    SRC --> S1["<b>Stage 1</b> · Load &amp; clean + labels + tx aggregates<br/><i>data_loading.py</i>"]
-    S1 --> S2["<b>Stage 2</b> · Build MultiDiGraph + node features<br/><i>graph_construction.py</i>"]
-    S2 --> S3
-
-    subgraph S3G["Stage 3 · Temporal motif fingerprints (per node, per δ)"]
+    subgraph DATA["Datasets"]
         direction LR
-        S3["get_backend(--motif-backend)<br/><i>motifs/__init__.py</i>"]
-        S3 --> NX["networkx<br/>5 types"]
-        S3 --> RAPH["raphtory<br/>40 types · default"]
-        S3 --> SNAP["snap<br/>broken"]
+        HF["HuggingFace ETH Fraud<br/>binary labels &middot; RQ1, RQ2"]
+        RC["Real-CATS<br/>criminal categories &middot; RQ3"]
+        BL["BLTE<br/>appendix replication"]
+        SY["Synthetic fixtures<br/>counter validation"]
+        HF ~~~ RC ~~~ BL ~~~ SY
     end
 
-    S3G --> S4["<b>Stage 4</b> · Assemble matrix · aggregates / motifs / full<br/><i>_stage4_assemble_features</i>"]
-    S4 --> MODE{"--mode"}
+    subgraph PIPE["Locked pipeline &middot; run_results.py  (detailed in the pipeline figure)"]
+        direction LR
+        PREP["Prepare<br/>eligibility, cohorts, folds"]
+        LOCK[["Locked artifacts<br/>protocol.json + Parquet"]]
+        EXEC["Execute<br/>graph, motifs, models, tests"]
+        PREP --> LOCK --> EXEC
+    end
 
-    MODE -->|supervised| SUP["<b>Stage 5a</b> · train RandomForest / XGBoost<br/>→ evaluate_classifier<br/><i>detection.py · evaluation.py</i>"]
-    MODE -->|unsupervised| UNS["<b>Stage 5b</b> · IsolationForest / DBSCAN<br/>+ cluster + coordinated groups<br/><i>detection.py · feature_engineering.py</i>"]
+    subgraph RES["Reported results &middot; Chapter 5"]
+        direction LR
+        R1["RQ1 ablation<br/>baseline / motifs / combined"]
+        R2["RQ2 window curve<br/>+ selected &delta;"]
+        R3["RQ3 separability<br/>+ per-category &delta;"]
+        RA["Robustness<br/>orderings, BLTE, synthetic"]
+        R1 ~~~ R2 ~~~ R3 ~~~ RA
+    end
 
-    SUP --> S6["<b>Stage 6</b> · Visualize (unless --no-plot)<br/><i>visualization.py</i>"]
-    UNS --> S6
+    RQ --> DATA --> PIPE --> RES
 
-    S2 -.->|"--mode graph"| OG[("results/*_graph.pkl")]
-    S3G -.->|"--mode motifs"| OFP[("results/*_fingerprints_*.parquet")]
-    SUP --> OJ[("results/results_*.json")]
-    UNS --> OJ
-    S6 --> OFIG[["matplotlib figures"]]
-
-    CFG -.-> S1
-    CFG -.-> SUP
-    CFG -.-> UNS
-    CFG -.-> S6
-
-    classDef out fill:#e2f0d9,stroke:#548235;
-    classDef cfg fill:#f2dede,stroke:#a94442;
-    class OG,OFP,OJ,OFIG out;
-    class CFG cfg;
+    classDef lock fill:#f2dede,stroke:#a94442,stroke-width:1.5px;
+    class LOCK lock;

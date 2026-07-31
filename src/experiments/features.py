@@ -98,10 +98,17 @@ def aggregate_features_from_parquet(
     temporary.mkdir(parents=True, exist_ok=True)
     connection = duckdb.connect()
     physical = physical_memory_bytes()
-    memory_gib = 4 if physical is None else max(1, min(16, int(physical / 1024**3 * 0.15)))
+    memory_gib = int(
+        os.environ.get(
+            "THESIS_DUCKDB_MEMORY_GIB",
+            4 if physical is None else max(1, min(16, int(physical / 1024**3 * 0.15))),
+        )
+    )
     connection.execute("SET temp_directory = ?", [str(temporary)])
     connection.execute(f"SET memory_limit = '{memory_gib}GiB'")
-    connection.execute(f"SET threads = {max(1, os.cpu_count() or 1)}")
+    connection.execute(
+        f"SET threads = {max(1, int(os.environ.get('THESIS_MODEL_THREADS', '1')))}"
+    )
     connection.register("experiment_targets", pa.table({"address": target_values}))
     query = """
         WITH events AS (

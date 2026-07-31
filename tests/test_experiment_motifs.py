@@ -16,6 +16,15 @@ def test_all_retained_raphtory_indices():
         assert vector[role_index] == 1
 
 
+def test_all_triangle_indices_for_catalogue_validation():
+    for role_index in range(32, 40):
+        graph = RaphtoryExperimentGraph(fixture_for_role(role_index))
+        counts = graph.count_all(2, ["A"])
+        vector = counts.iloc[0].to_numpy()
+        assert vector.sum() == 1
+        assert vector[role_index] == 1
+
+
 def test_delta_boundary_and_zero_row_retention():
     graph = RaphtoryExperimentGraph(fixture_for_role(0, start=100, step=5))
     assert graph.count(10, ["A"]).to_numpy().sum() == 1

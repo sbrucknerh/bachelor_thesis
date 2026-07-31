@@ -3,12 +3,31 @@
 from __future__ import annotations
 
 
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 5
 RANDOM_SEED = 42
 CV_SEEDS = (42, 43, 44)
 DELTAS = (300, 1_800, 3_600, 21_600, 86_400, 259_200, 604_800)
 N_PERMUTATIONS = 10_000
 N_BOOTSTRAPS = 10_000
+HF_RESEARCH_QUESTIONS = frozenset({"rq1", "rq2"})
+REALCATS_RESEARCH_QUESTIONS = frozenset({"rq3", "rq4"})
+DELTA_MEAN_TIE_TOLERANCE = 1e-12
+DELTA_SELECTION = {
+    "rq2_primary": "development_cv_mean_combined_average_precision_argmax",
+    "rq2_tie_break": "smallest_delta_within_absolute_tolerance",
+    "rq2_tie_tolerance": DELTA_MEAN_TIE_TOLERANCE,
+    "rq2_secondary": "shortest_delta_within_one_standard_error",
+    "rq4_global": "development_cv_macro_average_precision_argmax",
+    "rq4_per_category": "development_cv_one_vs_rest_average_precision_argmax",
+    "rq4_test": "category_specific_vs_global_macro_average_precision_paired_bootstrap",
+}
+REALCATS_CATEGORY_ELIGIBILITY = {
+    "label_source": "CE.tsv exact label",
+    "minimum_active_addresses": 100,
+    "exclude_casefold_labels": ["other"],
+    "merge_labels": False,
+    "coordination_ground_truth_available": False,
+}
 
 STAR_CLASSES = ("pre", "mid", "post")
 DIRECTION_CODES = ("iii", "iio", "ioi", "ioo", "oii", "oio", "ooi", "ooo")
@@ -55,7 +74,6 @@ DEFAULT_RF_PARAMS = {
     "n_estimators": 100,
     "max_depth": 10,
     "class_weight": "balanced",
-    "n_jobs": -1,
     "random_state": RANDOM_SEED,
 }
 
@@ -63,7 +81,6 @@ DEFAULT_XGB_PARAMS = {
     "n_estimators": 100,
     "max_depth": 6,
     "learning_rate": 0.1,
-    "n_jobs": -1,
     "random_state": RANDOM_SEED,
     "eval_metric": "logloss",
 }
@@ -72,4 +89,51 @@ MULTICLASS_LOGISTIC_PARAMS = {
     "class_weight": "balanced",
     "max_iter": 2_000,
     "random_state": RANDOM_SEED,
+}
+
+# Protocol-v5 resource-accounting constants. These are conservative admission
+# assumptions, not operating-system-enforced limits for Raphtory.
+GRAPH_COLUMN_EXPANSION_FACTOR = 4.0
+HF_NODE_COUNT_INFLATION = 1.20
+MOTIF_RESULT_BYTES_PER_NODE = 512
+DUCKDB_MEMORY_FRACTION = 0.15
+DUCKDB_MEMORY_MIN_GIB = 1
+DUCKDB_MEMORY_MAX_GIB = 16
+RAM_ADMISSION_FRACTION = 0.85
+DISK_SORT_FACTOR = 2.5
+DISK_RESERVE_FRACTION = 0.20
+DISK_RESERVE_MIN_GIB = 20
+SMOKE_DISK_RESERVE_GIB = 2
+RESULT_STAGING_ALLOWANCE_GIB = 2
+CHECKPOINT_STAGING_MIN_MIB = 256
+COORDINATOR_ALLOWANCE_GIB = 1
+
+RESOURCE_CONSTANTS = {
+    "graph_column_expansion_factor": GRAPH_COLUMN_EXPANSION_FACTOR,
+    "hf_node_count_inflation": HF_NODE_COUNT_INFLATION,
+    "motif_result_bytes_per_node": MOTIF_RESULT_BYTES_PER_NODE,
+    "duckdb_memory_fraction": DUCKDB_MEMORY_FRACTION,
+    "duckdb_memory_min_gib": DUCKDB_MEMORY_MIN_GIB,
+    "duckdb_memory_max_gib": DUCKDB_MEMORY_MAX_GIB,
+    "ram_admission_fraction": RAM_ADMISSION_FRACTION,
+    "disk_sort_factor": DISK_SORT_FACTOR,
+    "disk_reserve_fraction": DISK_RESERVE_FRACTION,
+    "disk_reserve_min_gib": DISK_RESERVE_MIN_GIB,
+    "smoke_disk_reserve_gib": SMOKE_DISK_RESERVE_GIB,
+    "result_staging_allowance_gib": RESULT_STAGING_ALLOWANCE_GIB,
+    "checkpoint_staging_min_mib": CHECKPOINT_STAGING_MIN_MIB,
+    "coordinator_allowance_gib": COORDINATOR_ALLOWANCE_GIB,
+}
+
+PROFILE_SETTINGS = {
+    "thesis": {
+        "permutations": N_PERMUTATIONS,
+        "bootstraps": N_BOOTSTRAPS,
+        "citable_candidate": True,
+    },
+    "development": {
+        "permutations": 100,
+        "bootstraps": 100,
+        "citable_candidate": False,
+    },
 }

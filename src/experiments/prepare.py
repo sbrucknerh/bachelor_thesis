@@ -23,14 +23,20 @@ from src.experiments.constants import (
     CV_SEEDS,
     DEFAULT_RF_PARAMS,
     DEFAULT_XGB_PARAMS,
+    DELTA_SELECTION,
     DELTAS,
     EVENT_EXECUTION,
     HF_COHORT_ELIGIBILITY,
     MULTICLASS_LOGISTIC_PARAMS,
     N_BOOTSTRAPS,
     N_PERMUTATIONS,
+    PROFILE_SETTINGS,
     PROTOCOL_VERSION,
     RANDOM_SEED,
+    REALCATS_CATEGORY_ELIGIBILITY,
+    REALCATS_LAYER_FILES,
+    REALCATS_RESEARCH_QUESTIONS,
+    RESOURCE_CONSTANTS,
 )
 from src.experiments.datasets import (
     count_target_activity,
@@ -53,11 +59,39 @@ from src.experiments.splits import (
 from src.experiments.telemetry import RunTelemetry
 
 
-VALID_RQS = {"rq1", "rq2", "rq3", "blte", "validation"}
+VALID_RQS = {
+    "rq1",
+    "rq2",
+    *REALCATS_RESEARCH_QUESTIONS,
+    "blte",
+    "validation",
+}
 
 
 def _relative(path: Path, root: Path) -> str:
     return str(path.relative_to(root))
+
+
+def _approx_distinct_endpoints(path: Path, temporary_directory: Path) -> int:
+    import duckdb
+
+    temporary_directory.mkdir(parents=True, exist_ok=True)
+    connection = duckdb.connect()
+    try:
+        connection.execute("SET temp_directory = ?", [str(temporary_directory)])
+        value = connection.execute(
+            """
+            SELECT approx_count_distinct(address) FROM (
+                SELECT from_address AS address FROM read_parquet(?)
+                UNION ALL
+                SELECT to_address AS address FROM read_parquet(?)
+            )
+            """,
+            [str(path), str(path)],
+        ).fetchone()[0]
+        return int(value or 0)
+    finally:
+        connection.close()
 
 
 def _prepare_hf(
@@ -84,18 +118,24 @@ def _prepare_hf(
         all_targets = load_hf_targets(snapshot, activity)
         selected, attrition = select_dual_hf_cohorts(all_targets)
 
-        split_frames: list[pd.DataFrame] = []
-        fold_frames: list[pd.DataFrame] = []
-        for cohort, cohort_targets in selected.groupby("cohort", sort=True):
-            cohort_targets = cohort_targets.copy()
-            cohort_targets["split"] = grouped_outer_split(cohort_targets).values
-            split_frames.append(cohort_targets)
-            development = cohort_targets.loc[cohort_targets["split"] == "development"]
-            folds = repeated_group_folds(development, seeds=CV_SEEDS)
-            folds["cohort"] = cohort
-            fold_frames.append(folds)
-        selected = pd.concat(split_frames, ignore_index=True)
-        folds = pd.concat(fold_frames, ignore_index=True)
+        selected["experiment_stratum"] = (
+            selected["cohort"].astype(str) + ":" + selected["stratum"].astype(str)
+        )
+        selected["split"] = grouped_outer_split(
+            selected, stratum_column="experiment_stratum"
+        ).values
+        development = selected.loc[selected["split"] == "development"]
+        folds = repeated_group_folds(
+            development,
+            seeds=CV_SEEDS,
+            stratum_column="experiment_stratum",
+        )
+        folds = folds.merge(
+            development[["address", "cohort"]],
+            on="address",
+            how="left",
+            validate="many_to_one",
+        )
 
     target_path = paths.data / "hf_targets.parquet"
     fold_path = paths.data / "hf_cv_folds.parquet"
@@ -124,6 +164,9 @@ def _prepare_hf(
         target_hash = sha256_file(target_path)
         fold_hash = sha256_file(fold_path)
         event_hash = sha256_file(event_path)
+    approximate_nodes = _approx_distinct_endpoints(
+        event_path, paths.data / "duckdb_tmp" / "prepare_hf_nodes"
+    )
     return {
         "snapshot_revision": snapshot.name,
         "sources": {
@@ -144,6 +187,10 @@ def _prepare_hf(
         },
         "attrition": attrition,
         "edge_extraction": extraction,
+        "resource_metadata": {
+            "approximate_distinct_nodes": approximate_nodes,
+            "target_count": int(len(selected)),
+        },
     }
 
 
@@ -210,6 +257,10 @@ def _prepare_realcats(
         )
         folds = _rq3_cv_assignments(inferential)
 
+    raw_label_rows = int(
+        len(pd.read_csv(label_dir / "CE.tsv", sep="\t", usecols=["address", "label"]))
+    )
+
     target_path = paths.data / "realcats_targets.parquet"
     fold_path = paths.data / "realcats_cv_folds.parquet"
     _write_or_verify_parquet(target_path, targets)
@@ -239,6 +290,18 @@ def _prepare_realcats(
         },
         "attrition": attrition,
         "conversion": conversion,
+        "label_audit": {
+            "source_rows": raw_label_rows,
+            "unique_consistent_addresses": int(len(labels)),
+            "identical_duplicate_rows_collapsed": raw_label_rows - int(len(labels)),
+        },
+        "resource_metadata": {
+            "target_count": int(len(inferential)),
+            "exact_distinct_nodes_by_layer": {
+                layer: int(conversion[f"{layer}_exact_distinct_nodes"])
+                for layer in REALCATS_LAYER_FILES
+            },
+        },
     }
 
 
@@ -253,6 +316,13 @@ def _prepare_blte(
     write_parquet_exclusive(event_path, events)
     write_parquet_exclusive(target_path, targets)
     counts = targets["label"].value_counts()
+    distinct_nodes = int(
+        pd.unique(
+            pd.concat(
+                [events["from_address"], events["to_address"]], ignore_index=True
+            )
+        ).size
+    )
     return {
         "eligible": bool(len(counts) == 2 and counts.min() >= 100),
         "active_label_counts": {str(key): int(value) for key, value in counts.items()},
@@ -272,6 +342,10 @@ def _prepare_blte(
             "events_sha256": sha256_file(event_path),
             "targets_sha256": sha256_file(target_path),
         },
+        "resource_metadata": {
+            "exact_distinct_nodes": distinct_nodes,
+            "target_count": int(len(targets)),
+        },
     }
 
 
@@ -283,16 +357,46 @@ def prepare_experiment(
     realcats_zip: str | Path = "data/raw/realcats_transactions/real-cats.zip",
     realcats_labels: str | Path = "data/raw/realcats_dataset",
     blte_dir: str | Path = "data/raw/ethereum_dataset_labelled",
-    permutations: int = N_PERMUTATIONS,
-    bootstraps: int = N_BOOTSTRAPS,
+    permutations: int | None = None,
+    bootstraps: int | None = None,
+    profile: str = "thesis",
     resume: bool = False,
 ) -> Path:
     selected_rqs = sorted(set(rqs))
     unknown = set(selected_rqs) - VALID_RQS
     if unknown:
         raise ValueError(f"Unknown research questions: {sorted(unknown)}")
-    if resume and selected_rqs != ["rq3"]:
-        raise ValueError("Checkpoint resume is supported only for an RQ3-only preparation")
+    if profile not in PROFILE_SETTINGS:
+        raise ValueError(f"Unknown preparation profile: {profile!r}")
+    if "blte" in selected_rqs and selected_rqs != ["blte"]:
+        raise ValueError("BLTE must be prepared as a separate optional secondary run")
+    realcats_selected = set(selected_rqs) & REALCATS_RESEARCH_QUESTIONS
+    if realcats_selected and realcats_selected != REALCATS_RESEARCH_QUESTIONS:
+        raise ValueError("RQ3 and RQ4 must be prepared together because they share one locked Real-CATS analysis")
+    profile_settings = PROFILE_SETTINGS[profile]
+    validation_only = selected_rqs == ["validation"]
+    if profile == "thesis" and not validation_only and (
+        permutations not in {None, N_PERMUTATIONS}
+        or bootstraps not in {None, N_BOOTSTRAPS}
+    ):
+        raise ValueError(
+            "The thesis profile locks 10,000 permutations and bootstraps; use "
+            "--profile development for reduced resampling"
+        )
+    permutations = int(
+        profile_settings["permutations"] if permutations is None else permutations
+    )
+    bootstraps = int(
+        profile_settings["bootstraps"] if bootstraps is None else bootstraps
+    )
+    if permutations <= 0 or bootstraps <= 0:
+        raise ValueError("permutations and bootstraps must be positive")
+    if profile == "development" and (
+        permutations > N_PERMUTATIONS or bootstraps > N_BOOTSTRAPS
+    ):
+        raise ValueError("The development profile may reduce, but not increase, resampling")
+    if resume and set(selected_rqs) != REALCATS_RESEARCH_QUESTIONS:
+        raise ValueError("Checkpoint resume is supported only for a combined RQ3/RQ4 preparation")
     preparation_runtime = runtime_manifest()
     paths = (
         resume_run_paths(results_root, run_id)
@@ -305,12 +409,13 @@ def prepare_experiment(
         "started",
         run_id=run_id,
         research_questions=selected_rqs,
+        profile=profile,
         resumed=resume,
     )
     realcats_zip_path = Path(realcats_zip)
     realcats_label_dir = Path(realcats_labels)
     realcats_source_hashes = None
-    if "rq3" in selected_rqs:
+    if REALCATS_RESEARCH_QUESTIONS <= set(selected_rqs):
         with telemetry.step("prepare.realcats.hash_sources"):
             realcats_source_hashes = {
                 "transactions": sha256_file(realcats_zip_path),
@@ -320,8 +425,10 @@ def prepare_experiment(
         "protocol_version": PROTOCOL_VERSION,
         "run_id": run_id,
         "research_questions": selected_rqs,
+        "profile": profile,
         "permutations": int(permutations),
         "bootstraps": int(bootstraps),
+        "delta_selection": DELTA_SELECTION,
         "inputs": {
             "hf_snapshot": str(Path(hf_snapshot).resolve()) if hf_snapshot else None,
             "realcats_zip": str(realcats_zip_path.resolve()),
@@ -350,7 +457,7 @@ def prepare_experiment(
     if {"rq1", "rq2"} & set(selected_rqs):
         snapshot = Path(hf_snapshot) if hf_snapshot else discover_hf_snapshot()
         datasets["huggingface"] = _prepare_hf(paths, snapshot, telemetry=telemetry)
-    if "rq3" in selected_rqs:
+    if REALCATS_RESEARCH_QUESTIONS <= set(selected_rqs):
         datasets["realcats"] = _prepare_realcats(
             paths,
             realcats_zip_path,
@@ -362,12 +469,46 @@ def prepare_experiment(
     if "blte" in selected_rqs:
         datasets["blte"] = _prepare_blte(paths, Path(blte_dir), telemetry=telemetry)
 
+    resource_estimates = {}
+    if "huggingface" in datasets:
+        metadata = datasets["huggingface"]["resource_metadata"]
+        resource_estimates["huggingface"] = {
+            "node_count_method": "duckdb_approx_count_distinct_inflated_20_percent",
+            "approximate_distinct_nodes": metadata["approximate_distinct_nodes"],
+            "node_count_admission": int(metadata["approximate_distinct_nodes"] * 1.2 + 0.999999),
+            "target_count": metadata["target_count"],
+            "max_feature_columns": 49,
+        }
+    if "realcats" in datasets:
+        metadata = datasets["realcats"]["resource_metadata"]
+        resource_estimates["realcats"] = {
+            "node_count_method": "exact_sqlite_union_distinct_per_layer",
+            "target_count": metadata["target_count"],
+            "max_feature_columns": 160,
+            "layers": {
+                layer: {"exact_distinct_nodes": value}
+                for layer, value in metadata["exact_distinct_nodes_by_layer"].items()
+            },
+        }
+    if "blte" in datasets:
+        metadata = datasets["blte"]["resource_metadata"]
+        resource_estimates["blte"] = {
+            "node_count_method": "exact_materialized_endpoint_union",
+            "exact_distinct_nodes": metadata["exact_distinct_nodes"],
+            "target_count": metadata["target_count"],
+            "max_feature_columns": 49,
+        }
+
     protocol = {
         "protocol_version": PROTOCOL_VERSION,
         "run_id": run_id,
         "research_questions": selected_rqs,
+        "execution_profile": profile,
+        "citable_candidate": bool(profile_settings["citable_candidate"]),
         "retrospective_classification_only": True,
         "primary_metric": "average_precision",
+        "delta_selection": DELTA_SELECTION,
+        "realcats_category_eligibility": REALCATS_CATEGORY_ELIGIBILITY,
         "alpha": 0.05,
         "deltas": list(DELTAS),
         "random_seed": RANDOM_SEED,
@@ -386,6 +527,14 @@ def prepare_experiment(
             "multiclass_standard_scaler": {"with_mean": True, "with_std": True},
         },
         "datasets": datasets,
+        "resource_estimates": resource_estimates,
+        "resource_constants": RESOURCE_CONSTANTS,
+        "source_scope": {
+            "huggingface_preparation": "full_source_scan",
+            "huggingface_motif_graph": "target_incident_subgraph",
+            "realcats_layers": list(REALCATS_LAYER_FILES),
+            "blte_scope": "separate_optional_secondary_rq1_run",
+        },
         "runtime": preparation_runtime,
         "preparation_state_sha256": sha256_file(preparation_state),
     }

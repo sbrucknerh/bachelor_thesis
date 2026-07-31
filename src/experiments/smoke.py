@@ -21,12 +21,15 @@ from src.experiments.artifacts import (
 from src.experiments.constants import (
     DEFAULT_RF_PARAMS,
     DEFAULT_XGB_PARAMS,
+    DELTA_SELECTION,
     EVENT_EXECUTION,
     HF_COHORT_ELIGIBILITY,
     MULTICLASS_LOGISTIC_PARAMS,
     PROTOCOL_VERSION,
     RANDOM_SEED,
+    REALCATS_CATEGORY_ELIGIBILITY,
     REALCATS_LAYER_FILES,
+    RESOURCE_CONSTANTS,
 )
 from src.experiments.datasets import (
     count_target_activity,
@@ -125,24 +128,29 @@ def _prepare_smoke_hf(paths, snapshot: Path, telemetry: RunTelemetry) -> dict:
             prevalence_size=SMOKE_HF_PREVALENCE_SIZE,
             controlled_per_stratum=SMOKE_HF_CONTROLLED_PER_STRATUM,
         )
-        split_frames: list[pd.DataFrame] = []
-        fold_frames: list[pd.DataFrame] = []
         for cohort, cohort_targets in selected.groupby("cohort", sort=True):
-            cohort_targets = cohort_targets.copy()
             if cohort_targets["label"].nunique() != 2:
                 raise RuntimeError(
                     f"HF smoke cohort {cohort!r} does not contain both labels"
                 )
-            cohort_targets["split"] = grouped_outer_split(cohort_targets).values
-            split_frames.append(cohort_targets)
-            development = cohort_targets.loc[
-                cohort_targets["split"] == "development"
-            ]
-            folds = repeated_group_folds(development, seeds=(RANDOM_SEED,))
-            folds["cohort"] = cohort
-            fold_frames.append(folds)
-        selected = pd.concat(split_frames, ignore_index=True)
-        folds = pd.concat(fold_frames, ignore_index=True)
+        selected["experiment_stratum"] = (
+            selected["cohort"].astype(str) + ":" + selected["stratum"].astype(str)
+        )
+        selected["split"] = grouped_outer_split(
+            selected, stratum_column="experiment_stratum"
+        ).values
+        development = selected.loc[selected["split"] == "development"]
+        folds = repeated_group_folds(
+            development,
+            seeds=(RANDOM_SEED,),
+            stratum_column="experiment_stratum",
+        )
+        folds = folds.merge(
+            development[["address", "cohort"]],
+            on="address",
+            how="left",
+            validate="many_to_one",
+        )
 
     target_path = paths.data / "hf_targets.parquet"
     fold_path = paths.data / "hf_cv_folds.parquet"
@@ -163,6 +171,17 @@ def _prepare_smoke_hf(paths, snapshot: Path, telemetry: RunTelemetry) -> dict:
         )
 
     attrition["smoke_source_rows"] = SMOKE_HF_SOURCE_ROWS
+    endpoints = pd.read_parquet(
+        event_path, columns=["from_address", "to_address"]
+    )
+    approximate_nodes = int(
+        pd.unique(
+            pd.concat(
+                [endpoints["from_address"], endpoints["to_address"]],
+                ignore_index=True,
+            )
+        ).size
+    )
     return {
         "snapshot_revision": snapshot.name,
         "smoke_bounded": True,
@@ -191,6 +210,10 @@ def _prepare_smoke_hf(paths, snapshot: Path, telemetry: RunTelemetry) -> dict:
         },
         "attrition": attrition,
         "edge_extraction": extraction,
+        "resource_metadata": {
+            "approximate_distinct_nodes": approximate_nodes,
+            "target_count": int(len(selected)),
+        },
     }
 
 
@@ -402,6 +425,13 @@ def _prepare_smoke_realcats(
         "selection": selection_audit,
         "attrition": attrition,
         "conversion": conversion,
+        "resource_metadata": {
+            "target_count": int(len(inferential)),
+            "exact_distinct_nodes_by_layer": {
+                layer: int(conversion[f"{layer}_exact_distinct_nodes"])
+                for layer in REALCATS_LAYER_FILES
+            },
+        },
     }
 
 
@@ -435,6 +465,7 @@ def prepare_smoke_experiment(
         "protocol_version": PROTOCOL_VERSION,
         "execution_profile": "smoke",
         "citable": False,
+        "citable_candidate": False,
         "run_id": run_id,
         "configuration": configuration,
         "inputs": {
@@ -458,14 +489,43 @@ def prepare_smoke_experiment(
         paths, realcats_zip_path, realcats_label_dir, telemetry
     )
     datasets["blte"] = _prepare_blte(paths, blte_path, telemetry=telemetry)
+    hf_resource = datasets["huggingface"].get(
+        "resource_metadata", {"approximate_distinct_nodes": 0, "target_count": 0}
+    )
+    realcats_resource = datasets["realcats"].get(
+        "resource_metadata",
+        {
+            "target_count": 0,
+            "exact_distinct_nodes_by_layer": {
+                layer: 0 for layer in REALCATS_LAYER_FILES
+            },
+        },
+    )
+    blte_resource = datasets["blte"].get(
+        "resource_metadata", {"exact_distinct_nodes": 0, "target_count": 0}
+    )
     protocol = {
         "protocol_version": PROTOCOL_VERSION,
         "execution_profile": "smoke",
         "citable": False,
+        "citable_candidate": False,
         "run_id": run_id,
-        "research_questions": ["blte", "rq1", "rq2", "rq3", "validation"],
+        "research_questions": [
+            "blte",
+            "rq1",
+            "rq2",
+            "rq3",
+            "rq4",
+            "validation",
+        ],
         "retrospective_classification_only": True,
         "primary_metric": "average_precision",
+        "delta_selection": DELTA_SELECTION,
+        "realcats_category_eligibility": {
+            **REALCATS_CATEGORY_ELIGIBILITY,
+            "minimum_active_addresses": SMOKE_REALCATS_MINIMUM_CLASS_SIZE,
+            "smoke_override": True,
+        },
         "alpha": 0.05,
         "deltas": list(SMOKE_DELTAS),
         "random_seed": RANDOM_SEED,
@@ -483,6 +543,37 @@ def prepare_smoke_experiment(
             "multiclass_standard_scaler": {"with_mean": True, "with_std": True},
         },
         "datasets": datasets,
+        "resource_estimates": {
+            "huggingface": {
+                "node_count_method": "exact_bounded_smoke_endpoints",
+                "approximate_distinct_nodes": hf_resource["approximate_distinct_nodes"],
+                "node_count_admission": hf_resource["approximate_distinct_nodes"],
+                "target_count": hf_resource["target_count"],
+                "max_feature_columns": 49,
+            },
+            "realcats": {
+                "node_count_method": "exact_sqlite_union_distinct_per_layer",
+                "target_count": realcats_resource["target_count"],
+                "max_feature_columns": 160,
+                "layers": {
+                    layer: {"exact_distinct_nodes": count}
+                    for layer, count in realcats_resource["exact_distinct_nodes_by_layer"].items()
+                },
+            },
+            "blte": {
+                "node_count_method": "exact_materialized_endpoint_union",
+                "exact_distinct_nodes": blte_resource["exact_distinct_nodes"],
+                "target_count": blte_resource["target_count"],
+                "max_feature_columns": 49,
+            },
+        },
+        "resource_constants": RESOURCE_CONSTANTS,
+        "source_scope": {
+            "huggingface_preparation": "bounded_source_prefix_smoke_only",
+            "huggingface_motif_graph": "target_incident_subgraph",
+            "realcats_layers": list(REALCATS_LAYER_FILES),
+            "blte_scope": "smoke_only",
+        },
         "runtime": runtime,
         "preparation_state_sha256": sha256_file(
             paths.root / "preparation_state.json"

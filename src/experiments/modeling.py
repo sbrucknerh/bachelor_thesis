@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import os
 
 import numpy as np
 import pandas as pd
@@ -15,13 +16,15 @@ from sklearn.preprocessing import StandardScaler
 from src.experiments.constants import (
     DEFAULT_RF_PARAMS,
     DEFAULT_XGB_PARAMS,
+    DELTA_MEAN_TIE_TOLERANCE,
     MULTICLASS_LOGISTIC_PARAMS,
 )
 
 
 def make_binary_model(model_type: str, y_train: pd.Series | np.ndarray):
+    threads = max(1, int(os.environ.get("THESIS_MODEL_THREADS", "1")))
     if model_type == "random_forest":
-        return RandomForestClassifier(**DEFAULT_RF_PARAMS)
+        return RandomForestClassifier(**DEFAULT_RF_PARAMS, n_jobs=threads)
     if model_type == "xgboost":
         from xgboost import XGBClassifier
 
@@ -29,6 +32,7 @@ def make_binary_model(model_type: str, y_train: pd.Series | np.ndarray):
         positive = int((y == 1).sum())
         negative = int((y == 0).sum())
         params = dict(DEFAULT_XGB_PARAMS)
+        params["n_jobs"] = threads
         params["scale_pos_weight"] = negative / positive if positive else 1.0
         return XGBClassifier(**params)
     raise ValueError(f"Unknown binary model: {model_type}")
@@ -89,14 +93,38 @@ def cv_delta_scores(
     return pd.DataFrame.from_records(records)
 
 
-def select_delta_one_standard_error(cv_scores: pd.DataFrame) -> tuple[int, pd.DataFrame]:
+def _summarize_delta_scores(cv_scores: pd.DataFrame) -> pd.DataFrame:
     summary = cv_scores.groupby("delta")["average_precision"].agg(["mean", "std", "count"])
     summary["standard_error"] = summary["std"] / np.sqrt(summary["count"])
+    return summary
+
+
+def select_delta_maximum(
+    cv_scores: pd.DataFrame,
+    tie_tolerance: float = DELTA_MEAN_TIE_TOLERANCE,
+) -> tuple[int, pd.DataFrame]:
+    """Select the development-CV mean-AP maximum with a locked tie rule."""
+    if tie_tolerance < 0:
+        raise ValueError("tie_tolerance must be nonnegative")
+    summary = _summarize_delta_scores(cv_scores)
+    maximum = float(summary["mean"].max())
+    tied = summary.index[
+        np.isclose(summary["mean"], maximum, rtol=0.0, atol=tie_tolerance)
+    ]
+    selected = int(min(tied))
+    summary["is_maximum"] = summary.index.isin(tied)
+    summary["selected_primary"] = summary.index == selected
+    return selected, summary.reset_index()
+
+
+def select_delta_one_standard_error(cv_scores: pd.DataFrame) -> tuple[int, pd.DataFrame]:
+    summary = _summarize_delta_scores(cv_scores)
     best_delta = int(summary["mean"].idxmax())
     cutoff = float(summary.loc[best_delta, "mean"] - summary.loc[best_delta, "standard_error"])
     qualifying = summary.index[summary["mean"] >= cutoff]
     selected = int(min(qualifying))
     summary["within_one_se"] = summary.index.isin(qualifying)
+    summary["selected_one_se"] = summary.index == selected
     return selected, summary.reset_index()
 
 

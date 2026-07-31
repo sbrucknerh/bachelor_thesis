@@ -17,7 +17,10 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from src.experiments.constants import REALCATS_LAYER_FILES
+from src.experiments.constants import (
+    REALCATS_CATEGORY_ELIGIBILITY,
+    REALCATS_LAYER_FILES,
+)
 from src.experiments.telemetry import RunTelemetry
 
 
@@ -38,7 +41,15 @@ def load_criminal_labels(label_dir: str | Path) -> pd.DataFrame:
     labels = pd.read_csv(Path(label_dir) / "CE.tsv", sep="\t", usecols=["address", "label"])
     labels["address"] = labels["address"].astype(str).str.lower()
     labels["type_label"] = labels["label"].astype(str).str.strip()
-    return labels.drop(columns="label").drop_duplicates("address")
+    conflicts = labels.groupby("address")["type_label"].nunique()
+    conflicts = conflicts[conflicts > 1]
+    if not conflicts.empty:
+        examples = sorted(conflicts.index.astype(str))[:10]
+        raise ValueError(
+            "CE.tsv contains addresses with conflicting criminal labels: "
+            f"{examples}"
+        )
+    return labels.drop(columns="label").drop_duplicates(["address", "type_label"])
 
 
 def _clean_int(value: Any) -> int | None:
@@ -250,6 +261,19 @@ def _export_layers(
         "event_signature",
         "layer",
     ]
+    schema = pa.schema(
+        [
+            ("from_address", pa.string()),
+            ("to_address", pa.string()),
+            ("timestamp", pa.int64()),
+            ("value", pa.float64()),
+            ("tx_hash", pa.string()),
+            ("block_number", pa.int64()),
+            ("transaction_index", pa.int64()),
+            ("event_signature", pa.string()),
+            ("layer", pa.string()),
+        ]
+    )
     for layer in REALCATS_LAYER_FILES:
         output = output_dir / f"{layer}.parquet"
         if output.exists():
@@ -284,10 +308,11 @@ def _export_layers(
                     telemetry.progress(
                         f"prepare.realcats.export.{layer}", exported_rows=exported_rows
                     )
-            if writer is not None:
-                writer.close()
-                temporary.replace(output)
-                output_paths[layer] = output
+            if writer is None:
+                writer = pq.ParquetWriter(temporary, schema, compression="zstd")
+            writer.close()
+            temporary.replace(output)
+            output_paths[layer] = output
     return output_paths
 
 
@@ -353,45 +378,66 @@ def convert_realcats_zip(
             audit["addresses_resumed"] = len(processed)
             remaining = len(by_address) - len(processed & set(by_address))
             completed_addresses = 0
-            for address, layer_files in by_address.items():
-                if address in processed:
-                    continue
-                normal_records = (
-                    _read_json(archive, layer_files["normal"])
-                    if "normal" in layer_files
-                    else []
+            progress_context = (
+                telemetry.task_progress(
+                    "Real-CATS address conversion",
+                    remaining,
+                    unit="address",
                 )
-                transaction_indices = {
-                    str(record.get("hash", "")).lower(): index
-                    for record in normal_records
-                    if (index := _clean_int(record.get("transactionIndex"))) is not None
-                }
-                for layer in REALCATS_LAYER_FILES:
-                    name = layer_files.get(layer)
-                    if not name:
+                if telemetry
+                else nullcontext(lambda _count=1: None)
+            )
+            with progress_context as advance:
+                for address, layer_files in by_address.items():
+                    if address in processed:
                         continue
-                    records = normal_records if layer == "normal" else _read_json(archive, name)
-                    source_count, _ = _insert_source_records(
-                        connection, layer, records, transaction_indices
+                    normal_records = (
+                        _read_json(archive, layer_files["normal"])
+                        if "normal" in layer_files
+                        else []
                     )
+                    transaction_indices = {
+                        str(record.get("hash", "")).lower(): index
+                        for record in normal_records
+                        if (index := _clean_int(record.get("transactionIndex")))
+                        is not None
+                    }
+                    for layer in REALCATS_LAYER_FILES:
+                        name = layer_files.get(layer)
+                        if not name:
+                            continue
+                        records = (
+                            normal_records
+                            if layer == "normal"
+                            else _read_json(archive, name)
+                        )
+                        source_count, _ = _insert_source_records(
+                            connection,
+                            layer,
+                            records,
+                            transaction_indices,
+                        )
+                        connection.execute(
+                            "INSERT OR REPLACE INTO source_audit VALUES (?, ?, ?)",
+                            (address, layer, source_count),
+                        )
                     connection.execute(
-                        "INSERT OR REPLACE INTO source_audit VALUES (?, ?, ?)",
-                        (address, layer, source_count),
+                        "INSERT OR IGNORE INTO processed_addresses VALUES (?)",
+                        (address,),
                     )
-                connection.execute(
-                    "INSERT OR IGNORE INTO processed_addresses VALUES (?)", (address,)
-                )
-                connection.commit()
-                completed_addresses += 1
-                if telemetry and (
-                    completed_addresses % 250 == 0 or completed_addresses == remaining
-                ):
-                    telemetry.progress(
-                        "prepare.realcats.address_conversion",
-                        addresses_complete=completed_addresses,
-                        addresses_total=remaining,
-                        addresses_resumed=len(processed),
-                    )
+                    connection.commit()
+                    completed_addresses += 1
+                    advance()
+                    if telemetry and (
+                        completed_addresses % 250 == 0
+                        or completed_addresses == remaining
+                    ):
+                        telemetry.progress(
+                            "prepare.realcats.address_conversion",
+                            addresses_complete=completed_addresses,
+                            addresses_total=remaining,
+                            addresses_resumed=len(processed),
+                        )
 
         connection.execute("CREATE INDEX IF NOT EXISTS events_layer ON events(layer)")
         connection.commit()
@@ -406,6 +452,18 @@ def convert_realcats_zip(
             audit[f"{layer}_unique_events"] = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM events WHERE layer = ?", (layer,)
+                ).fetchone()[0]
+            )
+            audit[f"{layer}_exact_distinct_nodes"] = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM (
+                        SELECT from_address AS address FROM events WHERE layer = ?
+                        UNION
+                        SELECT to_address AS address FROM events WHERE layer = ?
+                    )
+                    """,
+                    (layer, layer),
                 ).fetchone()[0]
             )
     finally:
@@ -434,7 +492,9 @@ def convert_realcats_zip(
 def select_realcats_targets(
     labels: pd.DataFrame,
     layer_paths: dict[str, str | Path],
-    minimum_class_size: int = 100,
+    minimum_class_size: int = REALCATS_CATEGORY_ELIGIBILITY[
+        "minimum_active_addresses"
+    ],
 ) -> tuple[pd.DataFrame, dict]:
     """Select active exact labels without merging or motif-coverage filtering."""
     labelled = set(labels["address"])
@@ -450,7 +510,10 @@ def select_realcats_targets(
                         active.add(normalized)
 
     selected = labels.loc[labels["address"].isin(active)].copy()
-    selected = selected.loc[selected["type_label"].str.casefold() != "other"]
+    excluded = set(REALCATS_CATEGORY_ELIGIBILITY["exclude_casefold_labels"])
+    selected = selected.loc[
+        ~selected["type_label"].str.casefold().isin(excluded)
+    ]
     counts = selected["type_label"].value_counts()
     inferential = set(counts[counts >= minimum_class_size].index)
     selected["inference_eligible"] = selected["type_label"].isin(inferential)
