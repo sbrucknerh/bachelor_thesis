@@ -24,23 +24,42 @@ from src.experiments.telemetry import RunTelemetry
 
 
 HF_REPO_CACHE = "datasets--fesevu--ethereum_fraud_dataset_by_activity"
+HF_DATASET_REVISION = "6a7a517fbdbe2bcc4ec65bee4c0ff15f1c0a3c70"
+HF_PROJECT_SNAPSHOT = (
+    Path(__file__).resolve().parents[2]
+    / "data/raw/huggingface_ethereum_fraud"
+)
 
 
-def discover_hf_snapshot(cache_root: str | Path | None = None) -> Path:
-    """Return the locally cached Hugging Face snapshot containing full GNN data."""
+def _is_hf_snapshot(candidate: Path) -> bool:
+    return (
+        (candidate / "gnn_dataset/edges_all/edges.parquet").exists()
+        and (candidate / "gnn_dataset/labels/targets_global.parquet").exists()
+        and (candidate / "addr_labels_balanced.csv.zst").exists()
+    )
+
+
+def discover_hf_snapshot(
+    cache_root: str | Path | None = None,
+    project_snapshot: str | Path | None = None,
+) -> Path:
+    """Return the pinned local Hugging Face snapshot containing full GNN data."""
+    local = Path(project_snapshot) if project_snapshot else HF_PROJECT_SNAPSHOT
+    if _is_hf_snapshot(local):
+        return local
     root = Path(cache_root) if cache_root else Path.home() / ".cache" / "huggingface" / "hub"
     snapshots = root / HF_REPO_CACHE / "snapshots"
+    pinned = snapshots / HF_DATASET_REVISION
+    if _is_hf_snapshot(pinned):
+        return pinned
     candidates = sorted(snapshots.glob("*")) if snapshots.exists() else []
     for candidate in reversed(candidates):
-        if (
-            (candidate / "gnn_dataset/edges_all/edges.parquet").exists()
-            and (candidate / "gnn_dataset/labels/targets_global.parquet").exists()
-            and (candidate / "addr_labels_balanced.csv.zst").exists()
-        ):
+        if _is_hf_snapshot(candidate):
             return candidate
     raise FileNotFoundError(
-        "Full Hugging Face GNN snapshot is not cached. Expected edges_all, "
-        "targets_global, and addr_labels_balanced in the local Hugging Face cache."
+        "Full Hugging Face GNN snapshot is missing. Run scripts/setup_results.sh "
+        "or provide --hf-snapshot with edges_all, targets_global, and "
+        "addr_labels_balanced."
     )
 
 

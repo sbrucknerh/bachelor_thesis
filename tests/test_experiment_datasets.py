@@ -5,11 +5,47 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from src.experiments.datasets import (
+    HF_DATASET_REVISION,
     campaign_group,
     count_target_activity,
+    discover_hf_snapshot,
     extract_target_edges,
     select_dual_hf_cohorts,
 )
+
+
+def _write_hf_snapshot(root):
+    for relative in (
+        "gnn_dataset/edges_all/edges.parquet",
+        "gnn_dataset/labels/targets_global.parquet",
+        "addr_labels_balanced.csv.zst",
+    ):
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+
+
+def test_hf_discovery_prefers_project_data_then_pinned_cache(tmp_path):
+    project_snapshot = tmp_path / "project"
+    cache_root = tmp_path / "cache"
+    pinned = (
+        cache_root
+        / "datasets--fesevu--ethereum_fraud_dataset_by_activity"
+        / "snapshots"
+        / HF_DATASET_REVISION
+    )
+    _write_hf_snapshot(pinned)
+
+    assert (
+        discover_hf_snapshot(cache_root, project_snapshot=project_snapshot)
+        == pinned
+    )
+
+    _write_hf_snapshot(project_snapshot)
+    assert (
+        discover_hf_snapshot(cache_root, project_snapshot=project_snapshot)
+        == project_snapshot
+    )
 
 
 def test_campaign_grouping_is_whitelisted():

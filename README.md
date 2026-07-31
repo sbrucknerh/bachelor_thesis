@@ -9,7 +9,8 @@ detecting malicious Ethereum addresses with temporal motifs.
 ## Requirements
 
 - Python 3.11 or newer
-- The Hugging Face and Real-CATS datasets stored locally
+- Git and an internet connection for the initial setup
+- A Kaggle account and API token for downloading Real-CATS
 - A local filesystem with enough free space for prepared data and checkpoints
 
 The thesis environment is pinned in `requirements-results.txt`. Raphtory motif
@@ -17,87 +18,97 @@ counting is CPU-based; the pipeline does not require a GPU.
 
 ## Setup
 
-### 1. Install the environment
+Clone the project first:
 
 ```bash
 git clone <repository-url>
 cd bachelor_thesis
-
-python3 -m venv venv
-venv/bin/pip install -r requirements-results.txt
 ```
 
-### 2. Place the datasets
+### Option A: Installation Script (recommended)
 
-#### Hugging Face (RQ1/RQ2)
+Create a token on the
+[Kaggle API settings page](https://www.kaggle.com/settings/api), then run:
 
-Source: [Ethereum Fraud Dataset by Activity](https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity)
+```bash
+export KAGGLE_API_TOKEN="PASTE_TOKEN_HERE"
+./scripts/setup_results.sh
+```
 
-Download only the three files used by the pipeline into the standard Hugging
-Face cache. This is approximately 21.6 GB, not the complete dataset repository:
+The script is safe to rerun. It:
+
+- creates `venv/` and installs the pinned dependencies;
+- downloads the three required Hugging Face files, approximately 21.6 GB;
+- downloads the Real-CATS labels and transaction archive;
+- downloads BLTE for the smoke test;
+- validates the dependency, Parquet, ZIP, and label schemas.
+
+Use `--smoke` to run the bounded end-to-end test immediately after setup, or
+`--check-only` to validate an existing installation without downloading data:
+
+```bash
+./scripts/setup_results.sh --smoke
+./scripts/setup_results.sh --check-only
+```
+
+### Option B: Manual Setup
+
+1. Create the environment:
+
+```bash
+python3 -m venv venv
+venv/bin/pip install -r requirements-results.txt
+venv/bin/pip install kaggle==2.2.4
+```
+
+2. Download the three Hugging Face files:
 
 ```bash
 venv/bin/hf download fesevu/ethereum_fraud_dataset_by_activity \
   gnn_dataset/edges_all/edges.parquet \
   gnn_dataset/labels/targets_global.parquet \
   addr_labels_balanced.csv.zst \
-  --repo-type dataset
+  --repo-type dataset \
+  --revision 6a7a517fbdbe2bcc4ec65bee4c0ff15f1c0a3c70 \
+  --local-dir data/raw/huggingface_ethereum_fraud
 ```
 
-The downloaded snapshot must contain:
-
-```text
-gnn_dataset/edges_all/edges.parquet
-gnn_dataset/labels/targets_global.parquet
-addr_labels_balanced.csv.zst
-```
-
-The runner automatically searches the local Hugging Face cache. "Streaming"
-in this project means that PyArrow reads this local Parquet file in bounded
-batches instead of loading it fully into RAM. It is not remote network
-streaming, so the files must be downloaded once before the run. When the
-snapshot is elsewhere, pass `--hf-snapshot /path/to/snapshot` to the run
-command.
-
-#### Real-CATS (RQ3/RQ4)
-
-- Labels: [official Real-CATS GitHub repository](https://github.com/sjdseu/Real-CATS)
-- Transactions: [official Real-CATS Kaggle dataset](https://www.kaggle.com/datasets/lvd312393/real-cats)
-
-Clone the labels repository into the expected location:
+3. Download Real-CATS:
 
 ```bash
+git clone https://github.com/sjdseu/Real-CATS.git data/raw/realcats_dataset
+git -C data/raw/realcats_dataset checkout --detach \
+  99623a1e588500d84379d58f17ec38e2d1816ed3
+
 mkdir -p data/raw/realcats_transactions
-git clone --depth 1 https://github.com/sjdseu/Real-CATS.git \
-  data/raw/realcats_dataset
+export KAGGLE_API_TOKEN="PASTE_TOKEN_HERE"
+venv/bin/kaggle datasets download lvd312393/real-cats \
+  --file real-cats.zip \
+  --path data/raw/realcats_transactions
 ```
 
-Download the transaction archive from Kaggle and place it without extracting
-it at:
-
-```text
-data/raw/realcats_transactions/real-cats.zip
-```
-
-The transaction ZIP is read directly. Do not process it with
-`scripts/extract_realcats.py` for the thesis experiments.
-
-#### BLTE (smoke test only)
-
-Source: [authors' labeled Ethereum transaction repository](https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network)
+4. Download BLTE and validate the installation:
 
 ```bash
-git clone --depth 1 \
+git clone \
   https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network.git \
   data/raw/ethereum_dataset_labelled
+git -C data/raw/ethereum_dataset_labelled checkout --detach \
+  497df9faf15c914becb3fcd121618e7a20da9c24
+
+./scripts/setup_results.sh --check-only
 ```
 
-The smoke test reads these two files from that clone:
+Both setup methods use these sources:
 
-```text
-data/raw/ethereum_dataset_labelled/Dataset.zip
-data/raw/ethereum_dataset_labelled/Featuers_Extraction.csv
-```
+- [Hugging Face Ethereum Fraud Dataset](https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity)
+- [Real-CATS labels](https://github.com/sjdseu/Real-CATS)
+- [Real-CATS transactions](https://www.kaggle.com/datasets/lvd312393/real-cats)
+- [BLTE](https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network)
+
+During experiments, Hugging Face data is streamed in bounded batches from the
+local Parquet file rather than loaded completely into RAM. It must therefore be
+downloaded once by either setup method.
 
 ## Usage
 
