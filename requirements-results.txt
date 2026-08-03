@@ -1,4 +1,4 @@
-# Protocol-v5 numerical environment used for thesis-result preparation and execution.
+# Protocol-v6 numerical environment used for thesis-result preparation and execution.
 # Install this file on the server before preparing a citable run; protocol.json
 # records and later verifies these versions plus the complete experiment source hashes.
 numpy==2.4.4

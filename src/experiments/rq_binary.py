@@ -6,10 +6,17 @@ from pathlib import Path
 from contextlib import nullcontext
 
 import pandas as pd
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 from src.experiments.artifacts import write_csv_exclusive, write_json_exclusive, write_parquet_exclusive
+from src.experiments.constants import (
+    HF_DIAGNOSTIC_ARM_NAMES,
+    HF_DIAGNOSTIC_COMPARISONS,
+    HF_REPRESENTATION_ANALYSIS,
+)
 from src.experiments.features import (
     aggregate_features_from_parquet,
+    binary_motif_representations,
     log_motif_counts,
     motif_coverage,
 )
@@ -29,7 +36,12 @@ from src.experiments.statistics import (
     stratified_group_bootstrap_delta,
 )
 from src.experiments.telemetry import RunTelemetry
-from src.experiments.visualization import plot_ablation, plot_delta_performance
+from src.experiments.visualization import (
+    plot_ablation,
+    plot_delta_performance,
+    plot_motif_coverage,
+    plot_representation_ablation,
+)
 
 
 def _artifact_path(root: Path, relative: str) -> Path:
@@ -40,6 +52,150 @@ def _save_indexed_parquet(path: Path, frame: pd.DataFrame) -> None:
     output = frame.copy()
     output.index.name = output.index.name or "address"
     write_parquet_exclusive(path, output.reset_index())
+
+
+def _joined_baseline(baseline: pd.DataFrame, features: pd.DataFrame) -> pd.DataFrame:
+    return baseline.join(features, how="left").fillna(0.0)
+
+
+def _diagnostic_feature_arms(
+    baseline: pd.DataFrame,
+    counts: pd.DataFrame,
+    incoming_star_roles: list[str],
+) -> dict[str, pd.DataFrame]:
+    representations = binary_motif_representations(counts, incoming_star_roles)
+    return {
+        **representations,
+        "baseline": baseline,
+        "baseline_presence": _joined_baseline(
+            baseline, representations["motif_presence"]
+        ),
+        "baseline_volume": _joined_baseline(
+            baseline, representations["motif_volume"]
+        ),
+        "baseline_composition": _joined_baseline(
+            baseline, representations["motif_composition"]
+        ),
+        "baseline_composition_volume": _joined_baseline(
+            baseline, representations["motif_composition_volume"]
+        ),
+        "baseline_incoming_stars": _joined_baseline(
+            baseline, representations["motif_incoming_stars"]
+        ),
+        "combined": _joined_baseline(baseline, representations["motifs"]),
+    }
+
+
+def _append_binary_output(
+    *,
+    metric_records: list[dict],
+    prediction_records: list[dict],
+    indexed: pd.DataFrame,
+    test_addresses: pd.Index,
+    test_labels: pd.Series,
+    cohort: str,
+    variant: str,
+    delta: int,
+    arm: str,
+    scores,
+    replication_index: int,
+) -> None:
+    metric_records.append(
+        {
+            "replication_index": int(replication_index),
+            "cohort": cohort,
+            "variant": variant,
+            "delta": int(delta),
+            "arm": arm,
+            **binary_metrics(test_labels, scores),
+        }
+    )
+    prediction_records.extend(
+        {
+            "address": address,
+            "label": int(label),
+            "campaign_group": str(indexed.loc[address, "campaign_group"]),
+            "replication_index": int(replication_index),
+            "cohort": cohort,
+            "variant": variant,
+            "delta": int(delta),
+            "arm": arm,
+            "score": float(score),
+        }
+        for address, label, score in zip(
+            test_addresses, test_labels, scores, strict=True
+        )
+    )
+
+
+def _role_diagnostics(
+    counts: pd.DataFrame,
+    indexed: pd.DataFrame,
+    delta: int,
+    replication_index: int,
+) -> pd.DataFrame:
+    records: list[dict] = []
+    for scope in ("development", "test"):
+        addresses = indexed.index[indexed["split"] == scope]
+        labels = indexed.loc[addresses, "label"].astype(int)
+        scoped = counts.loc[addresses]
+        for role in scoped.columns:
+            values = scoped[role].astype("float64")
+            nonzero = values.gt(0)
+            record = {
+                "replication_index": int(replication_index),
+                "scope": scope,
+                "delta": int(delta),
+                "role": str(role),
+                "n": int(len(values)),
+                "average_precision_direct_count": float(
+                    average_precision_score(labels, values)
+                ),
+                "roc_auc_direct_count": float(roc_auc_score(labels, values)),
+                "nonzero_coverage": float(nonzero.mean()),
+            }
+            for label in (0, 1):
+                selected = labels.eq(label)
+                record[f"mean_count_label_{label}"] = float(values.loc[selected].mean())
+                record[f"nonzero_coverage_label_{label}"] = float(
+                    nonzero.loc[selected].mean()
+                )
+            records.append(record)
+    return pd.DataFrame.from_records(records)
+
+
+def _coverage_summary(
+    counts_by_delta: dict[int, pd.DataFrame],
+    indexed: pd.DataFrame,
+    cohort: str,
+    variant: str,
+    replication_index: int,
+) -> pd.DataFrame:
+    records: list[pd.DataFrame] = []
+    for delta, counts in counts_by_delta.items():
+        for scope in ("all", "development", "test"):
+            addresses = (
+                indexed.index
+                if scope == "all"
+                else indexed.index[indexed["split"] == scope]
+            )
+            scoped_counts = counts.loc[addresses]
+            labels = indexed.loc[addresses, "label"].astype(int)
+            by_label = motif_coverage(scoped_counts, labels).reset_index()
+            by_label["label"] = by_label["label"].astype(str)
+            overall = motif_coverage(scoped_counts).assign(label="all")
+            frame = pd.concat([overall, by_label], ignore_index=True)
+            frame["zero"] = frame["n"] - frame["nonzero"]
+            frame["zero_fraction"] = 1.0 - frame["coverage"]
+            frame = frame.assign(
+                replication_index=int(replication_index),
+                delta=int(delta),
+                cohort=cohort,
+                variant=variant,
+                scope=scope,
+            )
+            records.append(frame)
+    return pd.concat(records, ignore_index=True)
 
 
 def _evaluate_cohort(
@@ -60,10 +216,15 @@ def _evaluate_cohort(
     development_labels = labels.loc[development_addresses]
     test_labels = labels.loc[test_addresses]
     development_folds = folds.loc[folds["cohort"] == cohort]
+    replication_index = int(protocol.get("replication", {}).get("index", 0))
+    representation_definition = protocol.get(
+        "hf_representation_analysis", HF_REPRESENTATION_ANALYSIS
+    )
+    incoming_star_roles = list(representation_definition["incoming_star_roles"])
 
     motif_features = {delta: log_motif_counts(counts) for delta, counts in motif_counts.items()}
     combined_features = {
-        delta: baseline.join(features, how="left").fillna(0.0)
+        delta: _joined_baseline(baseline, features)
         for delta, features in motif_features.items()
     }
     cv_context = (
@@ -129,24 +290,60 @@ def _evaluate_cohort(
             ("motifs", motif_scores),
             ("combined", combined_scores),
         ):
-            metrics = binary_metrics(test_labels, scores)
-            metric_records.append(
-                {"cohort": cohort, "variant": variant, "delta": delta, "arm": arm, **metrics}
+            _append_binary_output(
+                metric_records=metric_records,
+                prediction_records=prediction_records,
+                indexed=indexed,
+                test_addresses=test_addresses,
+                test_labels=test_labels,
+                cohort=cohort,
+                variant=variant,
+                delta=int(delta),
+                arm=arm,
+                scores=scores,
+                replication_index=replication_index,
             )
-            prediction_records.extend(
-                {
-                    "address": address,
-                    "label": int(label),
-                    "campaign_group": str(indexed.loc[address, "campaign_group"]),
-                    "cohort": cohort,
-                    "variant": variant,
-                    "delta": delta,
-                    "arm": arm,
-                    "score": float(score),
-                }
-                for address, label, score in zip(
-                    test_addresses, test_labels, scores, strict=True
-                )
+
+    diagnostic_features = _diagnostic_feature_arms(
+        baseline,
+        motif_counts[selected_delta],
+        incoming_star_roles,
+    )
+    diagnostic_scores = {
+        "baseline": baseline_scores,
+        "motifs": scores_by_delta[selected_delta]["motifs"],
+        "combined": scores_by_delta[selected_delta]["combined"],
+    }
+    diagnostic_context = (
+        telemetry.step(
+            f"hf.representation_models.{cohort}.{variant}",
+            arms=len(HF_DIAGNOSTIC_ARM_NAMES),
+            delta=int(selected_delta),
+        )
+        if telemetry
+        else nullcontext()
+    )
+    with diagnostic_context:
+        for arm in HF_DIAGNOSTIC_ARM_NAMES:
+            features = diagnostic_features[arm]
+            _, scores = fit_binary_scores(
+                features.loc[development_addresses],
+                development_labels,
+                features.loc[test_addresses],
+            )
+            diagnostic_scores[arm] = scores
+            _append_binary_output(
+                metric_records=metric_records,
+                prediction_records=prediction_records,
+                indexed=indexed,
+                test_addresses=test_addresses,
+                test_labels=test_labels,
+                cohort=cohort,
+                variant=variant,
+                delta=int(selected_delta),
+                arm=arm,
+                scores=scores,
+                replication_index=replication_index,
             )
 
     groups = indexed.loc[test_addresses, "campaign_group"].astype(str)
@@ -178,45 +375,136 @@ def _evaluate_cohort(
             seed=int(protocol["random_seed"]),
         )
 
+    representation_effects = {
+        comparison: float(
+            average_precision_score(test_labels, diagnostic_scores[alternative])
+            - average_precision_score(test_labels, diagnostic_scores[reference])
+        )
+        for comparison, reference, alternative in HF_DIAGNOSTIC_COMPARISONS
+    }
+    representation_comparisons: list[dict] = []
+    if variant == representation_definition["formal_ordering_variant"]:
+        representation_context = (
+            telemetry.step(
+                f"hf.representation_statistics.{cohort}.{variant}",
+                comparisons=len(HF_DIAGNOSTIC_COMPARISONS),
+                permutations=int(protocol["permutations"]),
+                bootstraps=int(protocol["bootstraps"]),
+            )
+            if telemetry
+            else nullcontext()
+        )
+        with representation_context:
+            for comparison, reference, alternative in HF_DIAGNOSTIC_COMPARISONS:
+                permutation = grouped_score_swap_test(
+                    test_labels,
+                    diagnostic_scores[reference],
+                    diagnostic_scores[alternative],
+                    groups,
+                    iterations=int(protocol["permutations"]),
+                    seed=int(protocol["random_seed"]),
+                )
+                bootstrap = stratified_group_bootstrap_delta(
+                    test_labels,
+                    diagnostic_scores[reference],
+                    diagnostic_scores[alternative],
+                    groups,
+                    iterations=int(protocol["bootstraps"]),
+                    seed=int(protocol["random_seed"]),
+                )
+                representation_comparisons.append(
+                    {
+                        "comparison": comparison,
+                        "reference_arm": reference,
+                        "alternative_arm": alternative,
+                        "reference_average_precision": float(
+                            average_precision_score(
+                                test_labels, diagnostic_scores[reference]
+                            )
+                        ),
+                        "alternative_average_precision": float(
+                            average_precision_score(
+                                test_labels, diagnostic_scores[alternative]
+                            )
+                        ),
+                        **permutation,
+                        "ci_95": bootstrap["ci_95"],
+                        "bootstrap_p_value_one_sided": bootstrap[
+                            "p_value_one_sided"
+                        ],
+                    }
+                )
+        adjusted = benjamini_hochberg(
+            item["p_value_one_sided"] for item in representation_comparisons
+        )
+        for item, adjusted_p in zip(
+            representation_comparisons, adjusted, strict=True
+        ):
+            item["p_value_bh"] = float(adjusted_p)
+            item["reject_h0_bh"] = bool(
+                adjusted_p < float(protocol["alpha"])
+            )
+
     comparisons = []
+    xgboost_robustness = None
     if variant == "canonical":
         xgboost_context = (
             telemetry.step(f"hf.model_xgboost.{cohort}.{variant}")
             if telemetry
             else nullcontext()
         )
+        xgboost_scores: dict[str, object] = {}
         with xgboost_context:
-            _, xgboost_scores = fit_binary_scores(
-                combined_features[selected_delta].loc[development_addresses],
-                development_labels,
-                combined_features[selected_delta].loc[test_addresses],
-                model_type="xgboost",
-            )
-        xgboost_metrics = binary_metrics(test_labels, xgboost_scores)
-        metric_records.append(
-            {
-                "cohort": cohort,
-                "variant": variant,
-                "delta": selected_delta,
-                "arm": "combined_xgboost",
-                **xgboost_metrics,
-            }
+            for arm, features in (
+                ("baseline_xgboost", diagnostic_features["baseline"]),
+                ("motifs_xgboost", diagnostic_features["motifs"]),
+                ("combined_xgboost", diagnostic_features["combined"]),
+            ):
+                _, scores = fit_binary_scores(
+                    features.loc[development_addresses],
+                    development_labels,
+                    features.loc[test_addresses],
+                    model_type="xgboost",
+                )
+                xgboost_scores[arm] = scores
+                _append_binary_output(
+                    metric_records=metric_records,
+                    prediction_records=prediction_records,
+                    indexed=indexed,
+                    test_addresses=test_addresses,
+                    test_labels=test_labels,
+                    cohort=cohort,
+                    variant=variant,
+                    delta=int(selected_delta),
+                    arm=arm,
+                    scores=scores,
+                    replication_index=replication_index,
+                )
+        xgb_permutation = grouped_score_swap_test(
+            test_labels,
+            xgboost_scores["baseline_xgboost"],
+            xgboost_scores["combined_xgboost"],
+            groups,
+            iterations=int(protocol["permutations"]),
+            seed=int(protocol["random_seed"]),
         )
-        prediction_records.extend(
-            {
-                "address": address,
-                "label": int(label),
-                "campaign_group": str(indexed.loc[address, "campaign_group"]),
-                "cohort": cohort,
-                "variant": variant,
-                "delta": selected_delta,
-                "arm": "combined_xgboost",
-                "score": float(score),
-            }
-            for address, label, score in zip(
-                test_addresses, test_labels, xgboost_scores, strict=True
-            )
+        xgb_bootstrap = stratified_group_bootstrap_delta(
+            test_labels,
+            xgboost_scores["baseline_xgboost"],
+            xgboost_scores["combined_xgboost"],
+            groups,
+            iterations=int(protocol["bootstraps"]),
+            seed=int(protocol["random_seed"]),
         )
+        xgboost_robustness = {
+            "reference_arm": "baseline_xgboost",
+            "alternative_arm": "combined_xgboost",
+            **xgb_permutation,
+            "ci_95": xgb_bootstrap["ci_95"],
+            "bootstrap_p_value_one_sided": xgb_bootstrap[
+                "p_value_one_sided"
+            ],
+        }
     rq2_context = (
         telemetry.step(
             f"hf.rq2_statistics.{cohort}.{variant}",
@@ -248,14 +536,12 @@ def _evaluate_cohort(
 
     predictions = pd.DataFrame.from_records(prediction_records)
     metrics = pd.DataFrame.from_records(metric_records)
-    coverage = pd.concat(
-        [
-            motif_coverage(motif_counts[delta].loc[indexed.index], labels)
-            .reset_index()
-            .assign(delta=delta, cohort=cohort, variant=variant)
-            for delta in protocol["deltas"]
-        ],
-        ignore_index=True,
+    coverage = _coverage_summary(
+        motif_counts,
+        indexed,
+        cohort,
+        variant,
+        replication_index,
     )
     stem = f"hf_{cohort}_{variant}"
     write_parquet_exclusive(paths.predictions / f"{stem}.parquet", predictions)
@@ -263,7 +549,20 @@ def _evaluate_cohort(
     write_csv_exclusive(paths.metrics / f"{stem}_cv.csv", cv_scores)
     write_csv_exclusive(paths.metrics / f"{stem}_delta_selection.csv", selection)
     write_csv_exclusive(paths.metrics / f"{stem}_coverage.csv", coverage)
+    if variant == representation_definition["formal_ordering_variant"]:
+        role_diagnostics = _role_diagnostics(
+            motif_counts[selected_delta],
+            indexed,
+            selected_delta,
+            replication_index,
+        )
+        role_diagnostics.insert(1, "cohort", cohort)
+        role_diagnostics.insert(2, "variant", variant)
+        write_csv_exclusive(
+            paths.metrics / f"{stem}_role_diagnostics.csv", role_diagnostics
+        )
     statistical = {
+        "replication_index": replication_index,
         "cohort": cohort,
         "variant": variant,
         "selected_delta": selected_delta,
@@ -272,6 +571,13 @@ def _evaluate_cohort(
         "selection_objective": "development_cv_mean_combined_average_precision",
         "rq1_randomization": randomization,
         "rq1_group_bootstrap": confidence_interval,
+        "representation_analysis": {
+            "definition": representation_definition,
+            "selected_delta": selected_delta,
+            "effects": representation_effects,
+            "formal_comparisons": representation_comparisons,
+        },
+        "xgboost_robustness": xgboost_robustness,
         "rq2_selected_vs_alternatives": comparisons,
     }
     write_json_exclusive(paths.metrics / f"{stem}_statistical_tests.json", statistical)
@@ -285,6 +591,21 @@ def _evaluate_cohort(
             },
             paths.figures / f"rq1_ablation_{cohort}.pdf",
             f"RQ1 ablation ({cohort} cohort)",
+        )
+        plot_representation_ablation(
+            {
+                arm: float(selected_metrics.loc[arm, "average_precision"])
+                for arm in (
+                    "baseline",
+                    "baseline_presence",
+                    "baseline_volume",
+                    "baseline_composition_volume",
+                    "baseline_incoming_stars",
+                    "combined",
+                )
+            },
+            paths.figures / f"rq1_representation_ablation_{cohort}.pdf",
+            f"RQ1 representation diagnostics ({cohort} cohort)",
         )
         delta_metrics = metrics.loc[metrics["arm"] == "combined", ["delta", "average_precision"]]
         delta_metrics["baseline_average_precision"] = float(
@@ -306,8 +627,219 @@ def _evaluate_cohort(
             paths.figures / f"rq2_delta_performance_{cohort}.pdf",
             f"RQ2 temporal-window sensitivity ({cohort} cohort)",
         )
+        plot_motif_coverage(
+            coverage.loc[coverage["scope"] == "all"],
+            paths.figures / f"rq2_motif_coverage_{cohort}.pdf",
+            f"RQ2 motif coverage ({cohort} cohort)",
+        )
 
     return statistical
+
+
+def _aggregate_hf_results(
+    output_paths,
+    source_paths,
+    protocol: dict,
+    targets: pd.DataFrame,
+    variant_results: list[dict],
+) -> dict:
+    alpha = float(protocol["alpha"])
+    replication_index = int(protocol.get("replication", {}).get("index", 0))
+    sensitivity: dict = {}
+    representation_sensitivity: dict = {
+        "replication_index": replication_index,
+        "formal_ordering_variant": protocol.get(
+            "hf_representation_analysis", HF_REPRESENTATION_ANALYSIS
+        )["formal_ordering_variant"],
+        "cohorts": {},
+    }
+    for cohort in sorted(targets["cohort"].unique()):
+        results = [result for result in variant_results if result["cohort"] == cohort]
+        decisions = [
+            result["rq1_randomization"]["p_value_one_sided"] < alpha
+            for result in results
+        ]
+        directions = [
+            result["rq1_randomization"]["observed_delta_ap"] > 0
+            for result in results
+        ]
+        sensitivity[cohort] = {
+            "ordering_robust": len(set(decisions)) == 1 and all(directions),
+            "rq1_rejected_in_all_variants": all(decisions),
+            "decisions": decisions,
+            "effect_directions_positive": directions,
+            "selected_deltas": [result["selected_delta"] for result in results],
+            "one_se_deltas": [result["one_se_delta"] for result in results],
+            "rq2_unique_optimum_in_all_variants": all(
+                result["rq2_selected_vs_alternatives"]
+                and all(
+                    comparison["observed_delta_ap"] > 0
+                    and comparison["p_value_bh"] < alpha
+                    for comparison in result["rq2_selected_vs_alternatives"]
+                )
+                for result in results
+            ),
+        }
+        effects = {
+            comparison: [
+                float(result["representation_analysis"]["effects"][comparison])
+                for result in results
+            ]
+            for comparison, _, _ in HF_DIAGNOSTIC_COMPARISONS
+        }
+        formal = next(
+            (
+                result["representation_analysis"]["formal_comparisons"]
+                for result in results
+                if result["representation_analysis"]["formal_comparisons"]
+            ),
+            [],
+        )
+        representation_sensitivity["cohorts"][cohort] = {
+            "selected_deltas": [int(result["selected_delta"]) for result in results],
+            "effects_by_comparison": effects,
+            "positive_in_all_orderings": {
+                comparison: all(value > 0 for value in values)
+                for comparison, values in effects.items()
+            },
+            "formal_bh_decisions": {
+                item["comparison"]: bool(item["reject_h0_bh"])
+                for item in formal
+            },
+        }
+    sensitivity["general_signal"] = all(
+        details["ordering_robust"] and details["rq1_rejected_in_all_variants"]
+        for key, details in sensitivity.items()
+        if key != "general_signal"
+    )
+
+    hypothesis_rows = []
+    delta_rows = []
+    representation_rows = []
+    xgboost_rows = []
+    for result in variant_results:
+        hypothesis_rows.append(
+            {
+                "replication_index": replication_index,
+                "cohort": result["cohort"],
+                "ordering_variant": result["variant"],
+                "selected_delta": result["selected_delta"],
+                "one_se_delta": result["one_se_delta"],
+                "delta_average_precision": result["rq1_randomization"][
+                    "observed_delta_ap"
+                ],
+                "ci_lower": result["rq1_group_bootstrap"]["ci_95"][0],
+                "ci_upper": result["rq1_group_bootstrap"]["ci_95"][1],
+                "p_value": result["rq1_randomization"]["p_value_one_sided"],
+                "reject_h0": result["rq1_randomization"]["p_value_one_sided"]
+                < alpha,
+            }
+        )
+        for comparison in result["rq2_selected_vs_alternatives"]:
+            delta_rows.append(
+                {
+                    "replication_index": replication_index,
+                    "cohort": result["cohort"],
+                    "ordering_variant": result["variant"],
+                    "selected_delta": result["selected_delta"],
+                    "one_se_delta": result["one_se_delta"],
+                    **comparison,
+                }
+            )
+        for comparison in result["representation_analysis"]["formal_comparisons"]:
+            representation_rows.append(
+                {
+                    "replication_index": replication_index,
+                    "cohort": result["cohort"],
+                    "ordering_variant": result["variant"],
+                    "selected_delta": result["selected_delta"],
+                    "comparison": comparison["comparison"],
+                    "reference_arm": comparison["reference_arm"],
+                    "alternative_arm": comparison["alternative_arm"],
+                    "reference_average_precision": comparison[
+                        "reference_average_precision"
+                    ],
+                    "alternative_average_precision": comparison[
+                        "alternative_average_precision"
+                    ],
+                    "observed_delta_ap": comparison["observed_delta_ap"],
+                    "ci_lower": comparison["ci_95"][0],
+                    "ci_upper": comparison["ci_95"][1],
+                    "p_value": comparison["p_value_one_sided"],
+                    "p_value_bh": comparison["p_value_bh"],
+                    "bootstrap_p_value": comparison[
+                        "bootstrap_p_value_one_sided"
+                    ],
+                    "reject_h0_bh": comparison["reject_h0_bh"],
+                }
+            )
+        xgboost = result.get("xgboost_robustness")
+        if xgboost:
+            xgboost_rows.append(
+                {
+                    "replication_index": replication_index,
+                    "cohort": result["cohort"],
+                    "ordering_variant": result["variant"],
+                    "selected_delta": result["selected_delta"],
+                    "reference_arm": xgboost["reference_arm"],
+                    "alternative_arm": xgboost["alternative_arm"],
+                    "observed_delta_ap": xgboost["observed_delta_ap"],
+                    "ci_lower": xgboost["ci_95"][0],
+                    "ci_upper": xgboost["ci_95"][1],
+                    "p_value": xgboost["p_value_one_sided"],
+                    "bootstrap_p_value": xgboost[
+                        "bootstrap_p_value_one_sided"
+                    ],
+                    "reject_h0": xgboost["p_value_one_sided"] < alpha,
+                }
+            )
+
+    role_frames = [
+        pd.read_csv(
+            source_paths.metrics
+            / f"hf_{cohort}_{HF_REPRESENTATION_ANALYSIS['formal_ordering_variant']}_role_diagnostics.csv"
+        )
+        for cohort in sorted(targets["cohort"].unique())
+    ]
+    coverage_frames = [
+        pd.read_csv(
+            source_paths.metrics
+            / f"hf_{cohort}_{HF_REPRESENTATION_ANALYSIS['formal_ordering_variant']}_coverage.csv"
+        )
+        for cohort in sorted(targets["cohort"].unique())
+    ]
+    write_csv_exclusive(
+        output_paths.tables / "rq1_hypothesis_tests.csv",
+        pd.DataFrame(hypothesis_rows),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq1_representation_tests.csv",
+        pd.DataFrame(representation_rows),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq1_role_diagnostics.csv",
+        pd.concat(role_frames, ignore_index=True),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq1_xgboost_robustness.csv",
+        pd.DataFrame(xgboost_rows),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq2_delta_comparisons.csv",
+        pd.DataFrame(delta_rows),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq2_motif_coverage.csv",
+        pd.concat(coverage_frames, ignore_index=True),
+    )
+    write_json_exclusive(
+        output_paths.metrics / "hf_ordering_sensitivity.json", sensitivity
+    )
+    write_json_exclusive(
+        output_paths.metrics / "hf_representation_sensitivity.json",
+        representation_sensitivity,
+    )
+    return sensitivity
 
 
 def execute_hf(
@@ -382,70 +914,10 @@ def execute_hf(
                     )
                 )
 
-    alpha = float(protocol["alpha"])
-    sensitivity = {}
-    for cohort in sorted(targets["cohort"].unique()):
-        results = [result for result in variant_results if result["cohort"] == cohort]
-        decisions = [
-            result["rq1_randomization"]["p_value_one_sided"] < alpha
-            for result in results
-        ]
-        directions = [result["rq1_randomization"]["observed_delta_ap"] > 0 for result in results]
-        sensitivity[cohort] = {
-            "ordering_robust": len(set(decisions)) == 1 and all(directions),
-            "rq1_rejected_in_all_variants": all(decisions),
-            "decisions": decisions,
-            "effect_directions_positive": directions,
-            "selected_deltas": [result["selected_delta"] for result in results],
-            "one_se_deltas": [result["one_se_delta"] for result in results],
-            "rq2_unique_optimum_in_all_variants": all(
-                result["rq2_selected_vs_alternatives"]
-                and all(
-                    comparison["observed_delta_ap"] > 0
-                    and comparison["p_value_bh"] < alpha
-                    for comparison in result["rq2_selected_vs_alternatives"]
-                )
-                for result in results
-            ),
-        }
-    sensitivity["general_signal"] = all(
-        details["ordering_robust"] and details["rq1_rejected_in_all_variants"]
-        for key, details in sensitivity.items()
-        if key != "general_signal"
-    )
-    hypothesis_rows = []
-    delta_rows = []
-    for result in variant_results:
-        hypothesis_rows.append(
-            {
-                "cohort": result["cohort"],
-                "ordering_variant": result["variant"],
-                "selected_delta": result["selected_delta"],
-                "one_se_delta": result["one_se_delta"],
-                "delta_average_precision": result["rq1_randomization"]["observed_delta_ap"],
-                "ci_lower": result["rq1_group_bootstrap"]["ci_95"][0],
-                "ci_upper": result["rq1_group_bootstrap"]["ci_95"][1],
-                "p_value": result["rq1_randomization"]["p_value_one_sided"],
-                "reject_h0": result["rq1_randomization"]["p_value_one_sided"] < alpha,
-            }
-        )
-        for comparison in result["rq2_selected_vs_alternatives"]:
-            delta_rows.append(
-                {
-                    "cohort": result["cohort"],
-                    "ordering_variant": result["variant"],
-                    "selected_delta": result["selected_delta"],
-                    "one_se_delta": result["one_se_delta"],
-                    **comparison,
-                }
-            )
-    write_csv_exclusive(paths.tables / "rq1_hypothesis_tests.csv", pd.DataFrame(hypothesis_rows))
-    write_csv_exclusive(paths.tables / "rq2_delta_comparisons.csv", pd.DataFrame(delta_rows))
-    write_json_exclusive(paths.metrics / "hf_ordering_sensitivity.json", sensitivity)
-    return sensitivity
+    return _aggregate_hf_results(paths, paths, protocol, targets, variant_results)
 
 
-def execute_hf_v5(
+def execute_hf_v6(
     paths,
     protocol: dict,
     stage_manager,
@@ -453,7 +925,7 @@ def execute_hf_v5(
     scratch_directory: Path,
     telemetry: RunTelemetry | None = None,
 ) -> dict:
-    """Checkpointed v5 execution preserving the established public filenames."""
+    """Checkpointed v6 execution preserving established public filenames."""
     import json
 
     dataset = protocol["datasets"]["huggingface"]
@@ -565,76 +1037,19 @@ def execute_hf_v5(
                 )
             variant_results.append(result)
 
-    alpha = float(protocol["alpha"])
-    sensitivity = {}
-    for cohort in sorted(targets["cohort"].unique()):
-        results = [result for result in variant_results if result["cohort"] == cohort]
-        decisions = [
-            result["rq1_randomization"]["p_value_one_sided"] < alpha
-            for result in results
-        ]
-        directions = [
-            result["rq1_randomization"]["observed_delta_ap"] > 0 for result in results
-        ]
-        sensitivity[cohort] = {
-            "ordering_robust": len(set(decisions)) == 1 and all(directions),
-            "rq1_rejected_in_all_variants": all(decisions),
-            "decisions": decisions,
-            "effect_directions_positive": directions,
-            "selected_deltas": [result["selected_delta"] for result in results],
-            "one_se_deltas": [result["one_se_delta"] for result in results],
-            "rq2_unique_optimum_in_all_variants": all(
-                result["rq2_selected_vs_alternatives"]
-                and all(
-                    comparison["observed_delta_ap"] > 0
-                    and comparison["p_value_bh"] < alpha
-                    for comparison in result["rq2_selected_vs_alternatives"]
-                )
-                for result in results
-            ),
-        }
-    sensitivity["general_signal"] = all(
-        details["ordering_robust"] and details["rq1_rejected_in_all_variants"]
-        for key, details in sensitivity.items()
-        if key != "general_signal"
-    )
-    hypothesis_rows = []
-    delta_rows = []
-    for result in variant_results:
-        hypothesis_rows.append(
-            {
-                "cohort": result["cohort"],
-                "ordering_variant": result["variant"],
-                "selected_delta": result["selected_delta"],
-                "one_se_delta": result["one_se_delta"],
-                "delta_average_precision": result["rq1_randomization"]["observed_delta_ap"],
-                "ci_lower": result["rq1_group_bootstrap"]["ci_95"][0],
-                "ci_upper": result["rq1_group_bootstrap"]["ci_95"][1],
-                "p_value": result["rq1_randomization"]["p_value_one_sided"],
-                "reject_h0": result["rq1_randomization"]["p_value_one_sided"] < alpha,
-            }
-        )
-        for comparison in result["rq2_selected_vs_alternatives"]:
-            delta_rows.append(
-                {
-                    "cohort": result["cohort"],
-                    "ordering_variant": result["variant"],
-                    "selected_delta": result["selected_delta"],
-                    "one_se_delta": result["one_se_delta"],
-                    **comparison,
-                }
-            )
     with stage_manager.stage("hf-cross-order-aggregation") as stage:
         if not stage.reused:
-            write_csv_exclusive(
-                stage.paths.tables / "rq1_hypothesis_tests.csv",
-                pd.DataFrame(hypothesis_rows),
+            sensitivity = _aggregate_hf_results(
+                stage.paths,
+                paths,
+                protocol,
+                targets,
+                variant_results,
             )
-            write_csv_exclusive(
-                stage.paths.tables / "rq2_delta_comparisons.csv",
-                pd.DataFrame(delta_rows),
-            )
-            write_json_exclusive(
-                stage.paths.metrics / "hf_ordering_sensitivity.json", sensitivity
+        else:
+            sensitivity = json.loads(
+                (paths.metrics / "hf_ordering_sensitivity.json").read_text(
+                    encoding="utf-8"
+                )
             )
     return sensitivity

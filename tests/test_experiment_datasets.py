@@ -133,15 +133,16 @@ def test_dual_cohorts_are_disjoint_and_apply_locked_activity_eligibility():
                             "is_contract": contract,
                             "activity_quintile": quintile,
                             "activity": 10**9 if is_high_activity else quintile + 1,
+                            "campaign_group": f"address:{node}",
                         }
                     )
     rows.append(
         {"node_id": 9999, "address": "9999", "label": 0, "is_contract": 0,
-         "activity_quintile": pd.NA, "activity": 0}
+         "activity_quintile": pd.NA, "activity": 0, "campaign_group": "address:9999"}
     )
     rows.append(
         {"node_id": 9998, "address": "9998", "label": 0, "is_contract": 0,
-         "activity_quintile": pd.NA, "activity": 2}
+         "activity_quintile": pd.NA, "activity": 2, "campaign_group": "address:9998"}
     )
     targets = pd.DataFrame(rows)
     selected, audit = select_dual_hf_cohorts(
@@ -157,6 +158,22 @@ def test_dual_cohorts_are_disjoint_and_apply_locked_activity_eligibility():
     assert audit["insufficient_activity_targets"] == 97
     assert audit["high_activity_targets_excluded"] == 1
     assert audit["minimum_incident_edges"] == 3
+
+    eligible = targets.loc[
+        (targets["activity"] >= 3) & (targets["node_id"] != high_activity_node)
+    ]
+    excluded_node = int(eligible.iloc[0]["node_id"])
+    excluded_group = str(eligible.iloc[1]["campaign_group"])
+    confirmation, confirmation_audit = select_dual_hf_cohorts(
+        targets,
+        prevalence_size=20,
+        controlled_per_stratum=2,
+        excluded_node_ids=[excluded_node],
+        excluded_campaign_groups=[excluded_group],
+    )
+    assert excluded_node not in set(confirmation["node_id"])
+    assert excluded_group not in set(confirmation["campaign_group"])
+    assert confirmation_audit["prior_run_exclusions_total"] == 2
 
 
 def test_mixed_blte_timestamp_formats_are_supported(tmp_path):

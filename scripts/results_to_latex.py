@@ -40,6 +40,8 @@ DELTA_LABELS = {
     86400: "1 day",
     259200: "3 days",
     604800: "1 week",
+    1209600: "2 weeks",
+    2592000: "30 days",
 }
 
 HEADLINE_VARIANT = "canonical"
@@ -52,10 +54,14 @@ REQUIRED = {
         "metrics/hf_controlled_canonical_metrics.csv",
         "metrics/hf_prevalence_canonical_metrics.csv",
         "metrics/hf_ordering_sensitivity.json",
+        "tables/rq1_representation_tests.csv",
+        "tables/rq1_role_diagnostics.csv",
+        "tables/rq1_xgboost_robustness.csv",
     ],
     "rq2": [
         "tables/rq2_delta_comparisons.csv",
         "metrics/hf_ordering_sensitivity.json",
+        "tables/rq2_motif_coverage.csv",
     ],
     "rq3": [
         "tables/rq3_global_results.csv",
@@ -433,6 +439,80 @@ def write_rq1(runs: RunSet, out: Path) -> None:
     (out / "results_rq1.tex").write_text(table)
 
 
+def write_rq1_diagnostics(runs: RunSet, out: Path) -> None:
+    if not (
+        "rq1" in runs.claimed
+        and runs.path_for("rq1", "tables/rq1_representation_tests.csv")
+    ):
+        (out / "results_rq1_representations.tex").write_text(
+            pending_table(
+                "RQ1 secondary representation comparisons.",
+                "tab:res_rq1_representations",
+            )
+        )
+        (out / "results_rq1_incoming_roles.tex").write_text(
+            pending_table(
+                "RQ1 prespecified all-incoming role diagnostics.",
+                "tab:res_rq1_incoming",
+            )
+        )
+        return
+
+    comparisons = runs.csv_for("rq1", "tables/rq1_representation_tests.csv")
+    comparisons = comparisons.loc[
+        comparisons["ordering_variant"] == HEADLINE_VARIANT
+    ].sort_values(["cohort", "comparison"])
+    rows = [
+        f"{str(row['cohort']).capitalize()} & {tex_escape(row['comparison'])} & "
+        f"{fnum(row['reference_average_precision'])} & "
+        f"{fnum(row['alternative_average_precision'])} & "
+        f"{fnum(row['observed_delta_ap'])} & "
+        f"[{fnum(row['ci_lower'])}, {fnum(row['ci_upper'])}] & "
+        f"{fp(row['p_value_bh'])} & {reject_cell(row['reject_h0_bh'])} \\"
+        for _, row in comparisons.iterrows()
+    ]
+    table = (
+        "\\begin{table}[ht]\n\\centering\n"
+        "\\caption{Prespecified secondary RQ1 representation comparisons at the "
+        "development-selected window under canonical ordering. P-values use "
+        "Benjamini--Hochberg correction across the eight contrasts per cohort.}\n"
+        "\\label{tab:res_rq1_representations}\n\\scriptsize\n"
+        "\\begin{tabular}{@{}l p{3.8cm} r r r c r l@{}}\n\\toprule\n"
+        "\\textbf{Cohort} & \\textbf{Comparison} & \\textbf{Ref.} & "
+        "\\textbf{Alt.} & \\textbf{$\\Delta$AP} & \\textbf{95\\,\\% CI} & "
+        "\\textbf{$p_{\\mathrm{BH}}$} & \\textbf{Decision} \\\\\n\\midrule\n"
+        + "\n".join(rows)
+        + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
+    )
+    (out / "results_rq1_representations.tex").write_text(table)
+
+    roles = runs.csv_for("rq1", "tables/rq1_role_diagnostics.csv")
+    incoming = {"star_pre_iii", "star_mid_iii", "star_post_iii"}
+    roles = roles.loc[roles["role"].isin(incoming)].sort_values(
+        ["cohort", "role", "scope"]
+    )
+    role_rows = [
+        f"{str(row['cohort']).capitalize()} & {tex_escape(row['scope'])} & "
+        f"{tex_escape(row['role'])} & {fnum(row['roc_auc_direct_count'])} & "
+        f"{fnum(row['average_precision_direct_count'])} & "
+        f"{fnum(row['nonzero_coverage'])} \\"
+        for _, row in roles.iterrows()
+    ]
+    role_table = (
+        "\\begin{table}[ht]\n\\centering\n"
+        "\\caption{Descriptive development and held-out diagnostics for the three "
+        "prespecified all-incoming star roles. Counts are used directly as scores; "
+        "these values are not fitted-model performance.}\n"
+        "\\label{tab:res_rq1_incoming}\n\\footnotesize\n"
+        "\\begin{tabular}{@{}l l l r r r@{}}\n\\toprule\n"
+        "\\textbf{Cohort} & \\textbf{Scope} & \\textbf{Role} & "
+        "\\textbf{ROC-AUC} & \\textbf{AP} & \\textbf{Coverage} \\\\\n\\midrule\n"
+        + "\n".join(role_rows)
+        + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
+    )
+    (out / "results_rq1_incoming_roles.tex").write_text(role_table)
+
+
 def write_rq2(runs: RunSet, out: Path) -> None:
     if not ("rq2" in runs.claimed and runs.path_for("rq2", REQUIRED["rq2"][0])):
         (out / "results_rq2.tex").write_text(
@@ -688,6 +768,7 @@ def main() -> None:
     write_macros(runs, out)
     write_cohorts(runs, out)
     write_rq1(runs, out)
+    write_rq1_diagnostics(runs, out)
     write_rq2(runs, out)
     write_rq3(runs, out)
     write_rq4(runs, out)

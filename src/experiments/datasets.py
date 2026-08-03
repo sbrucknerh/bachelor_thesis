@@ -190,8 +190,10 @@ def select_dual_hf_cohorts(
     seed: int = RANDOM_SEED,
     minimum_activity: int = HF_COHORT_ELIGIBILITY["minimum_incident_edges"],
     activity_upper_quantile: float = HF_COHORT_ELIGIBILITY["activity_upper_quantile"],
+    excluded_node_ids: Iterable[int] = (),
+    excluded_campaign_groups: Iterable[str] = (),
 ) -> tuple[pd.DataFrame, dict]:
-    """Select disjoint cohorts after a prespecified activity eligibility rule."""
+    """Select cohorts after eligibility and optional prior-run exclusion rules."""
     if minimum_activity < 3:
         raise ValueError("Three-edge motifs require minimum_activity >= 3")
     if not 0 < activity_upper_quantile < 1:
@@ -203,11 +205,27 @@ def select_dual_hf_cohorts(
     )["activity"].transform(lambda values: values.quantile(activity_upper_quantile))
     high_activity = activity_eligible["activity"] > activity_eligible["activity_cutoff"]
     eligible = activity_eligible.loc[~high_activity].drop(columns="activity_cutoff").copy()
-    prevalence_n = min(prevalence_size, len(eligible))
-    prevalence = eligible.sample(n=prevalence_n, random_state=seed, replace=False).copy()
+    excluded_nodes = {int(value) for value in excluded_node_ids}
+    excluded_groups = {str(value) for value in excluded_campaign_groups}
+    node_exclusion = eligible["node_id"].isin(excluded_nodes)
+    if excluded_groups and "campaign_group" not in eligible:
+        raise ValueError("campaign_group is required for prior-run group exclusions")
+    campaign_exclusion = (
+        eligible["campaign_group"].astype(str).isin(excluded_groups)
+        if "campaign_group" in eligible
+        else pd.Series(False, index=eligible.index)
+    )
+    excluded = node_exclusion | campaign_exclusion
+    available = eligible.loc[~excluded].copy()
+    prevalence_n = min(prevalence_size, len(available))
+    prevalence = available.sample(
+        n=prevalence_n, random_state=seed, replace=False
+    ).copy()
     prevalence["cohort"] = "prevalence"
 
-    remaining = eligible.loc[~eligible["node_id"].isin(prevalence["node_id"])].copy()
+    remaining = available.loc[
+        ~available["node_id"].isin(prevalence["node_id"])
+    ].copy()
     controlled_parts: list[pd.DataFrame] = []
     for _, group in remaining.groupby(["label", "is_contract", "activity_quintile"]):
         take = min(controlled_per_stratum, len(group))
@@ -231,6 +249,10 @@ def select_dual_hf_cohorts(
         "high_activity_targets_excluded": int(high_activity.sum()),
         "activity_upper_quantile": float(activity_upper_quantile),
         "eligible_active_targets": int(len(eligible)),
+        "prior_run_node_exclusions": int(node_exclusion.sum()),
+        "prior_run_campaign_exclusions": int((campaign_exclusion & ~node_exclusion).sum()),
+        "prior_run_exclusions_total": int(excluded.sum()),
+        "available_after_prior_run_exclusions": int(len(available)),
         "prevalence_targets": int(len(prevalence)),
         "controlled_targets": int(len(controlled)),
         "high_activity_exclusions_by_stratum": {

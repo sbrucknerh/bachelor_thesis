@@ -53,12 +53,24 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--permutations", type=int)
     prepare.add_argument("--bootstraps", type=int)
     prepare.add_argument(
+        "--replication-index",
+        type=int,
+        default=0,
+        help="Deterministic cohort/split replication index (default: 0)",
+    )
+    prepare.add_argument(
+        "--exclude-hf-run",
+        action="append",
+        default=[],
+        help="Prior HF run root whose addresses and campaign groups must be excluded; repeatable",
+    )
+    prepare.add_argument(
         "--resume",
         action="store_true",
         help="Resume interrupted combined RQ3/RQ4 preparation before protocol locking",
     )
 
-    execute = subparsers.add_parser("execute", help="Execute or resume one locked v5 run")
+    execute = subparsers.add_parser("execute", help="Execute or resume one locked v6 run")
     execute.add_argument("run_root")
     execute.add_argument("--resume", action="store_true")
     execute.add_argument("--threads", type=int)
@@ -103,6 +115,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     thesis.add_argument("--host-lock")
     thesis.add_argument("--resume", action="store_true")
+    thesis.add_argument(
+        "--replication-index",
+        type=int,
+        default=0,
+        help="Deterministic cohort/split replication index (default: 0)",
+    )
+    thesis.add_argument(
+        "--exclude-hf-run",
+        action="append",
+        default=[],
+        help="Prior HF run root excluded from the confirmation cohort; repeatable",
+    )
+
+    hf = subparsers.add_parser(
+        "run-hf",
+        help="Prepare, execute, and verify one RQ1/RQ2 run",
+    )
+    hf.add_argument("--run-id")
+    hf.add_argument("--results-root", default="results/experiments")
+    hf.add_argument("--threads", type=int)
+    hf.add_argument("--hf-snapshot")
+    hf.add_argument("--host-lock")
+    hf.add_argument("--resume", action="store_true")
+    hf.add_argument(
+        "--replication-index",
+        type=int,
+        default=0,
+        help="Deterministic cohort/split replication index (default: 0)",
+    )
+    hf.add_argument(
+        "--exclude-hf-run",
+        action="append",
+        default=[],
+        help="Prior HF run root excluded from the confirmation cohort; repeatable",
+    )
 
     preflight = subparsers.add_parser("preflight", help="Read-only resource admission")
     preflight.add_argument("run_roots", nargs="+")
@@ -110,6 +157,13 @@ def build_parser() -> argparse.ArgumentParser:
     verify = subparsers.add_parser("verify", help="Read-only integrity verification")
     verify.add_argument("run_root")
     verify.add_argument("--require-citable", action="store_true")
+
+    aggregate = subparsers.add_parser(
+        "aggregate-hf-replications",
+        help="Report all independent verified HF confirmation runs",
+    )
+    aggregate.add_argument("output_directory")
+    aggregate.add_argument("run_roots", nargs="+")
 
     smoke = subparsers.add_parser(
         "smoke", help="Run bounded, non-citable validation across every path"
@@ -141,6 +195,8 @@ def main() -> None:
             bootstraps=args.bootstraps,
             profile=args.profile,
             resume=args.resume,
+            replication_index=args.replication_index,
+            exclude_hf_runs=args.exclude_hf_run,
         )
         print(f"Prepared and locked: {root}")
         return
@@ -162,6 +218,18 @@ def main() -> None:
         except (VerificationError, OSError, RuntimeError, ValueError) as error:
             raise SystemExit(f"Verification failed: {error}") from error
         print(json.dumps(report, indent=2, sort_keys=True))
+        return
+
+    if args.command == "aggregate-hf-replications":
+        from src.experiments.replications import aggregate_hf_replications
+
+        try:
+            output = aggregate_hf_replications(
+                args.run_roots, args.output_directory
+            )
+        except (OSError, RuntimeError, ValueError) as error:
+            raise SystemExit(f"Replication aggregation failed: {error}") from error
+        print(f"Replication report written: {output}")
         return
 
     if args.command == "execute-parallel":
@@ -192,6 +260,26 @@ def main() -> None:
             execution_mode=args.execution_mode,
             host_lock_path=args.host_lock,
             resume=args.resume,
+            replication_index=args.replication_index,
+            exclude_hf_runs=args.exclude_hf_run,
+        )
+        print(json.dumps(outcome, indent=2, sort_keys=True))
+        return
+
+    if args.command == "run-hf":
+        requested_threads = args.threads or max(1, os.cpu_count() or 1)
+        _set_thread_environment(requested_threads)
+        from src.experiments.server_workflow import run_hf_workflow
+
+        outcome = run_hf_workflow(
+            results_root=args.results_root,
+            run_id=args.run_id,
+            hf_snapshot=args.hf_snapshot,
+            threads=args.threads,
+            host_lock_path=args.host_lock,
+            resume=args.resume,
+            replication_index=args.replication_index,
+            exclude_hf_runs=args.exclude_hf_run,
         )
         print(json.dumps(outcome, indent=2, sort_keys=True))
         return

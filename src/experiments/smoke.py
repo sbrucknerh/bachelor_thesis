@@ -24,12 +24,14 @@ from src.experiments.constants import (
     DELTA_SELECTION,
     EVENT_EXECUTION,
     HF_COHORT_ELIGIBILITY,
+    HF_REPRESENTATION_ANALYSIS,
     MULTICLASS_LOGISTIC_PARAMS,
     PROTOCOL_VERSION,
     RANDOM_SEED,
     REALCATS_CATEGORY_ELIGIBILITY,
     REALCATS_LAYER_FILES,
     RESOURCE_CONSTANTS,
+    replication_seed_definition,
 )
 from src.experiments.datasets import (
     count_target_activity,
@@ -386,7 +388,7 @@ def _prepare_smoke_realcats(
             how="left",
             validate="one_to_one",
         )
-        folds = _rq3_cv_assignments(inferential)
+        folds = _rq3_cv_assignments(inferential, RANDOM_SEED)
 
     target_path = paths.data / "realcats_targets.parquet"
     fold_path = paths.data / "realcats_cv_folds.parquet"
@@ -521,6 +523,7 @@ def prepare_smoke_experiment(
         "retrospective_classification_only": True,
         "primary_metric": "average_precision",
         "delta_selection": DELTA_SELECTION,
+        "hf_representation_analysis": HF_REPRESENTATION_ANALYSIS,
         "realcats_category_eligibility": {
             **REALCATS_CATEGORY_ELIGIBILITY,
             "minimum_active_addresses": SMOKE_REALCATS_MINIMUM_CLASS_SIZE,
@@ -530,6 +533,13 @@ def prepare_smoke_experiment(
         "deltas": list(SMOKE_DELTAS),
         "random_seed": RANDOM_SEED,
         "cv_seeds": [RANDOM_SEED],
+        "replication": {
+            **replication_seed_definition(0),
+            "cv_seeds": [RANDOM_SEED],
+            "hf_exclusion_references": [],
+            "confirmation_design": "initial_analysis",
+            "smoke_override": True,
+        },
         "permutations": SMOKE_RESAMPLES,
         "bootstraps": SMOKE_RESAMPLES,
         "ordering_variants": list(SMOKE_ORDER_VARIANTS),
@@ -549,7 +559,7 @@ def prepare_smoke_experiment(
                 "approximate_distinct_nodes": hf_resource["approximate_distinct_nodes"],
                 "node_count_admission": hf_resource["approximate_distinct_nodes"],
                 "target_count": hf_resource["target_count"],
-                "max_feature_columns": 49,
+                "max_feature_columns": 50,
             },
             "realcats": {
                 "node_count_method": "exact_sqlite_union_distinct_per_layer",

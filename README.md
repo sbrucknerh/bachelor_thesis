@@ -113,9 +113,9 @@ downloaded once by either setup method.
 
 ## Usage
 
-### Step 1: Run the smoke test
+### 1. Run the smoke test
 
-Always run this before starting the multi-day experiment:
+Run this after setup and before using server time:
 
 ```bash
 venv/bin/python scripts/run_results.py smoke \
@@ -123,112 +123,110 @@ venv/bin/python scripts/run_results.py smoke \
   --sla-minutes 60
 ```
 
-The smoke test exercises preparation, motif counting, model fitting,
-statistical tests, figures, tables, and integrity verification. It normally
-finishes well within one hour; the last local protocol-v5 run took 76.4
-seconds.
+It checks every execution path but uses bounded data and reduced resampling, so
+`results/smoke/<run-id>` is always marked `citable: false`.
 
-Smoke results are stored under `results/smoke/<run-id>`. They are deliberately
-marked `citable: false` because they use bounded data and reduced resampling.
+### 2. Run all four RQs
 
-### Step 2: Start the complete thesis run
-
-After the smoke test passes, the complete workflow is one command:
+For this thesis, the new representation analysis was designed after inspecting
+the v5 HF run. The first v6 run must therefore use a disjoint cohort:
 
 ```bash
 venv/bin/python scripts/run_results.py run-thesis \
-  --run-id thesis_final_20260731 \
-  --threads 20
+  --run-id thesis_confirmation_1 \
+  --threads 20 \
+  --replication-index 1 \
+  --exclude-hf-run results/experiments/thesis_final_20260731_hf
 ```
 
-The command automatically:
+Copy the prior HF result root to the server first. Only `protocol.json`,
+`protocol.sha256`, and `data/hf_targets.parquet` are needed, with that directory
+layout preserved. For a genuinely new study with no inspected pilot cohort, use
+`--run-id thesis_v6_initial --threads 20` and omit the last two options.
 
-1. checks the input datasets;
-2. prepares and locks the Hugging Face and Real-CATS experiments;
-3. checks available memory and storage;
-4. runs both experiments in parallel when the machine can admit them;
-5. falls back to sequential execution when necessary;
-6. creates resumable checkpoints, metrics, tables, and figures;
-7. verifies both result directories as thesis-citable.
+The command prepares and locks HF and Real-CATS, performs resource admission,
+runs them in parallel when possible, checkpoints each window, creates all
+artifacts, and requires citable verification before returning success.
 
 On the provided 20-core, 128 GB RAM, 4 TB server, parallel execution normally
-assigns 10 CPU threads to each dataset. The GPU is not used. The current full
-runtime estimate is approximately 3-10 days, but the measured ETA shown during
-execution is more useful than this planning estimate.
+assigns 10 CPU threads to each dataset. The GPU is not used. The previous
+seven-window run took about four hours; protocol v6 adds two windows and
+secondary diagnostics, so plan for approximately 5-7 hours. The live ETA is
+the better estimate once motif checkpoints start completing.
 
-`--run-id` is optional. If omitted, the runner creates a timestamped ID. An
-explicit ID is recommended because it is needed for simple recovery after an
-interruption.
+Run inside `tmux`. The terminal and `overall_progress.json` show total and
+current-step ETAs; `run_log.jsonl` contains fsynced events and five-minute
+heartbeats. If `--run-id` is omitted, a timestamped ID is generated.
 
-Run the command inside `tmux` or another persistent server session. The
-terminal keeps a persistent **total execution** bar above the current-step
-`tqdm` bar. The initial 3-10 day planning range is shown during preparation;
-after the locked event counts are available, the total ETA is recalibrated from
-measured weighted throughput. It becomes more stable as motif windows finish.
+### 3. Run the independent HF confirmation
 
-Each run root writes the current percentage, ETA, and estimated completion time
-to `overall_progress.json`. Detailed, fsynced events and five-minute heartbeats
-with the same total-ETA fields are written to `run_log.jsonl`. These estimates
-are operational guidance, not experimental results.
-
-### Step 3: Monitor the run
-
-The command creates two result directories:
-
-```text
-results/experiments/thesis_final_20260731_hf/
-results/experiments/thesis_final_20260731_realcats/
-```
-
-Monitor either worker with:
+Use all 20 cores for the second, HF-only confirmation. Exclude every earlier HF
+cohort and increment the replication index:
 
 ```bash
-tail -f results/experiments/thesis_final_20260731_hf/run_log.jsonl
-tail -f results/experiments/thesis_final_20260731_realcats/run_log.jsonl
+venv/bin/python scripts/run_results.py run-hf \
+  --run-id thesis_confirmation_2 \
+  --threads 20 \
+  --replication-index 2 \
+  --exclude-hf-run results/experiments/thesis_final_20260731_hf \
+  --exclude-hf-run results/experiments/thesis_confirmation_1_hf
 ```
 
-### Step 4: Resume after an interruption
+The runner rejects a confirmation index without an exclusion reference. Never
+select the best rerun. Report both v6 runs with:
 
-Use the same run ID and thread budget:
+```bash
+venv/bin/python scripts/run_results.py aggregate-hf-replications \
+  results/replications/hf_confirmation \
+  results/experiments/thesis_confirmation_1_hf \
+  results/experiments/thesis_confirmation_2_hf
+```
+
+The aggregator rejects overlap or incompatible definitions, reports every
+supplied run, and does not pool p-values.
+
+### 4. Monitor or resume
+
+```bash
+tail -f results/experiments/thesis_confirmation_1_hf/run_log.jsonl
+```
+
+Resume the complete run with exactly the same replication and exclusion options:
 
 ```bash
 venv/bin/python scripts/run_results.py run-thesis \
-  --run-id thesis_final_20260731 \
+  --run-id thesis_confirmation_1 \
   --threads 20 \
+  --replication-index 1 \
+  --exclude-hf-run results/experiments/thesis_final_20260731_hf \
   --resume
 ```
 
-Committed checkpoints are validated and reused. Existing results are never
-silently overwritten.
+For `run-hf`, use the same pattern with that command and its original options.
+Committed checkpoints are hash-checked and reused; outputs are never replaced.
 
-### Step 5: Verify the finished results
+### 5. Verify and export
 
-`run-thesis` performs this verification automatically. It can also be repeated
-manually:
+The workflows verify automatically. Repeat the checks manually before writing:
 
 ```bash
 venv/bin/python scripts/run_results.py verify \
-  results/experiments/thesis_final_20260731_hf \
+  results/experiments/thesis_confirmation_1_hf \
   --require-citable
 
 venv/bin/python scripts/run_results.py verify \
-  results/experiments/thesis_final_20260731_realcats \
+  results/experiments/thesis_confirmation_1_realcats \
   --require-citable
 ```
-
-Both commands must exit successfully before their results are used in the
-thesis.
-
-### Step 6: Generate the LaTeX results
 
 ```bash
 venv/bin/python scripts/results_to_latex.py writing/generated \
-  results/experiments/thesis_final_20260731_hf \
-  results/experiments/thesis_final_20260731_realcats
+  results/experiments/thesis_confirmation_1_hf \
+  results/experiments/thesis_confirmation_1_realcats
 ```
 
-This creates the RQ1-RQ4 table fragments and macros in `writing/generated/`.
-Figures remain in each verified run's `figures/` directory.
+Both verifications must succeed. The exporter creates RQ1-RQ4 fragments in
+`writing/generated/`; figures remain in each run's `figures/` directory.
 
 ## Manual Execution
 
@@ -238,20 +236,23 @@ be controlled stage by stage:
 ```bash
 # Prepare the two locked experiments
 venv/bin/python scripts/run_results.py prepare \
-  --run-id hf_rq12_v5 --profile thesis --rq rq1 rq2
+  --run-id hf_confirmation_1 --profile thesis --rq rq1 rq2 \
+  --replication-index 1 \
+  --exclude-hf-run results/experiments/thesis_final_20260731_hf
 
 venv/bin/python scripts/run_results.py prepare \
-  --run-id realcats_rq34_v5 --profile thesis --rq rq3 rq4
+  --run-id realcats_confirmation_1 --profile thesis --rq rq3 rq4 \
+  --replication-index 1
 
 # Check combined resource admission without changing either run
 venv/bin/python scripts/run_results.py preflight \
-  results/experiments/hf_rq12_v5 \
-  results/experiments/realcats_rq34_v5
+  results/experiments/hf_confirmation_1 \
+  results/experiments/realcats_confirmation_1
 
 # Execute both roots with a combined 20-thread budget
 venv/bin/python scripts/run_results.py execute-parallel \
-  results/experiments/hf_rq12_v5 \
-  results/experiments/realcats_rq34_v5 \
+  results/experiments/hf_confirmation_1 \
+  results/experiments/realcats_confirmation_1 \
   --threads 20
 ```
 
@@ -263,14 +264,21 @@ when both coordinated workers were interrupted. Run
 
 | Question | Dataset | Analysis |
 |---|---|---|
-| RQ1 | Hugging Face | Baseline versus baseline plus temporal motifs on identical grouped splits |
-| RQ2 | Hugging Face | Development-CV delta sweep; primary choice maximizes average precision |
+| RQ1 | Hugging Face | Baseline versus baseline plus motifs; prespecified volume, composition, presence, and incoming-role diagnostics |
+| RQ2 | Hugging Face | Development-CV sweep from 5 minutes to 30 days; primary choice maximizes average precision |
 | RQ3 | Real-CATS | Multiclass category distinguishability with a held-out label-permutation test |
 | RQ4 | Real-CATS | Global versus category-specific delta selection with paired bootstrap inference |
 
-RQ2 selects the delta with the highest mean development-CV average precision;
+RQ2 selects from 5 minutes, 30 minutes, 1 hour, 6 hours, 1 day, 3 days,
+1 week, 2 weeks, and 30 days. It uses the highest mean development-CV AP;
 exact ties choose the smaller delta. The one-standard-error choice is reported
 only as a secondary parsimony result.
+
+The RQ1 representation tests all use that same development-selected window and
+the same held-out addresses. Canonical-order p-values are corrected across the
+eight locked secondary contrasts. The three `star_*_iii` roles are specified
+before execution; role-level direct-count scores are descriptive, not fitted
+model performance.
 
 Real-CATS categories use exact, non-`Other` labels with at least 100 active
 addresses. Labels are not merged after inspecting results. Because Real-CATS
@@ -287,8 +295,8 @@ to be citable. Synthetic data is used only for motif-catalogue and boundary
 validation.
 
 Result roots contain `features/`, `predictions/`, `metrics/`, `tables/`, and
-`figures/`, plus hash-verified checkpoints and manifests. Protocol v1-v4 runs
-cannot be accepted as protocol-v5 thesis evidence.
+`figures/`, plus hash-verified checkpoints and manifests. Protocol v1-v5 runs
+are legacy read-only artifacts and cannot replace a verified protocol-v6 run.
 
 Run `venv/bin/pytest -q` for development checks. Use
 `venv/bin/python scripts/run_results.py --help` for command details. `main.py`

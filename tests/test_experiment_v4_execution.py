@@ -101,6 +101,26 @@ def test_realcats_rq3_and_rq4_must_be_locked_together(tmp_path):
         prepare_experiment(tmp_path, "rq4-only", ["rq4"])
 
 
+def test_hf_confirmation_requires_prior_run_exclusion(tmp_path):
+    with pytest.raises(ValueError, match="must exclude at least one prior HF run"):
+        prepare_experiment(
+            tmp_path,
+            "confirmation",
+            ["rq1", "rq2"],
+            replication_index=1,
+        )
+
+
+def test_hf_initial_analysis_rejects_exclusion_reference(tmp_path):
+    with pytest.raises(ValueError, match="replication-index greater than zero"):
+        prepare_experiment(
+            tmp_path,
+            "initial",
+            ["rq1", "rq2"],
+            exclude_hf_runs=[tmp_path / "prior"],
+        )
+
+
 def test_resume_reuses_committed_stage_after_finalization_failure(tmp_path, monkeypatch):
     import src.experiments.execute as execution
     from src.experiments.artifacts import sha256_file

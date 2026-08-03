@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -107,6 +108,12 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
     import numpy as np
     import pandas as pd
 
+    from src.experiments.constants import (
+        HF_DIAGNOSTIC_ARM_NAMES,
+        HF_DIAGNOSTIC_COMPARISONS,
+        MOTIF_ROLE_NAMES,
+    )
+
     audit: dict = {"files_checked": 0}
     for path in sorted((run_root / "features").glob("*.parquet")):
         frame = pd.read_parquet(path)
@@ -157,6 +164,114 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
 
     selected = set(protocol.get("research_questions", []))
     deltas = set(int(delta) for delta in protocol.get("deltas", []))
+    if "rq1" in selected:
+        representation = pd.read_csv(
+            run_root / "tables" / "rq1_representation_tests.csv"
+        )
+        required_representation = {
+            "cohort",
+            "ordering_variant",
+            "selected_delta",
+            "comparison",
+            "reference_arm",
+            "alternative_arm",
+            "observed_delta_ap",
+            "ci_lower",
+            "ci_upper",
+            "p_value_bh",
+            "reject_h0_bh",
+        }
+        if not required_representation <= set(representation):
+            raise RuntimeError("RQ1 representation table is missing required columns")
+        expected_comparisons = {
+            comparison for comparison, _, _ in HF_DIAGNOSTIC_COMPARISONS
+        }
+        expected_cohorts = set(
+            pd.read_parquet(
+                run_root
+                / protocol["datasets"]["huggingface"]["artifacts"]["targets"],
+                columns=["cohort"],
+            )["cohort"].astype(str)
+        )
+        if set(representation["cohort"].astype(str)) != expected_cohorts:
+            raise RuntimeError("RQ1 representation table is missing a locked cohort")
+        for cohort, rows in representation.groupby("cohort"):
+            if set(rows["comparison"].astype(str)) != expected_comparisons:
+                raise RuntimeError(
+                    f"RQ1 representation comparisons are incomplete for {cohort}"
+                )
+            if set(rows["ordering_variant"].astype(str)) != {"canonical"}:
+                raise RuntimeError("RQ1 formal representation tests must be canonical only")
+
+        roles = pd.read_csv(run_root / "tables" / "rq1_role_diagnostics.csv")
+        role_required = {
+            "cohort",
+            "variant",
+            "scope",
+            "delta",
+            "role",
+            "average_precision_direct_count",
+            "roc_auc_direct_count",
+            "nonzero_coverage",
+        }
+        if not role_required <= set(roles):
+            raise RuntimeError("RQ1 role diagnostics are missing required columns")
+        for (cohort, scope), rows in roles.groupby(["cohort", "scope"]):
+            if set(rows["role"].astype(str)) != set(MOTIF_ROLE_NAMES):
+                raise RuntimeError(
+                    f"RQ1 role diagnostics are incomplete for {cohort}/{scope}"
+                )
+        if set(roles["scope"].astype(str)) != {"development", "test"}:
+            raise RuntimeError("RQ1 role diagnostics must separate development and test")
+
+        xgboost = pd.read_csv(
+            run_root / "tables" / "rq1_xgboost_robustness.csv"
+        )
+        if set(xgboost["cohort"].astype(str)) != expected_cohorts or set(
+            xgboost["ordering_variant"].astype(str)
+        ) != {"canonical"}:
+            raise RuntimeError("RQ1 XGBoost robustness rows are incomplete")
+
+        expected_selected_arms = {
+            "baseline",
+            "motifs",
+            "combined",
+            *HF_DIAGNOSTIC_ARM_NAMES,
+        }
+        expected_xgboost_arms = {
+            "baseline_xgboost",
+            "motifs_xgboost",
+            "combined_xgboost",
+        }
+        for cohort in expected_cohorts:
+            for variant in protocol["ordering_variants"]:
+                stem = f"hf_{cohort}_{variant}"
+                metrics = pd.read_csv(run_root / "metrics" / f"{stem}_metrics.csv")
+                statistical = json.loads(
+                    (run_root / "metrics" / f"{stem}_statistical_tests.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                selected_delta = int(statistical["selected_delta"])
+                at_selected = set(
+                    metrics.loc[metrics["delta"].astype(int) == selected_delta, "arm"].astype(str)
+                )
+                required_arms = set(expected_selected_arms)
+                if variant == "canonical":
+                    required_arms.update(expected_xgboost_arms)
+                if not required_arms <= at_selected:
+                    missing = sorted(required_arms - at_selected)
+                    raise RuntimeError(
+                        f"{stem} is missing selected-window arms: {missing}"
+                    )
+                primary = metrics.loc[
+                    metrics["arm"].isin(["baseline", "motifs", "combined"])
+                ]
+                for arm, rows in primary.groupby("arm"):
+                    if set(rows["delta"].astype(int)) != deltas:
+                        raise RuntimeError(
+                            f"{stem} primary arm {arm} is missing a locked delta"
+                        )
     if "rq2" in selected:
         rq2 = pd.read_csv(run_root / "tables" / "rq2_delta_comparisons.csv")
         required = {
@@ -167,7 +282,7 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
             "p_value_bh",
         }
         if not required <= set(rq2):
-            raise RuntimeError("RQ2 comparison table is missing protocol-v5 columns")
+            raise RuntimeError("RQ2 comparison table is missing protocol-v6 columns")
         observed_deltas = set(
             pd.concat(
                 [
@@ -179,6 +294,25 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
         )
         if not observed_deltas <= deltas:
             raise RuntimeError("RQ2 comparison table contains an unlocked delta")
+        coverage = pd.read_csv(run_root / "tables" / "rq2_motif_coverage.csv")
+        coverage_required = {
+            "cohort",
+            "variant",
+            "scope",
+            "label",
+            "delta",
+            "n",
+            "nonzero",
+            "zero",
+            "coverage",
+            "zero_fraction",
+        }
+        if not coverage_required <= set(coverage):
+            raise RuntimeError("RQ2 coverage table is missing required columns")
+        if set(coverage["delta"].astype(int)) != deltas:
+            raise RuntimeError("RQ2 coverage table is missing a locked delta")
+        if set(coverage["scope"].astype(str)) != {"all", "development", "test"}:
+            raise RuntimeError("RQ2 coverage table is missing a required population scope")
     if {"rq3", "rq4"} <= selected:
         rq4_global = pd.read_csv(
             run_root / "tables" / "rq4_global_results.csv"

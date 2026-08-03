@@ -1,4 +1,4 @@
-"""Resumable, integrity-chained protocol-v5 experiment execution."""
+"""Resumable, integrity-chained protocol-v6 experiment execution."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from src.experiments.constants import (
     DELTAS,
     EVENT_EXECUTION,
     HF_COHORT_ELIGIBILITY,
+    HF_REPRESENTATION_ANALYSIS,
     MULTICLASS_LOGISTIC_PARAMS,
     N_BOOTSTRAPS,
     N_PERMUTATIONS,
@@ -30,6 +31,7 @@ from src.experiments.constants import (
     REALCATS_CATEGORY_ELIGIBILITY,
     REALCATS_RESEARCH_QUESTIONS,
     RESOURCE_CONSTANTS,
+    replication_seed_definition,
 )
 from src.experiments.execution_control import (
     FileLock,
@@ -97,6 +99,29 @@ def _verify_locked_scientific_definition(protocol: dict) -> None:
         raise RuntimeError("Hugging Face cohort eligibility changed after preparation")
     if protocol.get("delta_selection") != DELTA_SELECTION:
         raise RuntimeError("Temporal-window selection rules changed after preparation")
+    if protocol.get("hf_representation_analysis") != HF_REPRESENTATION_ANALYSIS:
+        raise RuntimeError("HF representation-analysis definition changed after preparation")
+    replication = protocol.get("replication", {})
+    try:
+        expected_replication = replication_seed_definition(replication["index"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("Invalid locked replication definition") from error
+    if protocol.get("execution_profile") != "smoke":
+        for key, expected in expected_replication.items():
+            if replication.get(key) != expected:
+                raise RuntimeError(
+                    f"Locked replication definition changed for {key}"
+                )
+    if list(protocol.get("cv_seeds", [])) != list(replication.get("cv_seeds", [])):
+        raise RuntimeError("Protocol CV seeds differ from its replication definition")
+    exclusions = replication.get("hf_exclusion_references", [])
+    expected_confirmation_design = (
+        "disjoint_out_of_sample_confirmation"
+        if exclusions
+        else "initial_analysis"
+    )
+    if replication.get("confirmation_design") != expected_confirmation_design:
+        raise RuntimeError("Locked HF confirmation design is inconsistent")
     expected_category_eligibility = REALCATS_CATEGORY_ELIGIBILITY
     if protocol.get("execution_profile") == "smoke":
         expected_category_eligibility = {
@@ -176,8 +201,13 @@ def _derive_citable(
             [
                 root / "features" / "hf_baseline.parquet",
                 root / "tables" / "rq1_hypothesis_tests.csv",
+                root / "tables" / "rq1_representation_tests.csv",
+                root / "tables" / "rq1_role_diagnostics.csv",
+                root / "tables" / "rq1_xgboost_robustness.csv",
                 root / "tables" / "rq2_delta_comparisons.csv",
+                root / "tables" / "rq2_motif_coverage.csv",
                 root / "metrics" / "hf_ordering_sensitivity.json",
+                root / "metrics" / "hf_representation_sensitivity.json",
             ]
         )
     if selected & REALCATS_RESEARCH_QUESTIONS:
@@ -342,9 +372,9 @@ def execute_experiment(
                     selected = set(protocol["research_questions"])
                     scratch = attempt.directory / "scratch" / "duckdb"
                     if {"rq1", "rq2"} & selected:
-                        from src.experiments.rq_binary import execute_hf_v5
+                        from src.experiments.rq_binary import execute_hf_v6
 
-                        results["huggingface"] = execute_hf_v5(
+                        results["huggingface"] = execute_hf_v6(
                             paths,
                             protocol,
                             stages,
@@ -353,9 +383,9 @@ def execute_experiment(
                             telemetry=telemetry,
                         )
                     if REALCATS_RESEARCH_QUESTIONS <= selected:
-                        from src.experiments.rq_multiclass import execute_realcats_v5
+                        from src.experiments.rq_multiclass import execute_realcats_v6
 
-                        results["realcats"] = execute_realcats_v5(
+                        results["realcats"] = execute_realcats_v6(
                             paths,
                             protocol,
                             stages,

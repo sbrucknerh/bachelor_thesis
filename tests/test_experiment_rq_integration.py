@@ -3,6 +3,11 @@ from __future__ import annotations
 import pandas as pd
 
 from src.experiments.artifacts import create_run_paths
+from src.experiments.constants import (
+    HF_DIAGNOSTIC_ARM_NAMES,
+    HF_DIAGNOSTIC_COMPARISONS,
+    MOTIF_ROLE_NAMES,
+)
 from src.experiments.rq_binary import execute_hf
 from src.experiments.rq_multiclass import execute_realcats
 from src.experiments.secondary import execute_blte
@@ -73,6 +78,23 @@ def test_rq1_rq2_orchestration_on_locked_fixture(tmp_path):
     assert "controlled" in result
     assert (paths.metrics / "hf_controlled_canonical_statistical_tests.json").exists()
     assert (paths.figures / "rq1_ablation_controlled.pdf").exists()
+    metrics = pd.read_csv(paths.metrics / "hf_controlled_canonical_metrics.csv")
+    selected_delta = int(
+        pd.read_csv(paths.tables / "rq1_hypothesis_tests.csv").loc[0, "selected_delta"]
+    )
+    selected_arms = set(metrics.loc[metrics["delta"] == selected_delta, "arm"])
+    assert {"baseline", "motifs", "combined", *HF_DIAGNOSTIC_ARM_NAMES} <= selected_arms
+    representation = pd.read_csv(paths.tables / "rq1_representation_tests.csv")
+    assert set(representation["comparison"]) == {
+        comparison for comparison, _, _ in HF_DIAGNOSTIC_COMPARISONS
+    }
+    roles = pd.read_csv(paths.tables / "rq1_role_diagnostics.csv")
+    assert set(roles["scope"]) == {"development", "test"}
+    assert set(roles["role"]) == set(MOTIF_ROLE_NAMES)
+    coverage = pd.read_csv(paths.tables / "rq2_motif_coverage.csv")
+    assert set(coverage["scope"]) == {"all", "development", "test"}
+    assert (paths.figures / "rq1_representation_ablation_controlled.pdf").exists()
+    assert (paths.figures / "rq2_motif_coverage_controlled.pdf").exists()
 
 
 def test_rq3_orchestration_uses_exact_labels_and_layer_features(tmp_path):

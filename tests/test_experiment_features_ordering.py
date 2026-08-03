@@ -6,8 +6,10 @@ import pandas as pd
 from src.experiments.features import (
     aggregate_features,
     aggregate_features_from_parquet,
+    binary_motif_representations,
     hellinger_motif_composition,
 )
+from src.experiments.constants import INCOMING_STAR_ROLE_NAMES, MOTIF_ROLE_NAMES
 from src.experiments.ordering import order_events
 from src.experiments.synthetic_fixtures import fixture_for_role
 
@@ -57,6 +59,30 @@ def test_hellinger_is_layer_normalized_and_zero_safe():
     transformed = hellinger_motif_composition(counts)
     assert np.isclose(transformed.loc["x", "normal__a"], np.sqrt(0.75))
     assert transformed.loc["y"].sum() == 0
+
+
+def test_binary_motif_representations_separate_presence_volume_and_shape():
+    counts = pd.DataFrame(
+        0,
+        index=["x", "y"],
+        columns=MOTIF_ROLE_NAMES,
+        dtype="int64",
+    )
+    counts.loc["x", "star_pre_iii"] = 3
+    counts.loc["x", "star_post_iii"] = 1
+
+    views = binary_motif_representations(counts, INCOMING_STAR_ROLE_NAMES)
+
+    assert views["motif_presence"].loc["x", "motif_presence"] == 1
+    assert views["motif_presence"].loc["y", "motif_presence"] == 0
+    assert np.isclose(views["motif_volume"].loc["x", "motif_volume"], np.log1p(4))
+    composition = views["motif_composition"]
+    assert np.isclose(composition.loc["x", "star_pre_iii"], np.sqrt(0.75))
+    assert np.isclose(composition.loc["x", "star_post_iii"], 0.5)
+    assert composition.loc["y"].sum() == 0
+    assert list(views["motif_incoming_stars"].columns) == list(
+        INCOMING_STAR_ROLE_NAMES
+    )
 
 
 def test_reverse_changes_only_unresolved_same_block_order():

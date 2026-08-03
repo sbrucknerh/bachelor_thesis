@@ -1,4 +1,4 @@
-"""Read-only protocol-v5 resource estimates and execution admission checks."""
+"""Read-only protocol-v6 resource estimates and execution admission checks."""
 
 from __future__ import annotations
 

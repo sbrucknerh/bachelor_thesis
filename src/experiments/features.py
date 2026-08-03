@@ -230,21 +230,63 @@ def log_motif_counts(counts: pd.DataFrame) -> pd.DataFrame:
     return np.log1p(counts.astype("float64"))
 
 
+def motif_presence(counts: pd.DataFrame) -> pd.DataFrame:
+    """Return one binary feature indicating whether any retained motif occurs."""
+    if (counts < 0).any().any():
+        raise ValueError("Motif counts cannot be negative")
+    return counts.sum(axis=1).gt(0).astype("float64").to_frame("motif_presence")
+
+
+def motif_volume(counts: pd.DataFrame) -> pd.DataFrame:
+    """Return log-transformed total motif volume as one feature."""
+    if (counts < 0).any().any():
+        raise ValueError("Motif counts cannot be negative")
+    total = counts.astype("float64").sum(axis=1)
+    return np.log1p(total).to_frame("motif_volume")
+
+
 def hellinger_motif_composition(counts: pd.DataFrame) -> pd.DataFrame:
     """Hellinger-transform motif proportions independently within each layer."""
     if (counts < 0).any().any():
         raise ValueError("Motif counts cannot be negative")
     transformed: list[pd.DataFrame] = []
-    layer_names = sorted({column.split("__", 1)[0] for column in counts.columns})
+    layered = ["__" in column for column in counts.columns]
+    if any(layered) and not all(layered):
+        raise ValueError("Motif columns must be either all layered or all unlayered")
+    layer_names = sorted(
+        {column.split("__", 1)[0] for column in counts.columns if "__" in column}
+    )
     if not layer_names:
         totals = counts.sum(axis=1).replace(0, np.nan)
-        return np.sqrt(counts.div(totals, axis=0).fillna(0.0))
+        return np.sqrt(counts.astype("float64").div(totals, axis=0).fillna(0.0))
     for layer in layer_names:
         columns = [column for column in counts.columns if column.startswith(f"{layer}__")]
         layer_counts = counts.loc[:, columns].astype("float64")
         totals = layer_counts.sum(axis=1).replace(0, np.nan)
         transformed.append(np.sqrt(layer_counts.div(totals, axis=0).fillna(0.0)))
     return pd.concat(transformed, axis=1)
+
+
+def binary_motif_representations(
+    counts: pd.DataFrame, incoming_star_roles: Iterable[str]
+) -> dict[str, pd.DataFrame]:
+    """Build the locked HF volume, composition, and incoming-role feature views."""
+    incoming = [str(role) for role in incoming_star_roles]
+    missing = [role for role in incoming if role not in counts.columns]
+    if missing:
+        raise ValueError(f"Missing prespecified incoming-star roles: {missing}")
+    presence = motif_presence(counts)
+    volume = motif_volume(counts)
+    composition = hellinger_motif_composition(counts)
+    incoming_features = log_motif_counts(counts.loc[:, incoming])
+    return {
+        "motif_presence": presence,
+        "motif_volume": volume,
+        "motif_composition": composition,
+        "motif_composition_volume": composition.join(volume),
+        "motif_incoming_stars": incoming_features,
+        "motifs": log_motif_counts(counts),
+    }
 
 
 def motif_coverage(counts: pd.DataFrame, labels: pd.Series | None = None) -> pd.DataFrame:

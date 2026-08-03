@@ -33,3 +33,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+server-results
+results

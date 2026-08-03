@@ -1,4 +1,4 @@
-"""Protocol-v5 checkpoint, stage, publication, and inventory primitives."""
+"""Protocol-v6 checkpoint, stage, publication, and inventory primitives."""
 
 from __future__ import annotations
 

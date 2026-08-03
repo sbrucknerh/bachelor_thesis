@@ -12,6 +12,7 @@ from sklearn.model_selection import StratifiedKFold
 
 from src.experiments.artifacts import (
     create_run_paths,
+    read_locked_protocol,
     resume_run_paths,
     runtime_manifest,
     sha256_file,
@@ -20,13 +21,13 @@ from src.experiments.artifacts import (
     write_parquet_exclusive,
 )
 from src.experiments.constants import (
-    CV_SEEDS,
     DEFAULT_RF_PARAMS,
     DEFAULT_XGB_PARAMS,
     DELTA_SELECTION,
     DELTAS,
     EVENT_EXECUTION,
     HF_COHORT_ELIGIBILITY,
+    HF_REPRESENTATION_ANALYSIS,
     MULTICLASS_LOGISTIC_PARAMS,
     N_BOOTSTRAPS,
     N_PERMUTATIONS,
@@ -37,6 +38,7 @@ from src.experiments.constants import (
     REALCATS_LAYER_FILES,
     REALCATS_RESEARCH_QUESTIONS,
     RESOURCE_CONSTANTS,
+    replication_seed_definition,
 )
 from src.experiments.datasets import (
     count_target_activity,
@@ -94,8 +96,73 @@ def _approx_distinct_endpoints(path: Path, temporary_directory: Path) -> int:
         connection.close()
 
 
+def _load_hf_exclusion_references(
+    run_roots: Iterable[str | Path],
+) -> tuple[set[int], set[str], list[dict]]:
+    """Load immutable prior HF cohorts that a confirmation run must not reuse."""
+    node_ids: set[int] = set()
+    campaign_groups: set[str] = set()
+    references: list[dict] = []
+    observed_roots: set[Path] = set()
+    for value in run_roots:
+        root = Path(value).resolve()
+        if root in observed_roots:
+            raise ValueError(f"Duplicate --exclude-hf-run root: {root}")
+        observed_roots.add(root)
+        paths, protocol = read_locked_protocol(root)
+        dataset = protocol.get("datasets", {}).get("huggingface")
+        if dataset is None:
+            raise ValueError(f"Prior run does not contain a Hugging Face dataset: {root}")
+        artifacts = dataset.get("artifacts", {})
+        relative = artifacts.get("targets")
+        expected_hash = artifacts.get("targets_sha256")
+        if not isinstance(relative, str) or not isinstance(expected_hash, str):
+            raise ValueError(f"Prior HF run has no locked target artifact: {root}")
+        target_path = paths.root / relative
+        actual_hash = sha256_file(target_path)
+        if actual_hash != expected_hash:
+            raise RuntimeError(f"Prior HF target artifact hash mismatch: {target_path}")
+        targets = pd.read_parquet(
+            target_path, columns=["node_id", "campaign_group"]
+        )
+        if targets["node_id"].isna().any() or targets["campaign_group"].isna().any():
+            raise ValueError(f"Prior HF targets contain null exclusion keys: {root}")
+        if targets["node_id"].duplicated().any():
+            raise ValueError(f"Prior HF targets contain duplicate node IDs: {root}")
+        node_ids.update(int(value) for value in targets["node_id"])
+        campaign_groups.update(str(value) for value in targets["campaign_group"])
+        references.append(
+            {
+                "run_root": str(root),
+                "run_id": str(protocol.get("run_id", root.name)),
+                "protocol_version": int(protocol.get("protocol_version", 0)),
+                "protocol_sha256": paths.protocol_hash.read_text(
+                    encoding="ascii"
+                ).strip(),
+                "targets_sha256": actual_hash,
+                "target_count": int(len(targets)),
+                "source_edges_sha256": dataset.get("sources", {})
+                .get("edges", {})
+                .get("sha256"),
+                "source_labels_sha256": dataset.get("sources", {})
+                .get("labels", {})
+                .get("sha256"),
+                "source_descriptions_sha256": dataset.get("sources", {})
+                .get("descriptions", {})
+                .get("sha256"),
+            }
+        )
+    return node_ids, campaign_groups, references
+
+
 def _prepare_hf(
-    paths, snapshot: Path, telemetry: RunTelemetry | None = None
+    paths,
+    snapshot: Path,
+    replication: dict,
+    excluded_node_ids: set[int],
+    excluded_campaign_groups: set[str],
+    exclusion_references: list[dict],
+    telemetry: RunTelemetry | None = None,
 ) -> dict:
     edge_source = snapshot / "gnn_dataset/edges_all/edges.parquet"
     label_source = snapshot / "gnn_dataset/labels/targets_global.parquet"
@@ -116,18 +183,30 @@ def _prepare_hf(
     )
     with cohort_context:
         all_targets = load_hf_targets(snapshot, activity)
-        selected, attrition = select_dual_hf_cohorts(all_targets)
+        selected, attrition = select_dual_hf_cohorts(
+            all_targets,
+            seed=int(replication["cohort_seed"]),
+            excluded_node_ids=excluded_node_ids,
+            excluded_campaign_groups=excluded_campaign_groups,
+        )
+
+        if set(selected["node_id"].astype(int)) & excluded_node_ids:
+            raise RuntimeError("Confirmation cohort reused a prior-run HF node")
+        if set(selected["campaign_group"].astype(str)) & excluded_campaign_groups:
+            raise RuntimeError("Confirmation cohort reused a prior-run campaign group")
 
         selected["experiment_stratum"] = (
             selected["cohort"].astype(str) + ":" + selected["stratum"].astype(str)
         )
         selected["split"] = grouped_outer_split(
-            selected, stratum_column="experiment_stratum"
+            selected,
+            stratum_column="experiment_stratum",
+            seed=int(replication["split_seed"]),
         ).values
         development = selected.loc[selected["split"] == "development"]
         folds = repeated_group_folds(
             development,
-            seeds=CV_SEEDS,
+            seeds=replication["cv_seeds"],
             stratum_column="experiment_stratum",
         )
         folds = folds.merge(
@@ -164,6 +243,22 @@ def _prepare_hf(
         target_hash = sha256_file(target_path)
         fold_hash = sha256_file(fold_path)
         event_hash = sha256_file(event_path)
+    for reference in exclusion_references:
+        if reference.get("source_edges_sha256") not in {None, source_edge_hash}:
+            raise RuntimeError(
+                "A prior HF exclusion run used a different edge source revision"
+            )
+        if reference.get("source_labels_sha256") not in {None, source_label_hash}:
+            raise RuntimeError(
+                "A prior HF exclusion run used a different label source revision"
+            )
+        if reference.get("source_descriptions_sha256") not in {
+            None,
+            description_hash,
+        }:
+            raise RuntimeError(
+                "A prior HF exclusion run used a different description source revision"
+            )
     approximate_nodes = _approx_distinct_endpoints(
         event_path, paths.data / "duckdb_tmp" / "prepare_hf_nodes"
     )
@@ -186,6 +281,14 @@ def _prepare_hf(
             "events_sha256": event_hash,
         },
         "attrition": attrition,
+        "confirmation_exclusions": {
+            "policy": "exclude_all_prior_target_node_ids_and_campaign_groups_before_sampling",
+            "references": exclusion_references,
+            "unique_prior_node_ids": int(len(excluded_node_ids)),
+            "unique_prior_campaign_groups": int(len(excluded_campaign_groups)),
+            "selected_node_overlap": 0,
+            "selected_campaign_group_overlap": 0,
+        },
         "edge_extraction": extraction,
         "resource_metadata": {
             "approximate_distinct_nodes": approximate_nodes,
@@ -194,9 +297,9 @@ def _prepare_hf(
     }
 
 
-def _rq3_cv_assignments(targets: pd.DataFrame) -> pd.DataFrame:
+def _rq3_cv_assignments(targets: pd.DataFrame, seed: int) -> pd.DataFrame:
     development = targets.loc[targets["split"] == "development"].reset_index(drop=True)
-    splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_SEED)
+    splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=int(seed))
     records = []
     for fold, (_, validation) in enumerate(
         splitter.split(development, development["type_label"])
@@ -222,6 +325,7 @@ def _prepare_realcats(
     label_dir: Path,
     resume: bool = False,
     source_hashes: dict[str, str] | None = None,
+    split_seed: int = RANDOM_SEED,
     telemetry: RunTelemetry | None = None,
 ) -> dict:
     layer_dir = paths.data / "realcats_layers"
@@ -248,14 +352,16 @@ def _prepare_realcats(
         labels = load_criminal_labels(label_dir)
         targets, attrition = select_realcats_targets(labels, layer_paths)
         inferential = targets.loc[targets["inference_eligible"]].copy()
-        inferential["split"] = stratified_outer_split(inferential).values
+        inferential["split"] = stratified_outer_split(
+            inferential, seed=int(split_seed)
+        ).values
         targets = targets.merge(
             inferential[["address", "split"]],
             on="address",
             how="left",
             validate="one_to_one",
         )
-        folds = _rq3_cv_assignments(inferential)
+        folds = _rq3_cv_assignments(inferential, int(split_seed))
 
     raw_label_rows = int(
         len(pd.read_csv(label_dir / "CE.tsv", sep="\t", usecols=["address", "label"]))
@@ -361,6 +467,8 @@ def prepare_experiment(
     bootstraps: int | None = None,
     profile: str = "thesis",
     resume: bool = False,
+    replication_index: int = 0,
+    exclude_hf_runs: Iterable[str | Path] = (),
 ) -> Path:
     selected_rqs = sorted(set(rqs))
     unknown = set(selected_rqs) - VALID_RQS
@@ -370,6 +478,16 @@ def prepare_experiment(
         raise ValueError(f"Unknown preparation profile: {profile!r}")
     if "blte" in selected_rqs and selected_rqs != ["blte"]:
         raise ValueError("BLTE must be prepared as a separate optional secondary run")
+    exclusion_roots = tuple(Path(value).resolve() for value in exclude_hf_runs)
+    hf_selected = bool({"rq1", "rq2"} & set(selected_rqs))
+    if exclusion_roots and not hf_selected:
+        raise ValueError("--exclude-hf-run is valid only for an RQ1/RQ2 preparation")
+    if hf_selected and int(replication_index) == 0 and exclusion_roots:
+        raise ValueError("HF exclusion runs require --replication-index greater than zero")
+    if hf_selected and int(replication_index) > 0 and not exclusion_roots:
+        raise ValueError(
+            "An HF confirmation replication must exclude at least one prior HF run"
+        )
     realcats_selected = set(selected_rqs) & REALCATS_RESEARCH_QUESTIONS
     if realcats_selected and realcats_selected != REALCATS_RESEARCH_QUESTIONS:
         raise ValueError("RQ3 and RQ4 must be prepared together because they share one locked Real-CATS analysis")
@@ -397,6 +515,21 @@ def prepare_experiment(
         raise ValueError("The development profile may reduce, but not increase, resampling")
     if resume and set(selected_rqs) != REALCATS_RESEARCH_QUESTIONS:
         raise ValueError("Checkpoint resume is supported only for a combined RQ3/RQ4 preparation")
+    replication = replication_seed_definition(replication_index)
+    excluded_node_ids: set[int] = set()
+    excluded_campaign_groups: set[str] = set()
+    exclusion_references: list[dict] = []
+    if exclusion_roots:
+        (
+            excluded_node_ids,
+            excluded_campaign_groups,
+            exclusion_references,
+        ) = _load_hf_exclusion_references(exclusion_roots)
+    replication["confirmation_design"] = (
+        "disjoint_out_of_sample_confirmation"
+        if exclusion_references
+        else "initial_analysis"
+    )
     preparation_runtime = runtime_manifest()
     paths = (
         resume_run_paths(results_root, run_id)
@@ -429,12 +562,17 @@ def prepare_experiment(
         "permutations": int(permutations),
         "bootstraps": int(bootstraps),
         "delta_selection": DELTA_SELECTION,
+        "replication": {
+            **replication,
+            "hf_exclusion_references": exclusion_references,
+        },
         "inputs": {
             "hf_snapshot": str(Path(hf_snapshot).resolve()) if hf_snapshot else None,
             "realcats_zip": str(realcats_zip_path.resolve()),
             "realcats_labels": str(realcats_label_dir.resolve()),
             "blte_dir": str(Path(blte_dir).resolve()),
             "realcats_source_sha256": realcats_source_hashes,
+            "exclude_hf_runs": [str(path) for path in exclusion_roots],
         },
         "runtime": preparation_runtime,
     }
@@ -456,7 +594,15 @@ def prepare_experiment(
     datasets: dict = {}
     if {"rq1", "rq2"} & set(selected_rqs):
         snapshot = Path(hf_snapshot) if hf_snapshot else discover_hf_snapshot()
-        datasets["huggingface"] = _prepare_hf(paths, snapshot, telemetry=telemetry)
+        datasets["huggingface"] = _prepare_hf(
+            paths,
+            snapshot,
+            replication,
+            excluded_node_ids,
+            excluded_campaign_groups,
+            exclusion_references,
+            telemetry=telemetry,
+        )
     if REALCATS_RESEARCH_QUESTIONS <= set(selected_rqs):
         datasets["realcats"] = _prepare_realcats(
             paths,
@@ -464,6 +610,7 @@ def prepare_experiment(
             realcats_label_dir,
             resume=resume,
             source_hashes=realcats_source_hashes,
+            split_seed=int(replication["split_seed"]),
             telemetry=telemetry,
         )
     if "blte" in selected_rqs:
@@ -477,7 +624,7 @@ def prepare_experiment(
             "approximate_distinct_nodes": metadata["approximate_distinct_nodes"],
             "node_count_admission": int(metadata["approximate_distinct_nodes"] * 1.2 + 0.999999),
             "target_count": metadata["target_count"],
-            "max_feature_columns": 49,
+            "max_feature_columns": 50,
         }
     if "realcats" in datasets:
         metadata = datasets["realcats"]["resource_metadata"]
@@ -508,11 +655,16 @@ def prepare_experiment(
         "retrospective_classification_only": True,
         "primary_metric": "average_precision",
         "delta_selection": DELTA_SELECTION,
+        "hf_representation_analysis": HF_REPRESENTATION_ANALYSIS,
         "realcats_category_eligibility": REALCATS_CATEGORY_ELIGIBILITY,
         "alpha": 0.05,
         "deltas": list(DELTAS),
         "random_seed": RANDOM_SEED,
-        "cv_seeds": list(CV_SEEDS),
+        "cv_seeds": list(replication["cv_seeds"]),
+        "replication": {
+            **replication,
+            "hf_exclusion_references": exclusion_references,
+        },
         "permutations": int(permutations),
         "bootstraps": int(bootstraps),
         "ordering_variants": [

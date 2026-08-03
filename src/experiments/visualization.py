@@ -19,10 +19,12 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 
+from src.experiments.constants import PROTOCOL_VERSION
+
 
 def _save_figure(fig, output: str | Path) -> None:
     metadata = {
-        "Creator": "bachelor-thesis protocol v5",
+        "Creator": f"bachelor-thesis protocol v{PROTOCOL_VERSION}",
         "Producer": "matplotlib",
         "CreationDate": None,
         "ModDate": None,
@@ -63,6 +65,67 @@ def plot_ablation(metrics: dict[str, float], output: str | Path, title: str) -> 
     axis.set_ylabel("Average precision")
     axis.set_ylim(0, 1)
     axis.set_title(title)
+    fig.tight_layout()
+    _save_figure(fig, output)
+    plt.close(fig)
+
+
+def plot_representation_ablation(
+    metrics: dict[str, float], output: str | Path, title: str
+) -> None:
+    arms = (
+        "baseline",
+        "baseline_presence",
+        "baseline_volume",
+        "baseline_composition_volume",
+        "baseline_incoming_stars",
+        "combined",
+    )
+    labels = (
+        "Baseline",
+        "+Presence",
+        "+Volume",
+        "+Composition + volume",
+        "+Incoming",
+        "+All roles",
+    )
+    values = [metrics[arm] for arm in arms]
+    fig, axis = plt.subplots(figsize=(8.0, 4.5))
+    bars = axis.bar(
+        labels,
+        values,
+        color=["#666666", "#8c8c8c", "#4c78a8", "#59a14f", "#e3a329", "#d95f0e"],
+    )
+    axis.bar_label(bars, fmt="%.3f", padding=3, fontsize=8)
+    axis.set_ylabel("Average precision")
+    axis.set_ylim(0, 1)
+    axis.set_title(title)
+    axis.tick_params(axis="x", rotation=25)
+    fig.tight_layout()
+    _save_figure(fig, output)
+    plt.close(fig)
+
+
+def plot_motif_coverage(metrics: pd.DataFrame, output: str | Path, title: str) -> None:
+    frame = metrics.copy()
+    frame["label"] = frame["label"].astype(str)
+    labels = {"all": "All addresses", "0": "Benign", "1": "Malicious"}
+    fig, axis = plt.subplots(figsize=(7.2, 4.4))
+    for label in ("all", "0", "1"):
+        rows = frame.loc[frame["label"] == label].sort_values("delta")
+        if len(rows):
+            axis.plot(
+                rows["delta"],
+                rows["coverage"],
+                marker="o",
+                label=labels[label],
+            )
+    axis.set_xscale("log")
+    axis.set_xlabel("Temporal window delta (seconds, log scale)")
+    axis.set_ylabel("Nonzero fingerprint coverage")
+    axis.set_ylim(0, 1)
+    axis.set_title(title)
+    axis.legend(frameon=False)
     fig.tight_layout()
     _save_figure(fig, output)
     plt.close(fig)

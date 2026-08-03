@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 RANDOM_SEED = 42
 CV_SEEDS = (42, 43, 44)
-DELTAS = (300, 1_800, 3_600, 21_600, 86_400, 259_200, 604_800)
+DELTAS = (
+    300,
+    1_800,
+    3_600,
+    21_600,
+    86_400,
+    259_200,
+    604_800,
+    1_209_600,
+    2_592_000,
+)
 N_PERMUTATIONS = 10_000
 N_BOOTSTRAPS = 10_000
 HF_RESEARCH_QUESTIONS = frozenset({"rq1", "rq2"})
@@ -40,6 +50,103 @@ TWO_NODE_ROLE_NAMES = tuple(f"two_node_{directions}" for directions in DIRECTION
 TRIANGLE_ROLE_NAMES = tuple(f"triangle_{index + 1}" for index in range(8))
 ALL_MOTIF_ROLE_NAMES = STAR_ROLE_NAMES + TWO_NODE_ROLE_NAMES + TRIANGLE_ROLE_NAMES
 MOTIF_ROLE_NAMES = STAR_ROLE_NAMES + TWO_NODE_ROLE_NAMES
+INCOMING_STAR_ROLE_NAMES = tuple(
+    f"star_{star_class}_iii" for star_class in STAR_CLASSES
+)
+
+HF_DIAGNOSTIC_ARM_NAMES = (
+    "motif_presence",
+    "motif_volume",
+    "motif_composition",
+    "motif_composition_volume",
+    "motif_incoming_stars",
+    "baseline_presence",
+    "baseline_volume",
+    "baseline_composition",
+    "baseline_composition_volume",
+    "baseline_incoming_stars",
+)
+
+HF_DIAGNOSTIC_COMPARISONS = (
+    ("motifs_vs_volume", "motif_volume", "motifs"),
+    (
+        "composition_volume_vs_volume",
+        "motif_volume",
+        "motif_composition_volume",
+    ),
+    (
+        "motifs_vs_composition_volume",
+        "motif_composition_volume",
+        "motifs",
+    ),
+    ("baseline_volume_vs_baseline", "baseline", "baseline_volume"),
+    (
+        "baseline_composition_volume_vs_baseline_volume",
+        "baseline_volume",
+        "baseline_composition_volume",
+    ),
+    (
+        "combined_vs_baseline_composition_volume",
+        "baseline_composition_volume",
+        "combined",
+    ),
+    ("baseline_incoming_vs_baseline", "baseline", "baseline_incoming_stars"),
+    ("combined_vs_baseline_incoming", "baseline_incoming_stars", "combined"),
+)
+
+HF_REPRESENTATION_ANALYSIS = {
+    "status": "prespecified_secondary_analysis",
+    "evaluation_delta": "rq2_primary_development_cv_selected_delta",
+    "formal_ordering_variant": "canonical",
+    "multiple_testing": "benjamini_hochberg_across_eight_representation_comparisons_per_cohort",
+    "feature_definitions": {
+        "motif_presence": "indicator(sum(raw_32_role_counts)>0)",
+        "motif_volume": "log1p(sum(raw_32_role_counts))",
+        "motif_composition": "sqrt(raw_role_count/sum(raw_32_role_counts)); zero vector retained",
+        "motif_composition_volume": "motif_composition joined with motif_volume",
+        "motifs": "log1p(raw_32_role_counts)",
+        "motif_incoming_stars": "log1p(raw counts for the three prespecified all-incoming star roles)",
+        "baseline_*": "locked aggregate/static baseline joined with the named motif representation",
+        "combined": "locked aggregate/static baseline joined with motifs",
+    },
+    "incoming_star_roles": list(INCOMING_STAR_ROLE_NAMES),
+    "diagnostic_arms": list(HF_DIAGNOSTIC_ARM_NAMES),
+    "formal_comparisons": [
+        {
+            "comparison": comparison,
+            "reference_arm": reference,
+            "alternative_arm": alternative,
+            "alternative": "alternative_arm_average_precision_greater_than_reference_arm",
+        }
+        for comparison, reference, alternative in HF_DIAGNOSTIC_COMPARISONS
+    ],
+    "xgboost_robustness_arms": [
+        "baseline_xgboost",
+        "motifs_xgboost",
+        "combined_xgboost",
+    ],
+}
+
+REPLICATION_SEED_STRIDE = 10_000
+MAX_REPLICATION_INDEX = 100_000
+
+
+def replication_seed_definition(index: int) -> dict:
+    """Return deterministic sampling/split seeds without changing model semantics."""
+    value = int(index)
+    if value < 0 or value > MAX_REPLICATION_INDEX:
+        raise ValueError(
+            f"replication_index must be between 0 and {MAX_REPLICATION_INDEX}"
+        )
+    offset = value * REPLICATION_SEED_STRIDE
+    return {
+        "index": value,
+        "cohort_seed": RANDOM_SEED + offset,
+        "split_seed": RANDOM_SEED + offset,
+        "cv_seeds": [seed + offset for seed in CV_SEEDS],
+        "model_and_resampling_seed": RANDOM_SEED,
+        "seed_stride": REPLICATION_SEED_STRIDE,
+    }
 
 EVENT_EXECUTION = {
     "external_sort": "duckdb",
@@ -91,7 +198,7 @@ MULTICLASS_LOGISTIC_PARAMS = {
     "random_state": RANDOM_SEED,
 }
 
-# Protocol-v5 resource-accounting constants. These are conservative admission
+# Protocol-v6 resource-accounting constants. These are conservative admission
 # assumptions, not operating-system-enforced limits for Raphtory.
 GRAPH_COLUMN_EXPANSION_FACTOR = 4.0
 HF_NODE_COUNT_INFLATION = 1.20
