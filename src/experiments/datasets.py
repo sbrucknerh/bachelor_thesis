@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections import defaultdict
 from contextlib import nullcontext
 import math
+import os
 from pathlib import Path
+import sys
 from typing import Iterable
 import zipfile
 
@@ -16,6 +18,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from src.experiments.constants import (
+    ACTIVITY_MATCHING_BINS,
     HF_COHORT_ELIGIBILITY,
     KNOWN_CAMPAIGN_PREFIXES,
     RANDOM_SEED,
@@ -386,6 +389,147 @@ def extract_target_edges(
     return audit
 
 
+def extract_released_neighborhood_edges(
+    edges_path: str | Path,
+    incident_edges_path: str | Path,
+    output_path: str | Path,
+    batch_size: int = 262_144,
+    telemetry: RunTelemetry | None = None,
+    max_rows: int | None = None,
+) -> dict[str, int | str | bool]:
+    """Materialize the released two-hop closure needed for target triangles.
+
+    For every selected target, both non-target vertices of any triangle must
+    already occur in its incident-edge endpoint set. Retaining all released
+    edges within the union of those endpoints therefore preserves every
+    target-centred triangle present in the released graph. It cannot restore
+    edges removed by the upstream dataset construction.
+    """
+    if max_rows is not None and max_rows <= 0:
+        raise ValueError("max_rows must be positive")
+    incident_path = Path(incident_edges_path)
+    output = Path(output_path)
+    if output.exists():
+        raise FileExistsError(output)
+    if not incident_path.is_file():
+        raise FileNotFoundError(incident_path)
+
+    incident_parquet = pq.ParquetFile(incident_path)
+    parquet = pq.ParquetFile(edges_path)
+    source_rows = int(parquet.metadata.num_rows)
+    rows_to_scan = min(source_rows, max_rows) if max_rows is not None else source_rows
+    incident_rows = int(incident_parquet.metadata.num_rows)
+
+    import duckdb
+
+    from src.experiments.resources import GIB, duckdb_memory_bytes, physical_memory_bytes
+
+    scratch = output.parent / "duckdb_tmp" / "prepare_hf_neighborhood"
+    scratch.mkdir(parents=True, exist_ok=True)
+    connection = duckdb.connect()
+    physical = physical_memory_bytes() or 64 * GIB
+    memory_gib = max(1, duckdb_memory_bytes(physical) // GIB)
+    threads = max(1, int(os.environ.get("THESIS_MODEL_THREADS", "1")))
+    connection.execute("SET temp_directory = ?", [str(scratch)])
+    connection.execute(f"SET memory_limit = '{memory_gib}GiB'")
+    connection.execute(f"SET threads = {threads}")
+    if sys.stderr.isatty() and os.environ.get("THESIS_DISABLE_TQDM", "0") != "1":
+        connection.execute("PRAGMA enable_progress_bar")
+        connection.execute("SET progress_bar_time = 2000")
+
+    source_literal = "'" + str(Path(edges_path)).replace("'", "''") + "'"
+    output_literal = "'" + str(output).replace("'", "''") + "'"
+    source_relation = f"read_parquet({source_literal})"
+    if max_rows is not None:
+        source_relation = f"(SELECT * FROM {source_relation} LIMIT {rows_to_scan})"
+    try:
+        if telemetry:
+            telemetry.progress(
+                "prepare.hf.neighborhood_extraction",
+                phase="build_endpoint_relation",
+                incident_edges=incident_rows,
+                threads=threads,
+                duckdb_memory_gib=memory_gib,
+            )
+        connection.execute(
+            """
+            CREATE TEMP TABLE neighborhood_nodes AS
+            SELECT CAST(from_address AS UBIGINT) AS node_id
+            FROM read_parquet(?)
+            UNION
+            SELECT CAST(to_address AS UBIGINT) AS node_id
+            FROM read_parquet(?)
+            """,
+            [str(incident_path), str(incident_path)],
+        )
+        endpoint_count = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM neighborhood_nodes"
+            ).fetchone()[0]
+        )
+        if endpoint_count <= 0:
+            raise RuntimeError("The target-incident graph contains no endpoints")
+        if telemetry:
+            telemetry.progress(
+                "prepare.hf.neighborhood_extraction",
+                phase="scan_released_graph",
+                rows_total=rows_to_scan,
+                source_rows=source_rows,
+                neighborhood_nodes=endpoint_count,
+            )
+        connection.execute(
+            f"""
+            COPY (
+                SELECT CAST(e.src_id AS VARCHAR) AS from_address,
+                       CAST(e.dst_id AS VARCHAR) AS to_address,
+                       CAST(e.ts AS BIGINT) AS timestamp,
+                       CAST(e.value_wei AS DOUBLE) / 1e18 AS value,
+                       CAST(e.tx_hash AS VARCHAR) AS tx_hash,
+                       CAST(e.block_number AS BIGINT) AS block_number,
+                       CAST(NULL AS BIGINT) AS transaction_index,
+                       CONCAT(
+                           CAST(e.tx_hash AS VARCHAR), '|',
+                           CAST(e.src_id AS VARCHAR), '|',
+                           CAST(e.dst_id AS VARCHAR)
+                       ) AS event_signature,
+                       'normal' AS layer
+                FROM {source_relation} e
+                INNER JOIN neighborhood_nodes src_nodes
+                    ON e.src_id = src_nodes.node_id
+                INNER JOIN neighborhood_nodes dst_nodes
+                    ON e.dst_id = dst_nodes.node_id
+            ) TO {output_literal} (
+                FORMAT PARQUET,
+                COMPRESSION ZSTD,
+                ROW_GROUP_SIZE {max(2_048, int(batch_size))}
+            )
+            """
+        )
+    finally:
+        connection.close()
+    if not output.is_file():
+        raise RuntimeError("No released edges were retained for the target neighborhoods")
+
+    selected_rows = int(pq.ParquetFile(output).metadata.num_rows)
+    if selected_rows < incident_rows:
+        raise RuntimeError(
+            "Released-neighborhood extraction lost a target-incident edge"
+        )
+    audit: dict[str, int | str | bool] = {
+        "source_edges": source_rows,
+        "incident_edges": incident_rows,
+        "neighborhood_nodes": endpoint_count,
+        "selected_edges": selected_rows,
+        "additional_neighborhood_edges": selected_rows - incident_rows,
+        "scope": "released_graph_target_neighborhood_closure",
+        "release_relative_completeness": True,
+        "full_ethereum_completeness": False,
+    }
+    if max_rows is not None:
+        audit["source_edges_scanned"] = rows_to_scan
+    return audit
+
+
 def load_blte_for_experiment(dataset_dir: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load BLTE events and endpoint-derived labels without precomputed feature leakage."""
     directory = Path(dataset_dir)
@@ -417,3 +561,84 @@ def load_blte_for_experiment(dataset_dir: str | Path) -> tuple[pd.DataFrame, pd.
     labels = labels.loc[labels["address"].isin(active)].drop_duplicates("address")
     labels["campaign_group"] = "address:" + labels["address"]
     return events, labels.reset_index(drop=True)
+
+
+def select_activity_matched_blte_targets(
+    events: pd.DataFrame,
+    targets: pd.DataFrame,
+    *,
+    seed: int = RANDOM_SEED,
+    minimum_activity: int = 3,
+) -> tuple[pd.DataFrame, dict]:
+    """Balance BLTE classes within incident-event activity bins."""
+    sent = events.groupby("from_address").size()
+    received = events.loc[
+        events["from_address"] != events["to_address"]
+    ].groupby("to_address").size()
+    activity = sent.add(received, fill_value=0).astype("int64")
+    working = targets.copy()
+    working["incident_events"] = (
+        working["address"].map(activity).fillna(0).astype("int64")
+    )
+    source_counts = {
+        str(key): int(value) for key, value in working["label"].value_counts().items()
+    }
+    working = working.loc[working["incident_events"] >= int(minimum_activity)].copy()
+    boundaries = [*ACTIVITY_MATCHING_BINS, np.inf]
+    bin_labels = [
+        f"[{int(lower)},{'inf' if np.isinf(upper) else int(upper)})"
+        for lower, upper in zip(boundaries[:-1], boundaries[1:], strict=True)
+    ]
+    working["activity_bin"] = pd.cut(
+        working["incident_events"],
+        bins=boundaries,
+        labels=bin_labels,
+        right=False,
+        include_lowest=True,
+    )
+    rng = np.random.default_rng(int(seed))
+    selected: list[pd.DataFrame] = []
+    bin_audit: dict[str, dict[str, int]] = {}
+    for activity_bin, scoped in working.groupby(
+        "activity_bin", observed=True, sort=True
+    ):
+        negative = scoped.loc[scoped["label"].astype(int) == 0].sort_values(
+            "address"
+        )
+        positive = scoped.loc[scoped["label"].astype(int) == 1].sort_values(
+            "address"
+        )
+        matched = min(len(negative), len(positive))
+        if matched:
+            negative_indices = rng.choice(len(negative), matched, replace=False)
+            positive_indices = rng.choice(len(positive), matched, replace=False)
+            selected.extend(
+                [
+                    negative.iloc[np.sort(negative_indices)],
+                    positive.iloc[np.sort(positive_indices)],
+                ]
+            )
+        bin_audit[str(activity_bin)] = {
+            "eligible_benign": int(len(negative)),
+            "eligible_scam": int(len(positive)),
+            "selected_per_class": int(matched),
+        }
+    if not selected:
+        raise ValueError("No activity-matched BLTE cohort can be formed")
+    result = pd.concat(selected, ignore_index=True).sort_values("address").reset_index(
+        drop=True
+    )
+    result["label"] = result["label"].astype(int)
+    result["activity_bin"] = result["activity_bin"].astype(str)
+    counts = result["label"].value_counts()
+    if len(counts) != 2 or counts.nunique() != 1:
+        raise RuntimeError("BLTE activity matching did not produce balanced classes")
+    return result, {
+        "source_label_counts": source_counts,
+        "minimum_incident_events": int(minimum_activity),
+        "activity_used_as_model_feature": False,
+        "bin_counts": bin_audit,
+        "selected_label_counts": {
+            str(key): int(value) for key, value in counts.items()
+        },
+    }

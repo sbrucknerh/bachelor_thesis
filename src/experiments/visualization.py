@@ -73,28 +73,25 @@ def plot_ablation(metrics: dict[str, float], output: str | Path, title: str) -> 
 def plot_representation_ablation(
     metrics: dict[str, float], output: str | Path, title: str
 ) -> None:
-    arms = (
-        "baseline",
-        "baseline_presence",
-        "baseline_volume",
-        "baseline_composition_volume",
-        "baseline_incoming_stars",
-        "combined",
-    )
-    labels = (
-        "Baseline",
-        "+Presence",
-        "+Volume",
-        "+Composition + volume",
-        "+Incoming",
-        "+All roles",
-    )
+    labels_by_arm = {
+        "baseline": "Baseline",
+        "baseline_presence": "+Presence",
+        "baseline_volume": "+Volume",
+        "baseline_composition_volume": "+Composition + volume",
+        "baseline_incoming_stars": "+Incoming stars",
+        "baseline_triangles": "+Triangles",
+        "combined_without_triangles": "+32 roles",
+        "combined": "+40 roles",
+    }
+    arms = tuple(metrics)
+    labels = tuple(labels_by_arm.get(arm, arm.replace("_", " ").title()) for arm in arms)
     values = [metrics[arm] for arm in arms]
     fig, axis = plt.subplots(figsize=(8.0, 4.5))
+    colors = plt.get_cmap("tab10")(np.linspace(0.08, 0.92, len(arms)))
     bars = axis.bar(
         labels,
         values,
-        color=["#666666", "#8c8c8c", "#4c78a8", "#59a14f", "#e3a329", "#d95f0e"],
+        color=colors,
     )
     axis.bar_label(bars, fmt="%.3f", padding=3, fontsize=8)
     axis.set_ylabel("Average precision")

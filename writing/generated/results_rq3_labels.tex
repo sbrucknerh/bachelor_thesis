@@ -1,15 +1,21 @@
 \begin{table}[ht]
 \centering
-\caption{RQ3: per-category average precision and the window at which each category is best detected (canonical ordering).}
+\caption{RQ3: one-vs-rest average precision for each behaviour category at the globally selected window (canonical ordering). The address count and class share are included because average precision depends on class prevalence.}
 \label{tab:res_rq3_labels}
 \small
-\begin{tabular}{@{}l r l@{}}
+\begin{tabular}{@{}l r r r@{}}
 \toprule
-\textbf{Category} & \textbf{AP} & \textbf{Best $\delta$} \\
+\textbf{Category} & \textbf{$n$} & \textbf{Share} & \textbf{AP} \\
 \midrule
-Hack Scam & 0.333 & 5 min \\
-Impersonation Scam & 0.333 & 5 min \\
-Phishing Scam & 0.333 & 5 min \\
+Phishing Scam & 7,525 & 0.692 & 0.756 \\
+Impersonation Scam & 2,099 & 0.193 & 0.349 \\
+Pigbutchering Scam & 131 & 0.012 & 0.191 \\
+Contract Exploit Scam & 234 & 0.022 & 0.101 \\
+Hack Scam & 220 & 0.020 & 0.092 \\
+Fake Returns Scam & 154 & 0.014 & 0.071 \\
+Rug Pull Scam & 179 & 0.016 & 0.053 \\
+Blackmail Scam & 202 & 0.019 & 0.051 \\
+NFT Airdrop Scam & 127 & 0.012 & 0.025 \\
 \bottomrule
 \end{tabular}
 \end{table}

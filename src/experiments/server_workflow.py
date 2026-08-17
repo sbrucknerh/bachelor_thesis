@@ -16,6 +16,29 @@ def _status(message: str) -> None:
     print(f"[{timestamp}] THESIS   {message}", file=sys.stderr, flush=True)
 
 
+def _report_hf_graph_scope(root: Path) -> None:
+    from src.experiments.artifacts import read_locked_protocol
+
+    if not (root / "protocol.json").is_file():
+        return
+    _, protocol = read_locked_protocol(root)
+    extraction = (
+        protocol.get("datasets", {})
+        .get("huggingface", {})
+        .get("edge_extraction", {})
+        .get("released_neighborhood", {})
+    )
+    incident = int(extraction.get("incident_edges", 0))
+    neighborhood = int(extraction.get("selected_edges", 0))
+    if incident > 0 and neighborhood >= incident:
+        _status(
+            "HF graph prepared: "
+            f"{incident:,} incident edges, {neighborhood:,} released-neighborhood "
+            f"edges ({neighborhood / incident:.2f}x), "
+            f"{int(extraction.get('neighborhood_nodes', 0)):,} nodes"
+        )
+
+
 def _default_run_id() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return f"thesis_{stamp}_v{PROTOCOL_VERSION}"
@@ -101,6 +124,7 @@ def _prepare_roots(
             results_root,
             realcats_id,
             sorted(REALCATS_RESEARCH_QUESTIONS),
+            hf_snapshot=hf_snapshot,
             realcats_zip=realcats_zip,
             realcats_labels=realcats_labels,
             profile="thesis",
@@ -113,6 +137,7 @@ def _prepare_roots(
             results_root,
             realcats_id,
             sorted(REALCATS_RESEARCH_QUESTIONS),
+            hf_snapshot=hf_snapshot,
             realcats_zip=realcats_zip,
             realcats_labels=realcats_labels,
             profile="thesis",
@@ -209,8 +234,9 @@ def run_hf_workflow(
         f"threads={allocated}, replication={replication_index}"
     )
     _status(
-        "Initial HF reference estimate: approximately 3-5 hours on the tested "
-        "20-core server; the measured total ETA will replace this range"
+        "Initial HF reference estimate: approximately 12-24 hours on the tested "
+        "20-core server with the v8 representation sweeps; the measured total "
+        "ETA will replace this range"
     )
     root = _prepare_hf_root(
         Path(results_root),
@@ -220,6 +246,7 @@ def run_hf_workflow(
         replication_index,
         exclusions,
     )
+    _report_hf_graph_scope(root)
     assert_preflight(preflight_runs([root], concurrent=False))
     _execute_one(root, allocated, host_lock_path)
     verification = verify_run(root, require_citable=True)
@@ -317,6 +344,7 @@ def run_thesis_workflow(
             snapshot / "addr_labels_balanced.csv.zst",
             zip_path,
             label_path / "CE.tsv",
+            label_path / "BE.tsv",
         )
         if not path.is_file()
     ]
@@ -331,7 +359,7 @@ def run_thesis_workflow(
         f"threads={allocated}, mode={execution_mode}, replication={replication_index}"
     )
     _status(
-        "Initial reference estimate: approximately 5-7 hours on the tested 20-core server; "
+        "Initial reference estimate: approximately 12-30 hours on the tested 20-core server; "
         f"this run uses {allocated} threads and a measured total ETA will replace "
         "the range after preparation"
     )
@@ -345,6 +373,7 @@ def run_thesis_workflow(
         replication_index,
         exclusion_roots,
     )
+    _report_hf_graph_scope(hf_root)
 
     concurrent_report = preflight_runs(
         [hf_root, realcats_root],

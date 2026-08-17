@@ -1,4 +1,4 @@
-"""Read-only protocol-v6 resource estimates and execution admission checks."""
+"""Read-only current-protocol resource estimates and execution admission checks."""
 
 from __future__ import annotations
 
@@ -90,7 +90,10 @@ def graph_resource_estimate(
     sorter = duckdb_memory_bytes(admitted_memory)
     motif = int(node_count) * MOTIF_RESULT_BYTES_PER_NODE
     python_model = python_model_allowance_bytes(targets, max_feature_columns)
-    checkpoint = max(CHECKPOINT_STAGING_MIN_MIB * MIB, 2 * targets * 33 * 8)
+    checkpoint = max(
+        CHECKPOINT_STAGING_MIN_MIB * MIB,
+        2 * targets * (max_feature_columns + 1) * 8,
+    )
     peak = graph + sorter + motif + python_model + checkpoint
     disk = int(uncompressed * DISK_SORT_FACTOR) + checkpoint + RESULT_STAGING_ALLOWANCE_GIB * GIB
     return {
@@ -111,7 +114,9 @@ def _dataset_reports(run_root: Path, protocol: dict, admitted_memory: int) -> li
     selected = set(protocol.get("research_questions", []))
     if {"rq1", "rq2"} & selected:
         dataset = protocol["datasets"]["huggingface"]
-        path = run_root / dataset["artifacts"]["events"]
+        path = run_root / dataset["artifacts"].get(
+            "motif_events", dataset["artifacts"]["events"]
+        )
         reports.append(
             {
                 "dataset": "huggingface",
@@ -141,6 +146,28 @@ def _dataset_reports(run_root: Path, protocol: dict, admitted_memory: int) -> li
                         node_count=int(layer_resource["exact_distinct_nodes"]),
                         targets=int(resources["realcats"]["target_count"]),
                         max_feature_columns=int(resources["realcats"]["max_feature_columns"]),
+                        admitted_memory=admitted_memory,
+                    ),
+                }
+            )
+        binary_resources = resources["realcats"].get("binary_replication")
+        for layer, relative in sorted(
+            dataset["artifacts"].get("binary_layers", {}).items()
+        ):
+            path = run_root / relative
+            layer_resource = binary_resources["layers"][layer]
+            reports.append(
+                {
+                    "dataset": "realcats_binary",
+                    "layer": layer,
+                    "path": str(path),
+                    **graph_resource_estimate(
+                        path,
+                        node_count=int(layer_resource["exact_distinct_nodes"]),
+                        targets=int(binary_resources["target_count"]),
+                        max_feature_columns=int(
+                            resources["realcats"]["max_feature_columns"]
+                        ),
                         admitted_memory=admitted_memory,
                     ),
                 }
@@ -184,7 +211,11 @@ def estimate_run(run_root: str | Path) -> dict:
     admitted = int(physical * RAM_ADMISSION_FRACTION) if physical else 64 * GIB
     reports = _dataset_reports(root, protocol, admitted)
     hf_peaks = [int(item["estimated_peak_bytes"]) for item in reports if item["dataset"] == "huggingface"]
-    real_peaks = [int(item["estimated_peak_bytes"]) for item in reports if item["dataset"] == "realcats"]
+    real_peaks = [
+        int(item["estimated_peak_bytes"])
+        for item in reports
+        if item["dataset"] in {"realcats", "realcats_binary"}
+    ]
     sequential_peak = max(hf_peaks + real_peaks + [0])
     scratch = max((int(item["estimated_scratch_bytes"]) for item in reports), default=0)
     usage = shutil.disk_usage(root)

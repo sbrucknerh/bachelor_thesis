@@ -4,14 +4,19 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from src.experiments.constants import TRIANGLE_ROLE_NAMES
 from src.experiments.datasets import (
     HF_DATASET_REVISION,
     campaign_group,
     count_target_activity,
     discover_hf_snapshot,
+    extract_released_neighborhood_edges,
     extract_target_edges,
+    select_activity_matched_blte_targets,
     select_dual_hf_cohorts,
 )
+from src.experiments.motifs import RaphtoryExperimentGraph
+from src.experiments.realcats import select_activity_matched_binary_targets
 
 
 def _write_hf_snapshot(root):
@@ -111,6 +116,46 @@ def test_activity_and_edge_extraction_respect_exact_row_bound(tmp_path):
     assert list(pd.read_parquet(output)["tx_hash"]) == ["a", "b", "c"]
 
 
+def test_released_neighborhood_extraction_restores_target_triangle_edges(tmp_path):
+    source = tmp_path / "edges.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "src_id": pa.array([1, 2, 3, 8], type=pa.uint64()),
+                "dst_id": pa.array([2, 3, 1, 9], type=pa.uint64()),
+                "ts": [100, 101, 102, 103],
+                "value_wei": ["1", "2", "3", "4"],
+                "block_number": [1, 2, 3, 4],
+                "tx_hash": ["target-out", "neighbor-edge", "target-in", "unrelated"],
+            }
+        ),
+        source,
+    )
+    incident = tmp_path / "incident.parquet"
+    extract_target_edges(source, [1], incident)
+    neighborhood = tmp_path / "neighborhood.parquet"
+    audit = extract_released_neighborhood_edges(source, incident, neighborhood)
+
+    retained = pd.read_parquet(neighborhood)
+    assert set(retained["tx_hash"]) == {"target-out", "neighbor-edge", "target-in"}
+    assert audit == {
+        "source_edges": 4,
+        "incident_edges": 2,
+        "neighborhood_nodes": 3,
+        "selected_edges": 3,
+        "additional_neighborhood_edges": 1,
+        "scope": "released_graph_target_neighborhood_closure",
+        "release_relative_completeness": True,
+        "full_ethereum_completeness": False,
+    }
+    incident_counts = RaphtoryExperimentGraph(pd.read_parquet(incident)).count_all(
+        10, ["1"]
+    )
+    neighborhood_counts = RaphtoryExperimentGraph(retained).count_all(10, ["1"])
+    assert int(incident_counts.loc["1", TRIANGLE_ROLE_NAMES].sum()) == 0
+    assert int(neighborhood_counts.loc["1", TRIANGLE_ROLE_NAMES].sum()) == 1
+
+
 def test_dual_cohorts_are_disjoint_and_apply_locked_activity_eligibility():
     rows = []
     node = 0
@@ -203,3 +248,61 @@ def test_mixed_blte_timestamp_formats_are_supported(tmp_path):
     assert len(events) == 2
     assert len(labels) == 2
     assert events["timestamp"].is_monotonic_increasing
+
+
+def test_realcats_binary_matching_is_balanced_and_hf_disjoint():
+    rows = []
+    for label in (0, 1):
+        for index, activity in enumerate((3, 4, 7, 8, 20, 21)):
+            rows.append(
+                {
+                    "address": f"0x{label}{index}",
+                    "source_activity": activity,
+                    "label": label,
+                }
+            )
+    labels = pd.DataFrame(rows)
+    excluded = {"0x00"}
+    selected, audit = select_activity_matched_binary_targets(
+        labels,
+        labels["address"],
+        excluded,
+        seed=42,
+    )
+
+    assert not (set(selected["address"]) & excluded)
+    assert selected["label"].value_counts().nunique() == 1
+    assert selected.groupby("activity_bin")["label"].value_counts().groupby(
+        level=0
+    ).nunique().eq(1).all()
+    assert audit["hf_label_universe_exclusions"] == 1
+    assert audit["activity_used_as_model_feature"] is False
+
+
+def test_blte_activity_matching_uses_incident_events_only_for_selection():
+    targets = []
+    events = []
+    for label in (0, 1):
+        for index in range(4):
+            address = f"target-{label}-{index}"
+            targets.append(
+                {
+                    "address": address,
+                    "label": label,
+                    "campaign_group": f"address:{address}",
+                }
+            )
+            for event_index in range(3 + index):
+                events.append(
+                    {
+                        "from_address": address,
+                        "to_address": f"peer-{label}-{index}-{event_index}",
+                    }
+                )
+    selected, audit = select_activity_matched_blte_targets(
+        pd.DataFrame(events), pd.DataFrame(targets), seed=42
+    )
+
+    assert selected["label"].value_counts().to_dict() == {0: 4, 1: 4}
+    assert selected["incident_events"].min() >= 3
+    assert audit["activity_used_as_model_feature"] is False

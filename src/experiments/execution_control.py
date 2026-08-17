@@ -1,4 +1,4 @@
-"""Protocol-v6 execution ownership, state transitions, and immutable definitions."""
+"""Execution ownership, state transitions, and immutable definitions."""
 
 from __future__ import annotations
 

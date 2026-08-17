@@ -25,6 +25,9 @@ def test_one_command_workflow_prepares_parallel_roots_and_verifies(
     realcats_labels = tmp_path / "labels"
     realcats_labels.mkdir()
     (realcats_labels / "CE.tsv").write_text("address\tlabel\n")
+    (realcats_labels / "BE.tsv").write_text(
+        "address\tlabel\ttransaction_number\n"
+    )
     states: dict[str, str] = {}
     prepared_scopes: dict[str, set[str]] = {}
 

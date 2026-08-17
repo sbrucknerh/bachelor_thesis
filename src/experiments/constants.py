@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 
-PROTOCOL_VERSION = 6
+PROTOCOL_VERSION = 8
+MIN_FULLY_VERIFIABLE_PROTOCOL_VERSION = 6
+SUPPORTED_FULL_PROTOCOL_VERSIONS = (6, 7, PROTOCOL_VERSION)
 RANDOM_SEED = 42
 CV_SEEDS = (42, 43, 44)
 DELTAS = (
@@ -54,6 +56,20 @@ INCOMING_STAR_ROLE_NAMES = tuple(
     f"star_{star_class}_iii" for star_class in STAR_CLASSES
 )
 
+# Raphtory emits triangle roles in this verified order. Keeping the established
+# column names preserves old artifacts; these definitions make each index
+# interpretable without renaming protocol-v7 results.
+TRIANGLE_ROLE_DEFINITIONS = {
+    "triangle_1": ["i_to_j", "k_to_j", "i_to_k"],
+    "triangle_2": ["i_to_j", "k_to_j", "k_to_i"],
+    "triangle_3": ["i_to_j", "j_to_k", "i_to_k"],
+    "triangle_4": ["i_to_j", "j_to_k", "k_to_i"],
+    "triangle_5": ["i_to_j", "k_to_i", "j_to_k"],
+    "triangle_6": ["i_to_j", "k_to_i", "k_to_j"],
+    "triangle_7": ["i_to_j", "i_to_k", "j_to_k"],
+    "triangle_8": ["i_to_j", "i_to_k", "k_to_j"],
+}
+
 HF_DIAGNOSTIC_ARM_NAMES = (
     "motif_presence",
     "motif_volume",
@@ -65,6 +81,10 @@ HF_DIAGNOSTIC_ARM_NAMES = (
     "baseline_composition",
     "baseline_composition_volume",
     "baseline_incoming_stars",
+    "triangles_only",
+    "baseline_triangles",
+    "motifs_without_triangles",
+    "combined_without_triangles",
 )
 
 HF_DIAGNOSTIC_COMPARISONS = (
@@ -92,20 +112,34 @@ HF_DIAGNOSTIC_COMPARISONS = (
     ),
     ("baseline_incoming_vs_baseline", "baseline", "baseline_incoming_stars"),
     ("combined_vs_baseline_incoming", "baseline_incoming_stars", "combined"),
+    ("baseline_triangles_vs_baseline", "baseline", "baseline_triangles"),
+    (
+        "combined_vs_combined_without_triangles",
+        "combined_without_triangles",
+        "combined",
+    ),
 )
 
 HF_REPRESENTATION_ANALYSIS = {
-    "status": "prespecified_secondary_analysis",
+    "status": "prespecified_protocol_v8_confirmation_extension",
     "evaluation_delta": "rq2_primary_development_cv_selected_delta",
     "formal_ordering_variant": "canonical",
-    "multiple_testing": "benjamini_hochberg_across_eight_representation_comparisons_per_cohort",
+    "multiple_testing": "benjamini_hochberg_across_ten_representation_comparisons_per_cohort",
     "feature_definitions": {
-        "motif_presence": "indicator(sum(raw_32_role_counts)>0)",
-        "motif_volume": "log1p(sum(raw_32_role_counts))",
-        "motif_composition": "sqrt(raw_role_count/sum(raw_32_role_counts)); zero vector retained",
+        "motif_presence": "indicator(sum(raw_40_role_counts)>0)",
+        "motif_volume": "log1p(sum(raw_40_role_counts))",
+        "motif_composition": "sqrt(raw_role_count/sum(raw_40_role_counts)); zero vector retained",
         "motif_composition_volume": "motif_composition joined with motif_volume",
-        "motifs": "log1p(raw_32_role_counts)",
-        "motif_incoming_stars": "log1p(raw counts for the three prespecified all-incoming star roles)",
+        "motifs": "log1p(raw_40_role_counts)",
+        "motif_incoming_stars": (
+            "log1p(raw counts for the three prespecified all-incoming star roles)"
+        ),
+        "triangles_only": "log1p(raw counts for the eight triangle roles)",
+        "baseline_triangles": "locked aggregate/static baseline joined with triangles_only",
+        "motifs_without_triangles": "log1p(raw 24 star and 8 two-node role counts)",
+        "combined_without_triangles": (
+            "locked aggregate/static baseline joined with motifs_without_triangles"
+        ),
         "baseline_*": "locked aggregate/static baseline joined with the named motif representation",
         "combined": "locked aggregate/static baseline joined with motifs",
     },
@@ -125,6 +159,92 @@ HF_REPRESENTATION_ANALYSIS = {
         "motifs_xgboost",
         "combined_xgboost",
     ],
+}
+
+HF_TRIANGLE_ANALYSIS = {
+    "enabled": True,
+    "scope": "released_graph_target_neighborhood_closure",
+    "extraction": (
+        "retain every released edge whose endpoints both occur in the union of "
+        "endpoints of selected-target incident edges"
+    ),
+    "release_relative_completeness": True,
+    "full_ethereum_completeness": False,
+    "upstream_release_filters_apply": True,
+    "upstream_release_constraints": [
+        "normal_transactions_only",
+        "labelled_seed_activity_windows",
+        "value_wei_raw_at_least_1e14",
+        "released_neighbor_and_pair_caps",
+    ],
+    "roles_retained": 40,
+    "triangle_roles_retained": 8,
+    "primary_features": "all_40_roles",
+    "incremental_test": "combined_40_roles_vs_combined_32_roles",
+    "role_definitions": TRIANGLE_ROLE_DEFINITIONS,
+}
+
+HF_TRIANGLE_WINDOW_ANALYSIS = {
+    "enabled": True,
+    "fold_contract": "same_addresses_labels_splits_and_repeated_cv_folds",
+    "representations": {
+        "all_40_roles": "baseline joined with log1p(all 40 role counts)",
+        "non_triangle_32_roles": (
+            "baseline joined with log1p(24 star and 8 two-node role counts)"
+        ),
+        "triangles_only": "log1p(the eight triangle role counts)",
+    },
+    "selection": "independent development_cv_mean_average_precision_argmax",
+    "test_comparison": (
+        "all_40_roles_at_its_selected_delta_vs_non_triangle_32_roles_at_its_"
+        "selected_delta"
+    ),
+    "coverage": "all_40_roles_non_triangle_32_roles_and_triangles_only_by_delta",
+    "classification": "secondary_prespecified_protocol_v8_analysis",
+}
+
+HF_RELEASE_IDENTITY = {
+    "repository": "fesevu/ethereum_fraud_dataset_by_activity",
+    "revision": "6a7a517fbdbe2bcc4ec65bee4c0ff15f1c0a3c70",
+    "edges_rows": 380_566_661,
+    "targets_rows": 114_739,
+    "sha256": {
+        "edges": "bbe483a60b6587982e6d6c5013ca6e5c4bd786d54653911308d3c5bc597c99a6",
+        "labels": "6a50328d1d7e76da7d3dccc41ed3193863f7c4785f17bf65f05a46901bf7cc9b",
+        "descriptions": "52941005bd44d2597037e2e1c932e4d25fcf9c855980f442896cb497d1827b39",
+    },
+    "unique_graph_representation": "gnn_dataset/edges_all/edges.parquet",
+    "alternate_repository_copies": [
+        "raw string-address GNN parquet",
+        "weekly partitions",
+        "monthly partitions",
+    ],
+    "alternate_copies_add_unique_released_edges": False,
+    "upstream_sampling_cannot_be_reversed_from_release": True,
+}
+
+HF_CONFIRMATION_EXCLUSION_POLICY = {
+    "minimum_reference_runs": 3,
+    "minimum_unique_prior_targets": 27_600,
+    "minimum_replication_index": 3,
+    "scope": "thesis_profile_protocol_v8_hf",
+}
+
+ACTIVITY_MATCHING_BINS = (3, 5, 10, 25, 100)
+
+REALCATS_BINARY_REPLICATION = {
+    "enabled": True,
+    "purpose": "secondary_external_rq1_rq2_replication",
+    "labels": "CE.tsv criminal versus BE.tsv benign",
+    "hf_overlap_policy": "exclude_every_address_in_pinned_hf_targets_global",
+    "minimum_usable_events": 3,
+    "activity_source": "transaction_number_used_for_matching_only_not_as_feature",
+    "activity_bins_left_closed": list(ACTIVITY_MATCHING_BINS) + ["infinity"],
+    "matching": "one_to_one_within_activity_bin_without_replacement",
+    "layers": ["normal", "internal", "erc20", "erc721", "erc1155"],
+    "motif_roles_per_layer": 32,
+    "ordering_variants": "same_as_primary_protocol",
+    "campaign_grouping": "singleton_addresses_dataset_has_no_campaign_identifier",
 }
 
 REPLICATION_SEED_STRIDE = 10_000
@@ -153,8 +273,10 @@ EVENT_EXECUTION = {
     "graph_loader": "raphtory_load_edges_arrow_batches",
     "large_event_pandas_materialization": False,
     "raphtory_roles_computed": 40,
-    "motif_roles_retained": 32,
-    "triangle_roles_retained": 0,
+    "hf_motif_roles_retained": 40,
+    "hf_triangle_roles_retained": 8,
+    "realcats_motif_roles_retained_per_layer": 32,
+    "realcats_triangle_roles_retained_per_layer": 0,
 }
 
 HF_COHORT_ELIGIBILITY = {
@@ -198,10 +320,9 @@ MULTICLASS_LOGISTIC_PARAMS = {
     "random_state": RANDOM_SEED,
 }
 
-# Protocol-v6 resource-accounting constants. These are conservative admission
+# Protocol-v8 resource-accounting constants. These are conservative admission
 # assumptions, not operating-system-enforced limits for Raphtory.
 GRAPH_COLUMN_EXPANSION_FACTOR = 4.0
-HF_NODE_COUNT_INFLATION = 1.20
 MOTIF_RESULT_BYTES_PER_NODE = 512
 DUCKDB_MEMORY_FRACTION = 0.15
 DUCKDB_MEMORY_MIN_GIB = 1
@@ -217,7 +338,6 @@ COORDINATOR_ALLOWANCE_GIB = 1
 
 RESOURCE_CONSTANTS = {
     "graph_column_expansion_factor": GRAPH_COLUMN_EXPANSION_FACTOR,
-    "hf_node_count_inflation": HF_NODE_COUNT_INFLATION,
     "motif_result_bytes_per_node": MOTIF_RESULT_BYTES_PER_NODE,
     "duckdb_memory_fraction": DUCKDB_MEMORY_FRACTION,
     "duckdb_memory_min_gib": DUCKDB_MEMORY_MIN_GIB,

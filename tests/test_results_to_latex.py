@@ -112,3 +112,76 @@ def test_exporter_does_not_fill_missing_citable_artifacts_from_smoke(
     assert runs.owners["rq1"] == thesis
     with pytest.raises(SystemExit, match="thesis.*artifact"):
         runs.check_completeness()
+
+
+def test_exporter_accepts_distinct_locked_replications(tmp_path, monkeypatch):
+    first = _run(
+        tmp_path,
+        "first",
+        {
+            "run_id": "first",
+            "execution_profile": "thesis",
+            "research_questions": ["rq1", "rq2"],
+            "replication": {"index": 1},
+            "datasets": {"huggingface": {}},
+        },
+        completed=True,
+    )
+    second = _run(
+        tmp_path,
+        "second",
+        {
+            "run_id": "second",
+            "execution_profile": "thesis",
+            "research_questions": ["rq1", "rq2"],
+            "replication": {"index": 2},
+            "datasets": {"huggingface": {}},
+        },
+        completed=True,
+    )
+    monkeypatch.setattr(
+        exporter,
+        "verify_run",
+        lambda *_args, **_kwargs: {"completed": True, "citable": True},
+    )
+
+    runs = exporter.RunSet([second, first])
+
+    assert runs.sources_for("rq1") == [first, second]
+    assert runs.sources_for("rq2") == [first, second]
+    assert runs.owners["rq1"] == first
+
+
+def test_exporter_rejects_equal_ranked_runs_without_replication_identity(
+    tmp_path, monkeypatch
+):
+    first = _run(
+        tmp_path,
+        "first",
+        {
+            "run_id": "first",
+            "execution_profile": "thesis",
+            "research_questions": ["rq1"],
+            "datasets": {"huggingface": {}},
+        },
+        completed=True,
+    )
+    second = _run(
+        tmp_path,
+        "second",
+        {
+            "run_id": "second",
+            "execution_profile": "thesis",
+            "research_questions": ["rq1"],
+            "datasets": {"huggingface": {}},
+        },
+        completed=True,
+    )
+    monkeypatch.setattr(
+        exporter,
+        "verify_run",
+        lambda *_args, **_kwargs: {"completed": True, "citable": True},
+    )
+
+    with pytest.raises(SystemExit, match="distinct locked replication indices"):
+        exporter.RunSet([first, second])

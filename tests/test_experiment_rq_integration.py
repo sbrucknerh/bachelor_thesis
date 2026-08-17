@@ -4,12 +4,13 @@ import pandas as pd
 
 from src.experiments.artifacts import create_run_paths
 from src.experiments.constants import (
+    ALL_MOTIF_ROLE_NAMES,
     HF_DIAGNOSTIC_ARM_NAMES,
     HF_DIAGNOSTIC_COMPARISONS,
-    MOTIF_ROLE_NAMES,
 )
 from src.experiments.rq_binary import execute_hf
 from src.experiments.rq_multiclass import execute_realcats
+from src.experiments.rq_realcats_binary import _evaluate_variant
 from src.experiments.secondary import execute_blte
 from src.experiments.splits import grouped_outer_split, repeated_group_folds
 from src.experiments.synthetic_fixtures import fixture_for_role
@@ -88,11 +89,30 @@ def test_rq1_rq2_orchestration_on_locked_fixture(tmp_path):
     assert set(representation["comparison"]) == {
         comparison for comparison, _, _ in HF_DIAGNOSTIC_COMPARISONS
     }
+    triangle_ablation = pd.read_csv(paths.tables / "rq1_triangle_ablation.csv")
+    assert set(triangle_ablation["comparison"]) == {
+        "baseline_triangles_vs_baseline",
+        "combined_vs_combined_without_triangles",
+    }
     roles = pd.read_csv(paths.tables / "rq1_role_diagnostics.csv")
     assert set(roles["scope"]) == {"development", "test"}
-    assert set(roles["role"]) == set(MOTIF_ROLE_NAMES)
+    assert set(roles["role"]) == set(ALL_MOTIF_ROLE_NAMES)
     coverage = pd.read_csv(paths.tables / "rq2_motif_coverage.csv")
     assert set(coverage["scope"]) == {"all", "development", "test"}
+    assert set(coverage["representation"]) == {
+        "all_40_roles",
+        "non_triangle_32_roles",
+        "triangles_only",
+    }
+    assert (paths.tables / "rq1_triangle_window_analysis.csv").exists()
+    delta_representations = pd.read_csv(
+        paths.tables / "rq2_representation_delta_selection.csv"
+    )
+    assert set(delta_representations["representation"]) == {
+        "all_40_roles",
+        "non_triangle_32_roles",
+        "triangles_only",
+    }
     assert (paths.figures / "rq1_representation_ablation_controlled.pdf").exists()
     assert (paths.figures / "rq2_motif_coverage_controlled.pdf").exists()
 
@@ -184,17 +204,30 @@ def test_blte_stops_before_models_when_motif_coverage_is_too_low(tmp_path):
                     "layer": "normal",
                 }
             )
+    target_frame = pd.DataFrame(targets)
+    target_frame["split"] = grouped_outer_split(
+        target_frame, stratum_column="label"
+    ).values
+    folds = repeated_group_folds(
+        target_frame.loc[target_frame["split"] == "development"],
+        seeds=(42,),
+        stratum_column="label",
+    )
     pd.DataFrame(events).to_parquet(paths.data / "events.parquet", index=False)
-    pd.DataFrame(targets).to_parquet(paths.data / "targets.parquet", index=False)
+    target_frame.to_parquet(paths.data / "targets.parquet", index=False)
+    folds.to_parquet(paths.data / "folds.parquet", index=False)
     protocol = {
         "random_seed": 42,
         "permutations": 10,
+        "bootstraps": 10,
+        "deltas": [604_800],
         "datasets": {
             "blte": {
                 "eligible": True,
                 "artifacts": {
                     "events": "data/events.parquet",
                     "targets": "data/targets.parquet",
+                    "folds": "data/folds.parquet",
                 },
             }
         },
@@ -205,3 +238,62 @@ def test_blte_stops_before_models_when_motif_coverage_is_too_low(tmp_path):
     assert result["status"] == "descriptive_only"
     assert result["minimum_required_coverage"] == 0.20
     assert not (paths.predictions / "blte.parquet").exists()
+
+
+def test_realcats_binary_replication_emits_locked_delta_outputs(tmp_path):
+    paths = create_run_paths(tmp_path, "realcats-binary")
+    targets = pd.DataFrame(
+        [
+            {
+                "address": f"address-{label}-{index}",
+                "label": label,
+                "campaign_group": f"address:address-{label}-{index}",
+            }
+            for label in (0, 1)
+            for index in range(20)
+        ]
+    )
+    targets["split"] = grouped_outer_split(
+        targets, stratum_column="label"
+    ).values
+    development = targets.loc[targets["split"] == "development"]
+    folds = repeated_group_folds(
+        development, seeds=(42,), stratum_column="label"
+    )
+    addresses = pd.Index(targets["address"], name="address")
+    baseline = pd.DataFrame(
+        {"aggregate": [index % 3 for index in range(len(addresses))]},
+        index=addresses,
+        dtype="float64",
+    )
+    counts_by_delta = {}
+    for delta in (2, 10):
+        counts = pd.DataFrame(
+            0,
+            index=addresses,
+            columns=[f"normal__{role}" for role in ALL_MOTIF_ROLE_NAMES[:32]],
+            dtype="int64",
+        )
+        counts.iloc[:, 0] = targets.set_index("address").loc[addresses, "label"] * delta
+        counts_by_delta[delta] = counts
+    result = _evaluate_variant(
+        paths,
+        {
+            "deltas": [2, 10],
+            "permutations": 10,
+            "bootstraps": 10,
+            "random_seed": 42,
+        },
+        targets,
+        folds,
+        baseline,
+        counts_by_delta,
+        "canonical",
+        None,
+    )
+
+    assert result["selected_delta"] in {2, 10}
+    assert (paths.predictions / "realcats_binary_canonical.parquet").exists()
+    metrics = pd.read_csv(paths.metrics / "realcats_binary_canonical_metrics.csv")
+    assert set(metrics["arm"]) == {"baseline", "motifs", "combined"}
+    assert set(metrics["delta"]) == {2, 10}

@@ -194,6 +194,7 @@ fi
 
 if $CHECK_ONLY; then
     [[ -s "$REALCATS_LABEL_DIR/CE.tsv" ]] || fail "Real-CATS CE.tsv is missing"
+    [[ -s "$REALCATS_LABEL_DIR/BE.tsv" ]] || fail "Real-CATS BE.tsv is missing"
 else
     clone_pinned_dataset \
         "Real-CATS labels" \
@@ -201,6 +202,8 @@ else
         "$REALCATS_LABEL_REVISION" \
         "$REALCATS_LABEL_DIR" \
         "CE.tsv"
+    [[ -s "$REALCATS_LABEL_DIR/BE.tsv" ]] \
+        || fail "Real-CATS label checkout did not contain BE.tsv"
 fi
 
 if [[ ! -s "$REALCATS_ZIP" ]]; then
@@ -238,6 +241,7 @@ log "Validating dataset schemas and archives"
 "$VENV_PYTHON" - \
     "$HF_SNAPSHOT" \
     "$REALCATS_LABEL_DIR/CE.tsv" \
+    "$REALCATS_LABEL_DIR/BE.tsv" \
     "$REALCATS_ZIP" \
     "$BLTE_DIR/Dataset.zip" \
     "$BLTE_DIR/Featuers_Extraction.csv" <<'PY'
@@ -248,20 +252,25 @@ import zipfile
 import pandas as pd
 import pyarrow.parquet as pq
 
-hf, ce_path, realcats_zip, blte_zip, blte_labels = map(Path, sys.argv[1:])
+hf, ce_path, be_path, realcats_zip, blte_zip, blte_labels = map(Path, sys.argv[1:])
 edges = pq.ParquetFile(hf / "gnn_dataset/edges_all/edges.parquet")
 targets = pq.ParquetFile(hf / "gnn_dataset/labels/targets_global.parquet")
 if not {"src_id", "dst_id", "ts"}.issubset(edges.schema.names):
     raise SystemExit("Hugging Face edge schema is incompatible")
 if not {"node_id", "is_scam", "is_contract", "address"}.issubset(targets.schema.names):
     raise SystemExit("Hugging Face target schema is incompatible")
+if edges.metadata.num_rows != 380_566_661 or targets.metadata.num_rows != 114_739:
+    raise SystemExit("Hugging Face files do not match the pinned release row counts")
 descriptions = pd.read_csv(hf / "addr_labels_balanced.csv.zst", nrows=1)
 if not {"address", "description"}.issubset(descriptions.columns):
     raise SystemExit("Hugging Face description schema is incompatible")
 
 ce_columns = set(ce_path.open(encoding="utf-8").readline().rstrip().split("\t"))
-if not {"address", "label"}.issubset(ce_columns):
+if not {"address", "label", "transaction_number"}.issubset(ce_columns):
     raise SystemExit("Real-CATS CE.tsv schema is incompatible")
+be_columns = set(be_path.open(encoding="utf-8").readline().rstrip().split("\t"))
+if not {"address", "label", "transaction_number"}.issubset(be_columns):
+    raise SystemExit("Real-CATS BE.tsv schema is incompatible")
 with zipfile.ZipFile(realcats_zip) as archive:
     if not any(item.filename.endswith("/normal_transactions.json") for item in archive.infolist()):
         raise SystemExit("Real-CATS ZIP does not contain address transaction histories")
@@ -298,8 +307,11 @@ cat <<EOF
 
 $COMPLETION_MESSAGE
 
-Run the thesis workflow with:
-  "$VENV_PYTHON" scripts/run_results.py run-thesis --threads 20
+Run the smoke test before server execution:
+  "$VENV_PYTHON" scripts/run_results.py smoke --run-id setup_check --sla-minutes 60
+
+The citable v8 command requires the three earlier HF exclusion roots. See the
+step-by-step "Full thesis run" command in README.md.
 
 Run setup validation again with:
   ./scripts/setup_results.sh --check-only

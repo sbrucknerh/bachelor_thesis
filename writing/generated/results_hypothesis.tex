@@ -5,13 +5,18 @@
 \small
 \begin{tabular}{@{}l l l l@{}}
 \toprule
-\textbf{Question} & \textbf{Tested claim} & \textbf{Decision} & \textbf{Ordering} \\
+\textbf{Question} & \textbf{Tested claim} & \textbf{Conclusion} & \textbf{Ordering} \\
 \midrule
-RQ1 (controlled) & motifs add signal & not rejected & robust: no \\
-RQ2 (controlled) & a single best window & not rejected & -- \\
-RQ1 (prevalence) & motifs add signal & not rejected & robust: no \\
-RQ2 (prevalence) & a single best window & not rejected & -- \\
-RQ3 & categories are separable & not rejected & robust: no \\
+RQ1 (rep. 1, controlled) & motifs add signal & supported & robust: yes \\
+RQ2 (rep. 1, controlled) & a single best window & not supported & -- \\
+RQ1 (rep. 1, prevalence) & motifs add signal & supported & robust: yes \\
+RQ2 (rep. 1, prevalence) & a single best window & not supported & -- \\
+RQ1 (rep. 2, controlled) & motifs add signal & supported & robust: yes \\
+RQ2 (rep. 2, controlled) & a single best window & not supported & -- \\
+RQ1 (rep. 2, prevalence) & motifs add signal & not supported & robust: yes \\
+RQ2 (rep. 2, prevalence) & a single best window & not supported & -- \\
+RQ3 & categories are separable & supported & robust: yes \\
+RQ4 & category-specific windows outperform one global window & not supported & robust: no \\
 \bottomrule
 \end{tabular}
 \end{table}

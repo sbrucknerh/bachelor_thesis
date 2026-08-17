@@ -8,6 +8,7 @@ from contextlib import nullcontext
 import json
 
 import pandas as pd
+import pyarrow.parquet as pq
 from sklearn.model_selection import StratifiedKFold
 
 from src.experiments.artifacts import (
@@ -26,8 +27,12 @@ from src.experiments.constants import (
     DELTA_SELECTION,
     DELTAS,
     EVENT_EXECUTION,
+    HF_CONFIRMATION_EXCLUSION_POLICY,
     HF_COHORT_ELIGIBILITY,
+    HF_RELEASE_IDENTITY,
     HF_REPRESENTATION_ANALYSIS,
+    HF_TRIANGLE_ANALYSIS,
+    HF_TRIANGLE_WINDOW_ANALYSIS,
     MULTICLASS_LOGISTIC_PARAMS,
     N_BOOTSTRAPS,
     N_PERMUTATIONS,
@@ -35,6 +40,7 @@ from src.experiments.constants import (
     PROTOCOL_VERSION,
     RANDOM_SEED,
     REALCATS_CATEGORY_ELIGIBILITY,
+    REALCATS_BINARY_REPLICATION,
     REALCATS_LAYER_FILES,
     REALCATS_RESEARCH_QUESTIONS,
     RESOURCE_CONSTANTS,
@@ -43,14 +49,20 @@ from src.experiments.constants import (
 from src.experiments.datasets import (
     count_target_activity,
     discover_hf_snapshot,
+    extract_released_neighborhood_edges,
     extract_target_edges,
     load_blte_for_experiment,
     load_hf_targets,
     select_dual_hf_cohorts,
+    select_activity_matched_blte_targets,
 )
 from src.experiments.realcats import (
+    count_target_usable_events,
     convert_realcats_zip,
+    load_binary_labels,
     load_criminal_labels,
+    realcats_archive_addresses,
+    select_activity_matched_binary_targets,
     select_realcats_targets,
 )
 from src.experiments.splits import (
@@ -72,28 +84,6 @@ VALID_RQS = {
 
 def _relative(path: Path, root: Path) -> str:
     return str(path.relative_to(root))
-
-
-def _approx_distinct_endpoints(path: Path, temporary_directory: Path) -> int:
-    import duckdb
-
-    temporary_directory.mkdir(parents=True, exist_ok=True)
-    connection = duckdb.connect()
-    try:
-        connection.execute("SET temp_directory = ?", [str(temporary_directory)])
-        value = connection.execute(
-            """
-            SELECT approx_count_distinct(address) FROM (
-                SELECT from_address AS address FROM read_parquet(?)
-                UNION ALL
-                SELECT to_address AS address FROM read_parquet(?)
-            )
-            """,
-            [str(path), str(path)],
-        ).fetchone()[0]
-        return int(value or 0)
-    finally:
-        connection.close()
 
 
 def _load_hf_exclusion_references(
@@ -162,10 +152,23 @@ def _prepare_hf(
     excluded_node_ids: set[int],
     excluded_campaign_groups: set[str],
     exclusion_references: list[dict],
+    profile: str,
     telemetry: RunTelemetry | None = None,
 ) -> dict:
     edge_source = snapshot / "gnn_dataset/edges_all/edges.parquet"
     label_source = snapshot / "gnn_dataset/labels/targets_global.parquet"
+    edge_rows = int(pq.ParquetFile(edge_source).metadata.num_rows)
+    label_rows = int(pq.ParquetFile(label_source).metadata.num_rows)
+    if profile == "thesis" and (
+        edge_rows != int(HF_RELEASE_IDENTITY["edges_rows"])
+        or label_rows != int(HF_RELEASE_IDENTITY["targets_rows"])
+    ):
+        raise RuntimeError(
+            "The thesis profile requires the pinned Hugging Face release with "
+            f"{HF_RELEASE_IDENTITY['edges_rows']:,} edges and "
+            f"{HF_RELEASE_IDENTITY['targets_rows']:,} targets; observed "
+            f"{edge_rows:,} and {label_rows:,}"
+        )
     labels = pd.read_parquet(label_source, columns=["node_id"])
     activity_context = (
         telemetry.step("prepare.hf.activity_scan", targets=len(labels))
@@ -219,6 +222,7 @@ def _prepare_hf(
     target_path = paths.data / "hf_targets.parquet"
     fold_path = paths.data / "hf_cv_folds.parquet"
     event_path = paths.data / "hf_incident_edges.parquet"
+    motif_event_path = paths.data / "hf_released_neighborhood_edges.parquet"
     write_parquet_exclusive(target_path, selected)
     write_parquet_exclusive(fold_path, folds)
     extraction_context = (
@@ -229,6 +233,21 @@ def _prepare_hf(
     with extraction_context:
         extraction = extract_target_edges(
             edge_source, selected["node_id"], event_path, telemetry=telemetry
+        )
+    neighborhood_context = (
+        telemetry.step(
+            "prepare.hf.neighborhood_extraction",
+            incident_edges=extraction["selected_edges"],
+        )
+        if telemetry
+        else nullcontext()
+    )
+    with neighborhood_context:
+        neighborhood_extraction = extract_released_neighborhood_edges(
+            edge_source,
+            event_path,
+            motif_event_path,
+            telemetry=telemetry,
         )
     hash_context = (
         telemetry.step("prepare.hf.hash_artifacts")
@@ -243,6 +262,16 @@ def _prepare_hf(
         target_hash = sha256_file(target_path)
         fold_hash = sha256_file(fold_path)
         event_hash = sha256_file(event_path)
+        motif_event_hash = sha256_file(motif_event_path)
+    observed_release_hashes = {
+        "edges": source_edge_hash,
+        "labels": source_label_hash,
+        "descriptions": description_hash,
+    }
+    if profile == "thesis" and observed_release_hashes != HF_RELEASE_IDENTITY["sha256"]:
+        raise RuntimeError(
+            "Hugging Face inputs do not match the pinned thesis release identity"
+        )
     for reference in exclusion_references:
         if reference.get("source_edges_sha256") not in {None, source_edge_hash}:
             raise RuntimeError(
@@ -259,11 +288,19 @@ def _prepare_hf(
             raise RuntimeError(
                 "A prior HF exclusion run used a different description source revision"
             )
-    approximate_nodes = _approx_distinct_endpoints(
-        event_path, paths.data / "duckdb_tmp" / "prepare_hf_nodes"
-    )
     return {
         "snapshot_revision": snapshot.name,
+        "release_identity": {
+            **HF_RELEASE_IDENTITY,
+            "observed_edges_rows": edge_rows,
+            "observed_targets_rows": label_rows,
+            "observed_sha256": observed_release_hashes,
+            "complete_pinned_release_match": bool(
+                edge_rows == int(HF_RELEASE_IDENTITY["edges_rows"])
+                and label_rows == int(HF_RELEASE_IDENTITY["targets_rows"])
+                and observed_release_hashes == HF_RELEASE_IDENTITY["sha256"]
+            ),
+        },
         "sources": {
             "edges": {"path": str(edge_source), "sha256": source_edge_hash},
             "labels": {"path": str(label_source), "sha256": source_label_hash},
@@ -276,9 +313,11 @@ def _prepare_hf(
             "targets": _relative(target_path, paths.root),
             "folds": _relative(fold_path, paths.root),
             "events": _relative(event_path, paths.root),
+            "motif_events": _relative(motif_event_path, paths.root),
             "targets_sha256": target_hash,
             "folds_sha256": fold_hash,
             "events_sha256": event_hash,
+            "motif_events_sha256": motif_event_hash,
         },
         "attrition": attrition,
         "confirmation_exclusions": {
@@ -289,9 +328,14 @@ def _prepare_hf(
             "selected_node_overlap": 0,
             "selected_campaign_group_overlap": 0,
         },
-        "edge_extraction": extraction,
+        "edge_extraction": {
+            "incident": extraction,
+            "released_neighborhood": neighborhood_extraction,
+        },
         "resource_metadata": {
-            "approximate_distinct_nodes": approximate_nodes,
+            "exact_distinct_nodes": int(
+                neighborhood_extraction["neighborhood_nodes"]
+            ),
             "target_count": int(len(selected)),
         },
     }
@@ -323,9 +367,11 @@ def _prepare_realcats(
     paths,
     zip_path: Path,
     label_dir: Path,
+    hf_label_source: Path,
     resume: bool = False,
     source_hashes: dict[str, str] | None = None,
     split_seed: int = RANDOM_SEED,
+    cv_seeds: Iterable[int] = (42, 43, 44),
     telemetry: RunTelemetry | None = None,
 ) -> dict:
     layer_dir = paths.data / "realcats_layers"
@@ -363,14 +409,108 @@ def _prepare_realcats(
         )
         folds = _rq3_cv_assignments(inferential, int(split_seed))
 
+    binary_context = (
+        telemetry.step("prepare.realcats.binary_replication")
+        if telemetry
+        else nullcontext()
+    )
+    with binary_context:
+        binary_labels = load_binary_labels(label_dir)
+        hf_address_frame = pd.read_parquet(
+            hf_label_source, columns=["address"]
+        )
+        hf_address_frame["address"] = (
+            hf_address_frame["address"].astype(str).str.lower()
+        )
+        hf_address_frame = hf_address_frame.drop_duplicates("address").sort_values(
+            "address"
+        ).reset_index(drop=True)
+        hf_addresses = set(hf_address_frame["address"])
+        archive_addresses = realcats_archive_addresses(zip_path)
+        binary_candidates, binary_selection = select_activity_matched_binary_targets(
+            binary_labels,
+            archive_addresses,
+            hf_addresses,
+            seed=int(split_seed),
+            minimum_activity=int(
+                REALCATS_BINARY_REPLICATION["minimum_usable_events"]
+            ),
+        )
+        binary_layer_dir = paths.data / "realcats_binary_layers"
+        binary_conversion = convert_realcats_zip(
+            zip_path,
+            label_dir,
+            binary_layer_dir,
+            resume=resume,
+            telemetry=telemetry,
+            selected_addresses=binary_candidates["address"],
+            address_universe=binary_labels["address"],
+        )
+        binary_layer_paths = {
+            layer: Path(path)
+            for layer, path in binary_conversion["layer_paths"].items()
+        }
+        usable_events = count_target_usable_events(
+            binary_layer_paths, binary_candidates["address"]
+        )
+        minimum_events = int(REALCATS_BINARY_REPLICATION["minimum_usable_events"])
+        usable_addresses = set(usable_events.index[usable_events >= minimum_events])
+        binary_targets, usable_matching = select_activity_matched_binary_targets(
+            binary_labels,
+            usable_addresses,
+            hf_addresses,
+            seed=int(split_seed),
+            minimum_activity=minimum_events,
+        )
+        binary_targets = binary_targets.merge(
+            usable_events.rename("usable_events"),
+            left_on="address",
+            right_index=True,
+            how="left",
+            validate="one_to_one",
+        )
+        if binary_targets["usable_events"].lt(minimum_events).any():
+            raise RuntimeError(
+                "Real-CATS binary targets violate the usable-event threshold"
+            )
+        binary_targets["split"] = stratified_outer_split(
+            binary_targets,
+            label_column="label",
+            seed=int(split_seed),
+        ).values
+        binary_development = binary_targets.loc[
+            binary_targets["split"] == "development"
+        ]
+        binary_folds = repeated_group_folds(
+            binary_development,
+            seeds=tuple(int(seed) for seed in cv_seeds),
+            stratum_column="label",
+        )
+        binary_selection["candidate_count_before_usable_event_filter"] = int(
+            len(binary_candidates)
+        )
+        binary_selection["candidate_usable_event_counts"] = {
+            "minimum": int(usable_events.min()),
+            "median": float(usable_events.median()),
+            "maximum": int(usable_events.max()),
+            "at_least_minimum": int((usable_events >= minimum_events).sum()),
+        }
+        binary_selection["final_matching_after_usable_event_filter"] = usable_matching
+
     raw_label_rows = int(
         len(pd.read_csv(label_dir / "CE.tsv", sep="\t", usecols=["address", "label"]))
     )
 
     target_path = paths.data / "realcats_targets.parquet"
     fold_path = paths.data / "realcats_cv_folds.parquet"
+    binary_target_path = paths.data / "realcats_binary_targets.parquet"
+    binary_fold_path = paths.data / "realcats_binary_cv_folds.parquet"
+    binary_hf_exclusion_path = paths.data / "realcats_binary_hf_exclusions.parquet"
     _write_or_verify_parquet(target_path, targets)
     _write_or_verify_parquet(fold_path, folds)
+    _write_or_verify_parquet(binary_target_path, binary_targets)
+    _write_or_verify_parquet(binary_fold_path, binary_folds)
+    _write_or_verify_parquet(binary_hf_exclusion_path, hf_address_frame)
     return {
         "sources": {
             "transactions": {
@@ -383,6 +523,16 @@ def _prepare_realcats(
                 "sha256": (source_hashes or {}).get("labels")
                 or sha256_file(label_dir / "CE.tsv"),
             },
+            "benign_labels": {
+                "path": str(label_dir / "BE.tsv"),
+                "sha256": (source_hashes or {}).get("benign_labels")
+                or sha256_file(label_dir / "BE.tsv"),
+            },
+            "hf_overlap_labels": {
+                "path": str(hf_label_source),
+                "sha256": (source_hashes or {}).get("hf_labels")
+                or sha256_file(hf_label_source),
+            },
         },
         "artifacts": {
             "targets": _relative(target_path, paths.root),
@@ -390,12 +540,36 @@ def _prepare_realcats(
             "layers": {
                 layer: _relative(path, paths.root) for layer, path in layer_paths.items()
             },
+            "binary_targets": _relative(binary_target_path, paths.root),
+            "binary_folds": _relative(binary_fold_path, paths.root),
+            "binary_hf_exclusions": _relative(
+                binary_hf_exclusion_path, paths.root
+            ),
+            "binary_layers": {
+                layer: _relative(path, paths.root)
+                for layer, path in binary_layer_paths.items()
+            },
             "targets_sha256": sha256_file(target_path),
             "folds_sha256": sha256_file(fold_path),
             "layers_sha256": {layer: sha256_file(path) for layer, path in layer_paths.items()},
+            "binary_targets_sha256": sha256_file(binary_target_path),
+            "binary_folds_sha256": sha256_file(binary_fold_path),
+            "binary_hf_exclusions_sha256": sha256_file(
+                binary_hf_exclusion_path
+            ),
+            "binary_layers_sha256": {
+                layer: sha256_file(path)
+                for layer, path in binary_layer_paths.items()
+            },
         },
         "attrition": attrition,
         "conversion": conversion,
+        "binary_replication": {
+            "definition": REALCATS_BINARY_REPLICATION,
+            "selection": binary_selection,
+            "conversion": binary_conversion,
+            "hf_address_overlap": 0,
+        },
         "label_audit": {
             "source_rows": raw_label_rows,
             "unique_consistent_addresses": int(len(labels)),
@@ -407,20 +581,46 @@ def _prepare_realcats(
                 layer: int(conversion[f"{layer}_exact_distinct_nodes"])
                 for layer in REALCATS_LAYER_FILES
             },
+            "binary_target_count": int(len(binary_targets)),
+            "binary_exact_distinct_nodes_by_layer": {
+                layer: int(binary_conversion[f"{layer}_exact_distinct_nodes"])
+                for layer in REALCATS_LAYER_FILES
+            },
         },
     }
 
 
 def _prepare_blte(
-    paths, dataset_dir: Path, telemetry: RunTelemetry | None = None
+    paths,
+    dataset_dir: Path,
+    *,
+    split_seed: int = RANDOM_SEED,
+    cv_seeds: Iterable[int] = (42, 43, 44),
+    telemetry: RunTelemetry | None = None,
 ) -> dict:
     context = telemetry.step("prepare.blte") if telemetry else nullcontext()
     with context:
-        events, targets = load_blte_for_experiment(dataset_dir)
+        events, raw_targets = load_blte_for_experiment(dataset_dir)
+        targets, matching = select_activity_matched_blte_targets(
+            events, raw_targets, seed=int(split_seed)
+        )
+        targets["split"] = stratified_outer_split(
+            targets,
+            label_column="label",
+            seed=int(split_seed),
+        ).values
+        development = targets.loc[targets["split"] == "development"]
+        folds = repeated_group_folds(
+            development,
+            seeds=tuple(int(seed) for seed in cv_seeds),
+            stratum_column="label",
+        )
     event_path = paths.data / "blte_events.parquet"
     target_path = paths.data / "blte_targets.parquet"
+    fold_path = paths.data / "blte_cv_folds.parquet"
     write_parquet_exclusive(event_path, events)
     write_parquet_exclusive(target_path, targets)
+    write_parquet_exclusive(fold_path, folds)
     counts = targets["label"].value_counts()
     distinct_nodes = int(
         pd.unique(
@@ -432,6 +632,7 @@ def _prepare_blte(
     return {
         "eligible": bool(len(counts) == 2 and counts.min() >= 100),
         "active_label_counts": {str(key): int(value) for key, value in counts.items()},
+        "activity_matching": matching,
         "sources": {
             "transactions": {
                 "path": str(dataset_dir / "Dataset.zip"),
@@ -445,8 +646,10 @@ def _prepare_blte(
         "artifacts": {
             "events": _relative(event_path, paths.root),
             "targets": _relative(target_path, paths.root),
+            "folds": _relative(fold_path, paths.root),
             "events_sha256": sha256_file(event_path),
             "targets_sha256": sha256_file(target_path),
+            "folds_sha256": sha256_file(fold_path),
         },
         "resource_metadata": {
             "exact_distinct_nodes": distinct_nodes,
@@ -488,6 +691,19 @@ def prepare_experiment(
         raise ValueError(
             "An HF confirmation replication must exclude at least one prior HF run"
         )
+    if profile == "thesis" and hf_selected:
+        minimum_index = int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_replication_index"]
+        )
+        minimum_roots = int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_reference_runs"]
+        )
+        if int(replication_index) < minimum_index or len(exclusion_roots) < minimum_roots:
+            raise ValueError(
+                "Protocol-v8 is the final post-hoc HF confirmation. A thesis-profile "
+                f"run requires --replication-index >= {minimum_index} and at least "
+                f"{minimum_roots} --exclude-hf-run roots covering the earlier cohorts."
+            )
     realcats_selected = set(selected_rqs) & REALCATS_RESEARCH_QUESTIONS
     if realcats_selected and realcats_selected != REALCATS_RESEARCH_QUESTIONS:
         raise ValueError("RQ3 and RQ4 must be prepared together because they share one locked Real-CATS analysis")
@@ -525,6 +741,16 @@ def prepare_experiment(
             excluded_campaign_groups,
             exclusion_references,
         ) = _load_hf_exclusion_references(exclusion_roots)
+    if profile == "thesis" and hf_selected:
+        minimum_prior_targets = int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_unique_prior_targets"]
+        )
+        if len(excluded_node_ids) < minimum_prior_targets:
+            raise ValueError(
+                "The supplied HF exclusion lineage is incomplete: expected at least "
+                f"{minimum_prior_targets:,} unique prior targets, observed "
+                f"{len(excluded_node_ids):,}"
+            )
     replication["confirmation_design"] = (
         "disjoint_out_of_sample_confirmation"
         if exclusion_references
@@ -548,12 +774,28 @@ def prepare_experiment(
     realcats_zip_path = Path(realcats_zip)
     realcats_label_dir = Path(realcats_labels)
     realcats_source_hashes = None
+    realcats_hf_label_source = None
     if REALCATS_RESEARCH_QUESTIONS <= set(selected_rqs):
+        realcats_hf_snapshot = (
+            Path(hf_snapshot) if hf_snapshot else discover_hf_snapshot()
+        )
+        realcats_hf_label_source = (
+            realcats_hf_snapshot
+            / "gnn_dataset/labels/targets_global.parquet"
+        )
         with telemetry.step("prepare.realcats.hash_sources"):
             realcats_source_hashes = {
                 "transactions": sha256_file(realcats_zip_path),
                 "labels": sha256_file(realcats_label_dir / "CE.tsv"),
+                "benign_labels": sha256_file(realcats_label_dir / "BE.tsv"),
+                "hf_labels": sha256_file(realcats_hf_label_source),
             }
+        if profile == "thesis" and realcats_source_hashes["hf_labels"] != (
+            HF_RELEASE_IDENTITY["sha256"]["labels"]
+        ):
+            raise RuntimeError(
+                "Real-CATS binary overlap exclusion requires the pinned HF label universe"
+            )
     preparation_definition = {
         "protocol_version": PROTOCOL_VERSION,
         "run_id": run_id,
@@ -601,6 +843,7 @@ def prepare_experiment(
             excluded_node_ids,
             excluded_campaign_groups,
             exclusion_references,
+            profile,
             telemetry=telemetry,
         )
     if REALCATS_RESEARCH_QUESTIONS <= set(selected_rqs):
@@ -608,33 +851,50 @@ def prepare_experiment(
             paths,
             realcats_zip_path,
             realcats_label_dir,
+            realcats_hf_label_source,
             resume=resume,
             source_hashes=realcats_source_hashes,
             split_seed=int(replication["split_seed"]),
+            cv_seeds=replication["cv_seeds"],
             telemetry=telemetry,
         )
     if "blte" in selected_rqs:
-        datasets["blte"] = _prepare_blte(paths, Path(blte_dir), telemetry=telemetry)
+        datasets["blte"] = _prepare_blte(
+            paths,
+            Path(blte_dir),
+            split_seed=int(replication["split_seed"]),
+            cv_seeds=replication["cv_seeds"],
+            telemetry=telemetry,
+        )
 
     resource_estimates = {}
     if "huggingface" in datasets:
         metadata = datasets["huggingface"]["resource_metadata"]
         resource_estimates["huggingface"] = {
-            "node_count_method": "duckdb_approx_count_distinct_inflated_20_percent",
-            "approximate_distinct_nodes": metadata["approximate_distinct_nodes"],
-            "node_count_admission": int(metadata["approximate_distinct_nodes"] * 1.2 + 0.999999),
+            "node_count_method": "exact_target_incident_endpoint_union",
+            "exact_distinct_nodes": metadata["exact_distinct_nodes"],
+            "node_count_admission": metadata["exact_distinct_nodes"],
             "target_count": metadata["target_count"],
-            "max_feature_columns": 50,
+            "max_feature_columns": 60,
         }
     if "realcats" in datasets:
         metadata = datasets["realcats"]["resource_metadata"]
         resource_estimates["realcats"] = {
             "node_count_method": "exact_sqlite_union_distinct_per_layer",
             "target_count": metadata["target_count"],
-            "max_feature_columns": 160,
+            "max_feature_columns": 245,
             "layers": {
                 layer: {"exact_distinct_nodes": value}
                 for layer, value in metadata["exact_distinct_nodes_by_layer"].items()
+            },
+            "binary_replication": {
+                "target_count": metadata["binary_target_count"],
+                "layers": {
+                    layer: {"exact_distinct_nodes": value}
+                    for layer, value in metadata[
+                        "binary_exact_distinct_nodes_by_layer"
+                    ].items()
+                },
             },
         }
     if "blte" in datasets:
@@ -656,7 +916,12 @@ def prepare_experiment(
         "primary_metric": "average_precision",
         "delta_selection": DELTA_SELECTION,
         "hf_representation_analysis": HF_REPRESENTATION_ANALYSIS,
+        "hf_triangle_analysis": HF_TRIANGLE_ANALYSIS,
+        "hf_triangle_window_analysis": HF_TRIANGLE_WINDOW_ANALYSIS,
         "realcats_category_eligibility": REALCATS_CATEGORY_ELIGIBILITY,
+        "realcats_binary_replication": REALCATS_BINARY_REPLICATION,
+        "hf_release_identity": HF_RELEASE_IDENTITY,
+        "hf_confirmation_exclusion_policy": HF_CONFIRMATION_EXCLUSION_POLICY,
         "alpha": 0.05,
         "deltas": list(DELTAS),
         "random_seed": RANDOM_SEED,
@@ -683,8 +948,13 @@ def prepare_experiment(
         "resource_constants": RESOURCE_CONSTANTS,
         "source_scope": {
             "huggingface_preparation": "full_source_scan",
-            "huggingface_motif_graph": "target_incident_subgraph",
+            "huggingface_baseline_graph": "target_incident_subgraph",
+            "huggingface_motif_graph": "released_graph_target_neighborhood_closure",
+            "huggingface_triangle_completeness": "complete_within_release_not_full_ethereum",
             "realcats_layers": list(REALCATS_LAYER_FILES),
+            "realcats_binary_replication": (
+                "hf_label_universe_disjoint_activity_matched_ce_vs_be"
+            ),
             "blte_scope": "separate_optional_secondary_rq1_run",
         },
         "runtime": preparation_runtime,

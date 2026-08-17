@@ -70,7 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resume interrupted combined RQ3/RQ4 preparation before protocol locking",
     )
 
-    execute = subparsers.add_parser("execute", help="Execute or resume one locked v6 run")
+    execute = subparsers.add_parser(
+        "execute", help="Execute or resume one locked current-protocol run"
+    )
     execute.add_argument("run_root")
     execute.add_argument("--resume", action="store_true")
     execute.add_argument("--threads", type=int)

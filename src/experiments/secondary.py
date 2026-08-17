@@ -4,13 +4,25 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
-from src.experiments.artifacts import write_json_exclusive, write_parquet_exclusive
+from src.experiments.artifacts import (
+    write_csv_exclusive,
+    write_json_exclusive,
+    write_parquet_exclusive,
+)
 from src.experiments.features import aggregate_features, log_motif_counts, motif_coverage
-from src.experiments.modeling import fit_binary_scores
+from src.experiments.modeling import (
+    cv_delta_scores,
+    fit_binary_scores,
+    select_delta_maximum,
+    select_delta_one_standard_error,
+)
 from src.experiments.motifs import RaphtoryExperimentGraph
-from src.experiments.statistics import binary_metrics, grouped_score_swap_test
+from src.experiments.statistics import (
+    binary_metrics,
+    grouped_score_swap_test,
+    stratified_group_bootstrap_delta,
+)
 from src.experiments.synthetic_fixtures import fixture_for_role
 from src.experiments.telemetry import RunTelemetry
 
@@ -28,34 +40,59 @@ def execute_blte(paths, protocol: dict, telemetry: RunTelemetry | None = None) -
 
     events = pd.read_parquet(paths.root / dataset["artifacts"]["events"])
     targets = pd.read_parquet(paths.root / dataset["artifacts"]["targets"])
+    folds = pd.read_parquet(paths.root / dataset["artifacts"]["folds"])
     targets["address"] = targets["address"].astype(str)
     indexed = targets.set_index("address", drop=False)
-    development, test = train_test_split(
-        indexed.index.to_numpy(),
-        test_size=0.2,
-        random_state=int(protocol["random_seed"]),
-        stratify=indexed["label"],
-    )
-    development = pd.Index(development)
-    test = pd.Index(test)
+    development = indexed.index[indexed["split"] == "development"]
+    test = indexed.index[indexed["split"] == "test"]
     labels = indexed["label"].astype(int)
     baseline = aggregate_features(events, indexed.index)
     graph = RaphtoryExperimentGraph(events, "canonical", telemetry=telemetry)
-    counts = graph.count(604_800, indexed.index)
-    coverage_frame = motif_coverage(counts, labels).reset_index()
+    counts_by_delta = graph.sweep(protocol["deltas"], indexed.index)
+    motif_features = {
+        delta: log_motif_counts(counts) for delta, counts in counts_by_delta.items()
+    }
+    combined_features = {
+        delta: baseline.join(features, how="left").fillna(0.0)
+        for delta, features in motif_features.items()
+    }
+    cv_scores = cv_delta_scores(
+        {delta: frame.loc[development] for delta, frame in combined_features.items()},
+        labels.loc[development],
+        folds,
+    )
+    selected_delta, selection = select_delta_maximum(cv_scores)
+    one_se_delta, one_se_selection = select_delta_one_standard_error(cv_scores)
+    selection = selection.merge(
+        one_se_selection[["delta", "within_one_se", "selected_one_se"]],
+        on="delta",
+        how="left",
+        validate="one_to_one",
+    )
+    coverage_records = []
+    for delta, counts in counts_by_delta.items():
+        frame = motif_coverage(counts, labels).reset_index()
+        frame["delta"] = int(delta)
+        coverage_records.append(frame)
+    coverage = pd.concat(coverage_records, ignore_index=True)
+    coverage_frame = coverage.loc[coverage["delta"] == selected_delta]
     minimum_coverage = 0.20
     if (coverage_frame["coverage"] < minimum_coverage).any():
         result = {
             "status": "descriptive_only",
             "reason": "at least one class has less than 20% nonzero motif coverage",
-            "delta": 604_800,
+            "selected_delta": int(selected_delta),
+            "one_se_delta": int(one_se_delta),
             "minimum_required_coverage": minimum_coverage,
-            "coverage": coverage_frame.to_dict(orient="records"),
+            "coverage": coverage.to_dict(orient="records"),
         }
+        write_csv_exclusive(paths.metrics / "blte_cv.csv", cv_scores)
+        write_csv_exclusive(paths.metrics / "blte_delta_selection.csv", selection)
+        write_csv_exclusive(paths.metrics / "blte_coverage.csv", coverage)
         write_json_exclusive(paths.metrics / "blte_results.json", result)
         return result
-    motifs = log_motif_counts(counts)
-    combined = baseline.join(motifs, how="left").fillna(0.0)
+    motifs = motif_features[selected_delta]
+    combined = combined_features[selected_delta]
     scores = {}
     for arm, features in (("baseline", baseline), ("motifs", motifs), ("combined", combined)):
         _, scores[arm] = fit_binary_scores(
@@ -63,7 +100,8 @@ def execute_blte(paths, protocol: dict, telemetry: RunTelemetry | None = None) -
         )
     result = {
         "status": "evaluated",
-        "delta": 604_800,
+        "selected_delta": int(selected_delta),
+        "one_se_delta": int(one_se_delta),
         "metrics": {arm: binary_metrics(labels.loc[test], values) for arm, values in scores.items()},
         "coverage": coverage_frame.to_dict(orient="records"),
         "randomization": grouped_score_swap_test(
@@ -74,16 +112,28 @@ def execute_blte(paths, protocol: dict, telemetry: RunTelemetry | None = None) -
             iterations=int(protocol["permutations"]),
             seed=int(protocol["random_seed"]),
         ),
+        "bootstrap": stratified_group_bootstrap_delta(
+            labels.loc[test],
+            scores["baseline"],
+            scores["combined"],
+            indexed.loc[test, "campaign_group"],
+            iterations=int(protocol["bootstraps"]),
+            seed=int(protocol["random_seed"]),
+        ),
     }
     predictions = pd.DataFrame(
         {
             "address": np.repeat(test.to_numpy(), 3),
             "label": np.repeat(labels.loc[test].to_numpy(), 3),
+            "delta": int(selected_delta),
             "arm": np.tile(["baseline", "motifs", "combined"], len(test)),
             "score": np.column_stack([scores["baseline"], scores["motifs"], scores["combined"]]).reshape(-1),
         }
     )
     write_parquet_exclusive(paths.predictions / "blte.parquet", predictions)
+    write_csv_exclusive(paths.metrics / "blte_cv.csv", cv_scores)
+    write_csv_exclusive(paths.metrics / "blte_delta_selection.csv", selection)
+    write_csv_exclusive(paths.metrics / "blte_coverage.csv", coverage)
     write_json_exclusive(paths.metrics / "blte_results.json", result)
     return result
 

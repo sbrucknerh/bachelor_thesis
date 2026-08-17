@@ -12,12 +12,14 @@ import sqlite3
 from typing import Any, Iterable
 import zipfile
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from src.experiments.constants import (
+    ACTIVITY_MATCHING_BINS,
     REALCATS_CATEGORY_ELIGIBILITY,
     REALCATS_LAYER_FILES,
 )
@@ -50,6 +52,140 @@ def load_criminal_labels(label_dir: str | Path) -> pd.DataFrame:
             f"{examples}"
         )
     return labels.drop(columns="label").drop_duplicates(["address", "type_label"])
+
+
+def load_binary_labels(label_dir: str | Path) -> pd.DataFrame:
+    """Load Real-CATS criminal/benign labels and matching-only activity."""
+    directory = Path(label_dir)
+    frames: list[pd.DataFrame] = []
+    for filename, label in (("CE.tsv", 1), ("BE.tsv", 0)):
+        frame = pd.read_csv(
+            directory / filename,
+            sep="\t",
+            usecols=["address", "transaction_number"],
+        )
+        frame["address"] = frame["address"].astype(str).str.lower()
+        frame["source_activity"] = pd.to_numeric(
+            frame.pop("transaction_number"), errors="raise"
+        ).astype("int64")
+        frame["label"] = int(label)
+        if frame["address"].duplicated().any():
+            raise ValueError(f"{filename} contains duplicate addresses")
+        frames.append(frame)
+    labels = pd.concat(frames, ignore_index=True)
+    overlap = labels.groupby("address")["label"].nunique()
+    conflicts = overlap[overlap > 1]
+    if not conflicts.empty:
+        raise ValueError(
+            "Real-CATS CE.tsv and BE.tsv contain conflicting addresses: "
+            f"{sorted(conflicts.index.astype(str))[:10]}"
+        )
+    return labels
+
+
+def realcats_archive_addresses(zip_path: str | Path) -> set[str]:
+    """Return addresses with at least one recognized history file in the archive."""
+    observed: set[str] = set()
+    with zipfile.ZipFile(zip_path) as archive:
+        for name in archive.namelist():
+            parts = name.split("/")
+            if len(parts) == 4 and parts[3] in _FILE_TO_LAYER:
+                observed.add(parts[2].lower())
+    return observed
+
+
+def _activity_bin(activity: pd.Series) -> pd.Series:
+    boundaries = [*ACTIVITY_MATCHING_BINS, np.inf]
+    labels = [
+        f"[{int(lower)},{'inf' if np.isinf(upper) else int(upper)})"
+        for lower, upper in zip(boundaries[:-1], boundaries[1:], strict=True)
+    ]
+    return pd.cut(
+        activity,
+        bins=boundaries,
+        labels=labels,
+        right=False,
+        include_lowest=True,
+    )
+
+
+def select_activity_matched_binary_targets(
+    labels: pd.DataFrame,
+    archive_addresses: Iterable[str],
+    excluded_addresses: Iterable[str],
+    *,
+    seed: int,
+    minimum_activity: int = 3,
+) -> tuple[pd.DataFrame, dict]:
+    """Select an HF-disjoint 1:1 criminal/benign cohort within activity bins."""
+    archive = {str(value).lower() for value in archive_addresses}
+    excluded = {str(value).lower() for value in excluded_addresses}
+    working = labels.copy()
+    source_counts = {
+        str(key): int(value) for key, value in working["label"].value_counts().items()
+    }
+    working = working.loc[working["source_activity"] >= int(minimum_activity)]
+    after_activity = {
+        str(key): int(value) for key, value in working["label"].value_counts().items()
+    }
+    working = working.loc[working["address"].isin(archive)]
+    after_archive = {
+        str(key): int(value) for key, value in working["label"].value_counts().items()
+    }
+    overlap_count = int(working["address"].isin(excluded).sum())
+    working = working.loc[~working["address"].isin(excluded)].copy()
+    working["activity_bin"] = _activity_bin(working["source_activity"])
+    if working["activity_bin"].isna().any():
+        raise RuntimeError("Real-CATS activity matching produced an unassigned bin")
+
+    selected: list[pd.DataFrame] = []
+    bin_audit: dict[str, dict[str, int]] = {}
+    rng = np.random.default_rng(int(seed))
+    for activity_bin, scoped in working.groupby(
+        "activity_bin", observed=True, sort=True
+    ):
+        criminal = scoped.loc[scoped["label"] == 1].sort_values("address")
+        benign = scoped.loc[scoped["label"] == 0].sort_values("address")
+        matched = min(len(criminal), len(benign))
+        if matched:
+            criminal_indices = rng.choice(len(criminal), size=matched, replace=False)
+            benign_indices = rng.choice(len(benign), size=matched, replace=False)
+            selected.extend(
+                [criminal.iloc[np.sort(criminal_indices)], benign.iloc[np.sort(benign_indices)]]
+            )
+        bin_audit[str(activity_bin)] = {
+            "eligible_criminal": int(len(criminal)),
+            "eligible_benign": int(len(benign)),
+            "selected_per_class": int(matched),
+        }
+    if not selected:
+        raise ValueError("No activity-matched Real-CATS binary cohort can be formed")
+    result = pd.concat(selected, ignore_index=True).sort_values("address").reset_index(
+        drop=True
+    )
+    if result["address"].duplicated().any():
+        raise RuntimeError("Real-CATS binary matching selected duplicate addresses")
+    if set(result["address"]) & excluded:
+        raise RuntimeError("Real-CATS binary cohort overlaps the HF label universe")
+    matched_counts = result["label"].value_counts()
+    if len(matched_counts) != 2 or matched_counts.nunique() != 1:
+        raise RuntimeError("Real-CATS binary cohort is not class balanced")
+    result["activity_bin"] = result["activity_bin"].astype(str)
+    result["campaign_group"] = "address:" + result["address"]
+    audit = {
+        "source_label_counts": source_counts,
+        "after_minimum_source_activity": after_activity,
+        "after_archive_presence": after_archive,
+        "hf_label_universe_exclusions": overlap_count,
+        "hf_label_universe_size": int(len(excluded)),
+        "minimum_source_activity": int(minimum_activity),
+        "activity_used_as_model_feature": False,
+        "bin_counts": bin_audit,
+        "selected_label_counts": {
+            str(key): int(value) for key, value in matched_counts.items()
+        },
+    }
+    return result, audit
 
 
 def _clean_int(value: Any) -> int | None:
@@ -325,8 +461,9 @@ def convert_realcats_zip(
     resume: bool = False,
     telemetry: RunTelemetry | None = None,
     selected_addresses: Iterable[str] | None = None,
+    address_universe: Iterable[str] | None = None,
 ) -> dict:
-    """Convert criminal-address histories into deduplicated layer Parquets."""
+    """Convert selected address histories into deduplicated layer Parquets."""
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=resume)
     ensure_free_space(destination.parent, minimum_free_gib)
@@ -338,20 +475,24 @@ def convert_realcats_zip(
         raise RuntimeError("Real-CATS conversion audit exists but layer artifacts are missing")
     labels = load_criminal_labels(label_dir)
     all_labelled = set(labels["address"])
+    validation_universe = (
+        {str(address).lower() for address in address_universe}
+        if address_universe is not None
+        else all_labelled
+    )
     requested_addresses = (
         {str(address).lower() for address in selected_addresses}
         if selected_addresses is not None
         else None
     )
     if requested_addresses is not None:
-        unknown = requested_addresses - all_labelled
+        unknown = requested_addresses - validation_universe
         if unknown:
             raise ValueError(
-                "Selected Real-CATS addresses are absent from CE.tsv: "
+                "Selected Real-CATS addresses are absent from the locked label universe: "
                 f"{sorted(unknown)[:10]}"
             )
-        labels = labels.loc[labels["address"].isin(requested_addresses)].copy()
-    labelled = set(labels["address"])
+    labelled = requested_addresses if requested_addresses is not None else all_labelled
     index_path = destination / "event_index.sqlite"
     connection = _create_event_index(index_path, resume=resume)
     audit = defaultdict(int)
@@ -373,6 +514,7 @@ def convert_realcats_zip(
             }
             audit["labelled_addresses"] = len(labelled)
             audit["release_labelled_addresses"] = len(all_labelled)
+            audit["selection_universe_addresses"] = len(validation_universe)
             audit["address_selection_bounded"] = requested_addresses is not None
             audit["addresses_in_archive"] = len(by_address)
             audit["addresses_resumed"] = len(processed)
@@ -526,3 +668,27 @@ def select_realcats_targets(
         "minimum_class_size": minimum_class_size,
     }
     return selected.reset_index(drop=True), audit
+
+
+def count_target_usable_events(
+    layer_paths: dict[str, str | Path], targets: Iterable[str]
+) -> pd.Series:
+    """Count deduplicated incident events across all converted layers."""
+    target_index = pd.Index(
+        sorted({str(address).lower() for address in targets}), name="address"
+    )
+    target_set = set(target_index)
+    counts = Counter({address: 0 for address in target_index})
+    for path in layer_paths.values():
+        parquet = pq.ParquetFile(path)
+        for batch in parquet.iter_batches(columns=["from_address", "to_address"]):
+            senders = batch.column(0).to_pylist()
+            receivers = batch.column(1).to_pylist()
+            for sender, receiver in zip(senders, receivers, strict=True):
+                sender_value = str(sender).lower()
+                receiver_value = str(receiver).lower()
+                if sender_value in target_set:
+                    counts[sender_value] += 1
+                if receiver_value in target_set and receiver_value != sender_value:
+                    counts[receiver_value] += 1
+    return pd.Series(counts, index=target_index, name="usable_events", dtype="int64")

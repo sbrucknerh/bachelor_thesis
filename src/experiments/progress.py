@@ -79,9 +79,12 @@ def build_execution_progress_plan(
         dataset = datasets["huggingface"]
         artifacts = dataset["artifacts"]
         event_path = root / artifacts["events"]
-        rows = int(pq.ParquetFile(event_path).metadata.num_rows)
-        event_weight = _event_work(rows)
-        items["stage:hf-baseline"] = event_weight
+        motif_event_path = root / artifacts.get("motif_events", artifacts["events"])
+        baseline_rows = int(pq.ParquetFile(event_path).metadata.num_rows)
+        motif_rows = int(pq.ParquetFile(motif_event_path).metadata.num_rows)
+        baseline_weight = _event_work(baseline_rows)
+        motif_weight = _event_work(motif_rows)
+        items["stage:hf-baseline"] = baseline_weight
 
         target_table = pq.read_table(
             root / artifacts["targets"], columns=["cohort"]
@@ -97,16 +100,16 @@ def build_execution_progress_plan(
             checkpoint_keys = tuple(
                 f"checkpoint:hf-{variant}-delta-{delta}" for delta in deltas
             )
-            graph_key = f"step:motifs.graph_load.{event_path.stem}.{variant}"
-            items[graph_key] = event_weight
+            graph_key = f"step:motifs.graph_load.{motif_event_path.stem}.{variant}"
+            items[graph_key] = motif_weight
             graph_requirements[graph_key] = checkpoint_keys
             for key in checkpoint_keys:
-                items[key] = event_weight
+                items[key] = motif_weight
             items[f"stage:hf-motifs-{variant}"] = _MINOR_WORK_UNIT
             for cohort in cohorts:
                 items[f"stage:hf-eval-{cohort}-{variant}"] = max(
                     _MINOR_WORK_UNIT,
-                    event_weight * _EVALUATION_EVENT_PASS_FRACTION,
+                    motif_weight * _EVALUATION_EVENT_PASS_FRACTION,
                 )
         items["stage:hf-cross-order-aggregation"] = _MINOR_WORK_UNIT
 
@@ -137,6 +140,36 @@ def build_execution_progress_plan(
             )
         items["stage:realcats-ordering-evaluation"] = _MINOR_WORK_UNIT
         items["stage:realcats-cross-order-aggregation"] = _MINOR_WORK_UNIT
+        binary_artifacts = dataset["artifacts"].get("binary_layers", {})
+        if binary_artifacts:
+            binary_layers: dict[str, tuple[Path, int, float]] = {}
+            for layer, relative in sorted(binary_artifacts.items()):
+                path = root / relative
+                rows = int(pq.ParquetFile(path).metadata.num_rows)
+                binary_layers[str(layer)] = (path, rows, _event_work(rows))
+            binary_total_weight = sum(
+                weight for _, _, weight in binary_layers.values()
+            )
+            items["stage:realcats-binary-baseline"] = binary_total_weight
+            for variant in variants:
+                for layer, (path, rows, event_weight) in binary_layers.items():
+                    checkpoint_keys = tuple(
+                        f"checkpoint:realcats-binary-{layer}-{variant}-delta-{delta}"
+                        for delta in deltas
+                    )
+                    if rows:
+                        graph_key = (
+                            f"step:motifs.graph_load.realcats_binary_{layer}.{variant}"
+                        )
+                        items[graph_key] = event_weight
+                        graph_requirements[graph_key] = checkpoint_keys
+                    for key in checkpoint_keys:
+                        items[key] = event_weight
+                items[f"stage:realcats-binary-eval-{variant}"] = max(
+                    _MINOR_WORK_UNIT,
+                    binary_total_weight * _EVALUATION_EVENT_PASS_FRACTION,
+                )
+            items["stage:realcats-binary-aggregation"] = _MINOR_WORK_UNIT
 
     if "blte" in datasets:
         labels.append("BLTE")

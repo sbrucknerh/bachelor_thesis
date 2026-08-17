@@ -1,15 +1,17 @@
 \begin{table}[ht]
 \centering
-\caption{RQ1: average precision of each feature view at the selected window (canonical ordering), the combined-minus-baseline difference with its 95\,\% confidence interval, the permutation $p$-value, and the decision.}
+\caption{RQ1: average precision of each feature view at the selected window for both disjoint confirmations (canonical ordering), the combined-minus-baseline difference with its 95\,\% confidence interval, the permutation $p$-value, and the decision.}
 \label{tab:res_rq1}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}l l r r r r c c l@{}}
+\begin{tabular}{@{}r l l r r r r c c l@{}}
 \toprule
-\textbf{Cohort} & \textbf{$\delta$} & \textbf{Base} & \textbf{Motifs} & \textbf{Comb.} & \textbf{$\Delta$AP} & \textbf{95\,\% CI} & \textbf{$p$} & \textbf{Decision} \\
+\textbf{Rep.} & \textbf{Cohort} & \textbf{$\delta$} & \textbf{Base} & \textbf{Motifs} & \textbf{Comb.} & \textbf{$\Delta$AP} & \textbf{95\,\% CI} & \textbf{$p$} & \textbf{Decision} \\
 \midrule
-Controlled & 5 min & 0.603 & 0.471 & 0.533 & -0.071 & [-0.219, 0.033] & 0.663 & not rejected \\
-Prevalence & 5 min & 0.682 & 0.449 & 0.660 & -0.022 & [-0.109, 0.102] & 0.634 & not rejected \\
+1 & Controlled & 2 weeks & 0.891 & 0.739 & 0.903 & 0.013 & [0.003, 0.023] & 0.007 & reject \\
+1 & Prevalence & 30 days & 0.756 & 0.526 & 0.789 & 0.033 & [0.011, 0.056] & 0.002 & reject \\
+2 & Controlled & 2 weeks & 0.889 & 0.699 & 0.902 & 0.013 & [0.002, 0.024] & 0.021 & reject \\
+2 & Prevalence & 30 days & 0.713 & 0.464 & 0.721 & 0.008 & [-0.018, 0.033] & 0.275 & not rejected \\
 \bottomrule
 \end{tabular}
 \end{table}

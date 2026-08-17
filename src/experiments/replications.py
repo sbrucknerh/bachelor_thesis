@@ -97,7 +97,7 @@ def aggregate_hf_replications(
     run_roots: list[str | Path] | tuple[str | Path, ...],
     output_directory: str | Path,
 ) -> Path:
-    """Report all disjoint v6 HF reruns without selecting or pooling them."""
+    """Report all compatible disjoint HF reruns without selecting or pooling them."""
     roots = [Path(value).resolve() for value in run_roots]
     if len(roots) < 2:
         raise ValueError("At least two HF run roots are required for replication aggregation")

@@ -1,4 +1,4 @@
-"""Protocol-v6 checkpoint, stage, publication, and inventory primitives."""
+"""Checkpoint, stage, publication, and inventory primitives."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from src.experiments.artifacts import (
     write_json_exclusive,
     write_parquet_exclusive,
 )
-from src.experiments.constants import MOTIF_ROLE_NAMES
+from src.experiments.constants import ALL_MOTIF_ROLE_NAMES, MOTIF_ROLE_NAMES
 from src.experiments.types import RunPaths
 
 
@@ -205,10 +205,18 @@ def canonical_checkpoint_table(frame):
     """Return the fixed Arrow table used to hash motif-count checkpoint content."""
     import pyarrow as pa
 
-    expected = list(MOTIF_ROLE_NAMES)
     work = frame.copy()
     if "address" not in work.columns:
         work = work.reset_index()
+    observed = set(work.columns) - {"address"}
+    if observed == set(MOTIF_ROLE_NAMES):
+        expected = list(MOTIF_ROLE_NAMES)
+    elif observed == set(ALL_MOTIF_ROLE_NAMES):
+        expected = list(ALL_MOTIF_ROLE_NAMES)
+    else:
+        raise ValueError(
+            "Checkpoint must contain exactly the locked 32-role or 40-role catalogue"
+        )
     if work["address"].isna().any():
         raise ValueError("Checkpoint addresses must be non-null")
     if list(work.columns) != ["address", *expected]:
@@ -278,13 +286,15 @@ class CheckpointStore:
         staging.mkdir(parents=True)
         frame = compute()
         canonical = canonical_checkpoint_hash(frame)
-        write_parquet_exclusive(staging / "counts.parquet", canonical_checkpoint_table(frame).to_pandas())
+        canonical_table = canonical_checkpoint_table(frame)
+        write_parquet_exclusive(staging / "counts.parquet", canonical_table.to_pandas())
         metadata = {
             "schema_version": 1,
             "identity": identity,
             "canonical_encoding": "arrow-ipc-v5-file-uncompressed-one-batch",
             "canonical_content_sha256": canonical,
             "row_count": int(len(frame)),
+            "motif_role_columns": int(len(canonical_table.column_names) - 1),
         }
         write_json_exclusive(staging / "metadata.json", metadata)
         _fsync_tree(staging)

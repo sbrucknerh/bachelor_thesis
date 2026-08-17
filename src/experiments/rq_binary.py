@@ -10,9 +10,10 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 from src.experiments.artifacts import write_csv_exclusive, write_json_exclusive, write_parquet_exclusive
 from src.experiments.constants import (
-    HF_DIAGNOSTIC_ARM_NAMES,
-    HF_DIAGNOSTIC_COMPARISONS,
     HF_REPRESENTATION_ANALYSIS,
+    HF_TRIANGLE_WINDOW_ANALYSIS,
+    MOTIF_ROLE_NAMES,
+    TRIANGLE_ROLE_NAMES,
 )
 from src.experiments.features import (
     aggregate_features_from_parquet,
@@ -64,7 +65,7 @@ def _diagnostic_feature_arms(
     incoming_star_roles: list[str],
 ) -> dict[str, pd.DataFrame]:
     representations = binary_motif_representations(counts, incoming_star_roles)
-    return {
+    arms = {
         **representations,
         "baseline": baseline,
         "baseline_presence": _joined_baseline(
@@ -84,6 +85,31 @@ def _diagnostic_feature_arms(
         ),
         "combined": _joined_baseline(baseline, representations["motifs"]),
     }
+    if set(TRIANGLE_ROLE_NAMES) <= set(counts.columns):
+        without_triangles = log_motif_counts(counts.loc[:, MOTIF_ROLE_NAMES])
+        triangles = log_motif_counts(counts.loc[:, TRIANGLE_ROLE_NAMES])
+        arms.update(
+            {
+                "triangles_only": triangles,
+                "baseline_triangles": _joined_baseline(baseline, triangles),
+                "motifs_without_triangles": without_triangles,
+                "combined_without_triangles": _joined_baseline(
+                    baseline, without_triangles
+                ),
+            }
+        )
+    return arms
+
+
+def _representation_comparison_specs(definition: dict) -> tuple[tuple[str, str, str], ...]:
+    return tuple(
+        (
+            str(item["comparison"]),
+            str(item["reference_arm"]),
+            str(item["alternative_arm"]),
+        )
+        for item in definition["formal_comparisons"]
+    )
 
 
 def _append_binary_output(
@@ -173,29 +199,53 @@ def _coverage_summary(
 ) -> pd.DataFrame:
     records: list[pd.DataFrame] = []
     for delta, counts in counts_by_delta.items():
-        for scope in ("all", "development", "test"):
-            addresses = (
-                indexed.index
-                if scope == "all"
-                else indexed.index[indexed["split"] == scope]
+        representations = {"all_40_roles": counts}
+        if set(TRIANGLE_ROLE_NAMES) <= set(counts.columns):
+            representations.update(
+                {
+                    "non_triangle_32_roles": counts.loc[:, MOTIF_ROLE_NAMES],
+                    "triangles_only": counts.loc[:, TRIANGLE_ROLE_NAMES],
+                }
             )
-            scoped_counts = counts.loc[addresses]
-            labels = indexed.loc[addresses, "label"].astype(int)
-            by_label = motif_coverage(scoped_counts, labels).reset_index()
-            by_label["label"] = by_label["label"].astype(str)
-            overall = motif_coverage(scoped_counts).assign(label="all")
-            frame = pd.concat([overall, by_label], ignore_index=True)
-            frame["zero"] = frame["n"] - frame["nonzero"]
-            frame["zero_fraction"] = 1.0 - frame["coverage"]
-            frame = frame.assign(
-                replication_index=int(replication_index),
-                delta=int(delta),
-                cohort=cohort,
-                variant=variant,
-                scope=scope,
-            )
-            records.append(frame)
+        for representation, representation_counts in representations.items():
+            for scope in ("all", "development", "test"):
+                addresses = (
+                    indexed.index
+                    if scope == "all"
+                    else indexed.index[indexed["split"] == scope]
+                )
+                scoped_counts = representation_counts.loc[addresses]
+                labels = indexed.loc[addresses, "label"].astype(int)
+                by_label = motif_coverage(scoped_counts, labels).reset_index()
+                by_label["label"] = by_label["label"].astype(str)
+                overall = motif_coverage(scoped_counts).assign(label="all")
+                frame = pd.concat([overall, by_label], ignore_index=True)
+                frame["zero"] = frame["n"] - frame["nonzero"]
+                frame["zero_fraction"] = 1.0 - frame["coverage"]
+                frame = frame.assign(
+                    replication_index=int(replication_index),
+                    delta=int(delta),
+                    cohort=cohort,
+                    variant=variant,
+                    scope=scope,
+                    representation=representation,
+                )
+                records.append(frame)
     return pd.concat(records, ignore_index=True)
+
+
+def _delta_selection_tables(
+    cv_scores: pd.DataFrame,
+) -> tuple[int, int, pd.DataFrame]:
+    maximum_delta, selection = select_delta_maximum(cv_scores)
+    one_se_delta, one_se_selection = select_delta_one_standard_error(cv_scores)
+    selection = selection.merge(
+        one_se_selection[["delta", "within_one_se", "selected_one_se"]],
+        on="delta",
+        how="left",
+        validate="one_to_one",
+    )
+    return maximum_delta, one_se_delta, selection
 
 
 def _evaluate_cohort(
@@ -221,11 +271,31 @@ def _evaluate_cohort(
         "hf_representation_analysis", HF_REPRESENTATION_ANALYSIS
     )
     incoming_star_roles = list(representation_definition["incoming_star_roles"])
+    diagnostic_arm_names = tuple(representation_definition["diagnostic_arms"])
+    comparison_specs = _representation_comparison_specs(representation_definition)
 
-    motif_features = {delta: log_motif_counts(counts) for delta, counts in motif_counts.items()}
+    motif_features = {
+        delta: log_motif_counts(counts) for delta, counts in motif_counts.items()
+    }
+    non_triangle_features = {
+        delta: log_motif_counts(counts.loc[:, MOTIF_ROLE_NAMES])
+        for delta, counts in motif_counts.items()
+    }
+    triangle_features = {
+        delta: log_motif_counts(counts.loc[:, TRIANGLE_ROLE_NAMES])
+        for delta, counts in motif_counts.items()
+    }
     combined_features = {
         delta: _joined_baseline(baseline, features)
         for delta, features in motif_features.items()
+    }
+    combined_non_triangle_features = {
+        delta: _joined_baseline(baseline, features)
+        for delta, features in non_triangle_features.items()
+    }
+    baseline_triangle_features = {
+        delta: _joined_baseline(baseline, features)
+        for delta, features in triangle_features.items()
     }
     cv_context = (
         telemetry.step(f"hf.cv.{cohort}.{variant}", deltas=len(protocol["deltas"]))
@@ -241,15 +311,28 @@ def _evaluate_cohort(
             development_labels,
             development_folds,
         )
-    maximum_delta, selection = select_delta_maximum(cv_scores)
-    one_se_delta, one_se_selection = select_delta_one_standard_error(cv_scores)
-    selection = selection.merge(
-        one_se_selection[
-            ["delta", "within_one_se", "selected_one_se"]
-        ],
-        on="delta",
-        how="left",
-        validate="one_to_one",
+        cv_scores_32 = cv_delta_scores(
+            {
+                delta: features.loc[development_addresses]
+                for delta, features in combined_non_triangle_features.items()
+            },
+            development_labels,
+            development_folds,
+        )
+        cv_scores_triangles = cv_delta_scores(
+            {
+                delta: features.loc[development_addresses]
+                for delta, features in triangle_features.items()
+            },
+            development_labels,
+            development_folds,
+        )
+    maximum_delta, one_se_delta, selection = _delta_selection_tables(cv_scores)
+    maximum_delta_32, one_se_delta_32, selection_32 = _delta_selection_tables(
+        cv_scores_32
+    )
+    maximum_delta_triangles, one_se_delta_triangles, selection_triangles = (
+        _delta_selection_tables(cv_scores_triangles)
     )
     selected_delta = maximum_delta
 
@@ -284,11 +367,42 @@ def _evaluate_cohort(
                 development_labels,
                 combined_features[delta].loc[test_addresses],
             )
-        scores_by_delta[delta] = {"motifs": motif_scores, "combined": combined_scores}
+            _, non_triangle_scores = fit_binary_scores(
+                non_triangle_features[delta].loc[development_addresses],
+                development_labels,
+                non_triangle_features[delta].loc[test_addresses],
+            )
+            _, combined_non_triangle_scores = fit_binary_scores(
+                combined_non_triangle_features[delta].loc[development_addresses],
+                development_labels,
+                combined_non_triangle_features[delta].loc[test_addresses],
+            )
+            _, triangle_scores = fit_binary_scores(
+                triangle_features[delta].loc[development_addresses],
+                development_labels,
+                triangle_features[delta].loc[test_addresses],
+            )
+            _, baseline_triangle_scores = fit_binary_scores(
+                baseline_triangle_features[delta].loc[development_addresses],
+                development_labels,
+                baseline_triangle_features[delta].loc[test_addresses],
+            )
+        scores_by_delta[delta] = {
+            "motifs": motif_scores,
+            "combined": combined_scores,
+            "motifs_without_triangles": non_triangle_scores,
+            "combined_without_triangles": combined_non_triangle_scores,
+            "triangles_only": triangle_scores,
+            "baseline_triangles": baseline_triangle_scores,
+        }
         for arm, scores in (
             ("baseline", baseline_scores),
             ("motifs", motif_scores),
             ("combined", combined_scores),
+            ("motifs_without_triangles", non_triangle_scores),
+            ("combined_without_triangles", combined_non_triangle_scores),
+            ("triangles_only", triangle_scores),
+            ("baseline_triangles", baseline_triangle_scores),
         ):
             _append_binary_output(
                 metric_records=metric_records,
@@ -311,20 +425,21 @@ def _evaluate_cohort(
     )
     diagnostic_scores = {
         "baseline": baseline_scores,
-        "motifs": scores_by_delta[selected_delta]["motifs"],
-        "combined": scores_by_delta[selected_delta]["combined"],
+        **scores_by_delta[selected_delta],
     }
     diagnostic_context = (
         telemetry.step(
             f"hf.representation_models.{cohort}.{variant}",
-            arms=len(HF_DIAGNOSTIC_ARM_NAMES),
+            arms=len(diagnostic_arm_names),
             delta=int(selected_delta),
         )
         if telemetry
         else nullcontext()
     )
     with diagnostic_context:
-        for arm in HF_DIAGNOSTIC_ARM_NAMES:
+        for arm in diagnostic_arm_names:
+            if arm in diagnostic_scores:
+                continue
             features = diagnostic_features[arm]
             _, scores = fit_binary_scores(
                 features.loc[development_addresses],
@@ -375,19 +490,74 @@ def _evaluate_cohort(
             seed=int(protocol["random_seed"]),
         )
 
+    triangle_window_reference = scores_by_delta[maximum_delta_32][
+        "combined_without_triangles"
+    ]
+    triangle_window_alternative = scores_by_delta[maximum_delta]["combined"]
+    triangle_window_comparison = {
+        "definition": protocol.get(
+            "hf_triangle_window_analysis", HF_TRIANGLE_WINDOW_ANALYSIS
+        ),
+        "all_40_selected_delta": int(maximum_delta),
+        "all_40_one_se_delta": int(one_se_delta),
+        "non_triangle_32_selected_delta": int(maximum_delta_32),
+        "non_triangle_32_one_se_delta": int(one_se_delta_32),
+        "triangles_only_selected_delta": int(maximum_delta_triangles),
+        "triangles_only_one_se_delta": int(one_se_delta_triangles),
+        "all_40_average_precision": float(
+            average_precision_score(test_labels, triangle_window_alternative)
+        ),
+        "non_triangle_32_average_precision": float(
+            average_precision_score(test_labels, triangle_window_reference)
+        ),
+        "triangles_only_average_precision": float(
+            average_precision_score(
+                test_labels,
+                scores_by_delta[maximum_delta_triangles]["triangles_only"],
+            )
+        ),
+    }
+    triangle_window_comparison["observed_delta_ap"] = float(
+        triangle_window_comparison["all_40_average_precision"]
+        - triangle_window_comparison["non_triangle_32_average_precision"]
+    )
+    if variant == "canonical":
+        triangle_window_permutation = grouped_score_swap_test(
+            test_labels,
+            triangle_window_reference,
+            triangle_window_alternative,
+            groups,
+            iterations=int(protocol["permutations"]),
+            seed=int(protocol["random_seed"]),
+        )
+        triangle_window_bootstrap = stratified_group_bootstrap_delta(
+            test_labels,
+            triangle_window_reference,
+            triangle_window_alternative,
+            groups,
+            iterations=int(protocol["bootstraps"]),
+            seed=int(protocol["random_seed"]),
+        )
+        triangle_window_comparison.update(
+            {
+                "permutation": triangle_window_permutation,
+                "bootstrap": triangle_window_bootstrap,
+            }
+        )
+
     representation_effects = {
         comparison: float(
             average_precision_score(test_labels, diagnostic_scores[alternative])
             - average_precision_score(test_labels, diagnostic_scores[reference])
         )
-        for comparison, reference, alternative in HF_DIAGNOSTIC_COMPARISONS
+        for comparison, reference, alternative in comparison_specs
     }
     representation_comparisons: list[dict] = []
     if variant == representation_definition["formal_ordering_variant"]:
         representation_context = (
             telemetry.step(
                 f"hf.representation_statistics.{cohort}.{variant}",
-                comparisons=len(HF_DIAGNOSTIC_COMPARISONS),
+                comparisons=len(comparison_specs),
                 permutations=int(protocol["permutations"]),
                 bootstraps=int(protocol["bootstraps"]),
             )
@@ -395,7 +565,7 @@ def _evaluate_cohort(
             else nullcontext()
         )
         with representation_context:
-            for comparison, reference, alternative in HF_DIAGNOSTIC_COMPARISONS:
+            for comparison, reference, alternative in comparison_specs:
                 permutation = grouped_score_swap_test(
                     test_labels,
                     diagnostic_scores[reference],
@@ -547,7 +717,18 @@ def _evaluate_cohort(
     write_parquet_exclusive(paths.predictions / f"{stem}.parquet", predictions)
     write_csv_exclusive(paths.metrics / f"{stem}_metrics.csv", metrics)
     write_csv_exclusive(paths.metrics / f"{stem}_cv.csv", cv_scores)
+    write_csv_exclusive(paths.metrics / f"{stem}_cv_32.csv", cv_scores_32)
+    write_csv_exclusive(
+        paths.metrics / f"{stem}_cv_triangles.csv", cv_scores_triangles
+    )
     write_csv_exclusive(paths.metrics / f"{stem}_delta_selection.csv", selection)
+    write_csv_exclusive(
+        paths.metrics / f"{stem}_delta_selection_32.csv", selection_32
+    )
+    write_csv_exclusive(
+        paths.metrics / f"{stem}_delta_selection_triangles.csv",
+        selection_triangles,
+    )
     write_csv_exclusive(paths.metrics / f"{stem}_coverage.csv", coverage)
     if variant == representation_definition["formal_ordering_variant"]:
         role_diagnostics = _role_diagnostics(
@@ -577,6 +758,7 @@ def _evaluate_cohort(
             "effects": representation_effects,
             "formal_comparisons": representation_comparisons,
         },
+        "triangle_window_analysis": triangle_window_comparison,
         "xgboost_robustness": xgboost_robustness,
         "rq2_selected_vs_alternatives": comparisons,
     }
@@ -597,12 +779,13 @@ def _evaluate_cohort(
                 arm: float(selected_metrics.loc[arm, "average_precision"])
                 for arm in (
                     "baseline",
-                    "baseline_presence",
                     "baseline_volume",
-                    "baseline_composition_volume",
                     "baseline_incoming_stars",
+                    "baseline_triangles",
+                    "combined_without_triangles",
                     "combined",
                 )
+                if arm in selected_metrics.index
             },
             paths.figures / f"rq1_representation_ablation_{cohort}.pdf",
             f"RQ1 representation diagnostics ({cohort} cohort)",
@@ -628,7 +811,10 @@ def _evaluate_cohort(
             f"RQ2 temporal-window sensitivity ({cohort} cohort)",
         )
         plot_motif_coverage(
-            coverage.loc[coverage["scope"] == "all"],
+            coverage.loc[
+                (coverage["scope"] == "all")
+                & (coverage["representation"] == "all_40_roles")
+            ],
             paths.figures / f"rq2_motif_coverage_{cohort}.pdf",
             f"RQ2 motif coverage ({cohort} cohort)",
         )
@@ -685,7 +871,9 @@ def _aggregate_hf_results(
                 float(result["representation_analysis"]["effects"][comparison])
                 for result in results
             ]
-            for comparison, _, _ in HF_DIAGNOSTIC_COMPARISONS
+            for comparison, _, _ in _representation_comparison_specs(
+                protocol.get("hf_representation_analysis", HF_REPRESENTATION_ANALYSIS)
+            )
         }
         formal = next(
             (
@@ -717,6 +905,8 @@ def _aggregate_hf_results(
     delta_rows = []
     representation_rows = []
     xgboost_rows = []
+    triangle_window_rows = []
+    representation_delta_rows = []
     for result in variant_results:
         hypothesis_rows.append(
             {
@@ -793,18 +983,83 @@ def _aggregate_hf_results(
                     "reject_h0": xgboost["p_value_one_sided"] < alpha,
                 }
             )
+        triangle_window = result["triangle_window_analysis"]
+        triangle_window_row = {
+            "replication_index": replication_index,
+            "cohort": result["cohort"],
+            "ordering_variant": result["variant"],
+            "all_40_selected_delta": triangle_window["all_40_selected_delta"],
+            "non_triangle_32_selected_delta": triangle_window[
+                "non_triangle_32_selected_delta"
+            ],
+            "triangles_only_selected_delta": triangle_window[
+                "triangles_only_selected_delta"
+            ],
+            "all_40_average_precision": triangle_window[
+                "all_40_average_precision"
+            ],
+            "non_triangle_32_average_precision": triangle_window[
+                "non_triangle_32_average_precision"
+            ],
+            "triangles_only_average_precision": triangle_window[
+                "triangles_only_average_precision"
+            ],
+            "observed_delta_ap": triangle_window["observed_delta_ap"],
+        }
+        if "permutation" in triangle_window:
+            triangle_window_row.update(
+                {
+                    "p_value": triangle_window["permutation"][
+                        "p_value_one_sided"
+                    ],
+                    "ci_lower": triangle_window["bootstrap"]["ci_95"][0],
+                    "ci_upper": triangle_window["bootstrap"]["ci_95"][1],
+                }
+            )
+            triangle_window_rows.append(triangle_window_row)
+        for representation, selected_key, one_se_key, ap_key in (
+            (
+                "all_40_roles",
+                "all_40_selected_delta",
+                "all_40_one_se_delta",
+                "all_40_average_precision",
+            ),
+            (
+                "non_triangle_32_roles",
+                "non_triangle_32_selected_delta",
+                "non_triangle_32_one_se_delta",
+                "non_triangle_32_average_precision",
+            ),
+            (
+                "triangles_only",
+                "triangles_only_selected_delta",
+                "triangles_only_one_se_delta",
+                "triangles_only_average_precision",
+            ),
+        ):
+            representation_delta_rows.append(
+                {
+                    "replication_index": replication_index,
+                    "cohort": result["cohort"],
+                    "ordering_variant": result["variant"],
+                    "representation": representation,
+                    "selected_delta": triangle_window[selected_key],
+                    "one_se_delta": triangle_window[one_se_key],
+                    "test_average_precision": triangle_window[ap_key],
+                }
+            )
 
     role_frames = [
         pd.read_csv(
             source_paths.metrics
-            / f"hf_{cohort}_{HF_REPRESENTATION_ANALYSIS['formal_ordering_variant']}_role_diagnostics.csv"
+            / f"hf_{cohort}_{representation_sensitivity['formal_ordering_variant']}_role_diagnostics.csv"
         )
         for cohort in sorted(targets["cohort"].unique())
     ]
     coverage_frames = [
         pd.read_csv(
             source_paths.metrics
-            / f"hf_{cohort}_{HF_REPRESENTATION_ANALYSIS['formal_ordering_variant']}_coverage.csv"
+            / f"hf_{cohort}_{representation_sensitivity['formal_ordering_variant']}_coverage.csv"
         )
         for cohort in sorted(targets["cohort"].unique())
     ]
@@ -812,9 +1067,24 @@ def _aggregate_hf_results(
         output_paths.tables / "rq1_hypothesis_tests.csv",
         pd.DataFrame(hypothesis_rows),
     )
+    representation_frame = pd.DataFrame(representation_rows)
     write_csv_exclusive(
         output_paths.tables / "rq1_representation_tests.csv",
-        pd.DataFrame(representation_rows),
+        representation_frame,
+    )
+    triangle_comparisons = {
+        "baseline_triangles_vs_baseline",
+        "combined_vs_combined_without_triangles",
+    }
+    write_csv_exclusive(
+        output_paths.tables / "rq1_triangle_ablation.csv",
+        representation_frame.loc[
+            representation_frame["comparison"].isin(triangle_comparisons)
+        ].reset_index(drop=True),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq1_triangle_window_analysis.csv",
+        pd.DataFrame(triangle_window_rows),
     )
     write_csv_exclusive(
         output_paths.tables / "rq1_role_diagnostics.csv",
@@ -831,6 +1101,10 @@ def _aggregate_hf_results(
     write_csv_exclusive(
         output_paths.tables / "rq2_motif_coverage.csv",
         pd.concat(coverage_frames, ignore_index=True),
+    )
+    write_csv_exclusive(
+        output_paths.tables / "rq2_representation_delta_selection.csv",
+        pd.DataFrame(representation_delta_rows),
     )
     write_json_exclusive(
         output_paths.metrics / "hf_ordering_sensitivity.json", sensitivity
@@ -849,14 +1123,18 @@ def execute_hf(
     targets = pd.read_parquet(_artifact_path(paths.root, dataset["artifacts"]["targets"]))
     folds = pd.read_parquet(_artifact_path(paths.root, dataset["artifacts"]["folds"]))
     event_path = _artifact_path(paths.root, dataset["artifacts"]["events"])
+    motif_event_path = _artifact_path(
+        paths.root,
+        dataset["artifacts"].get("motif_events", dataset["artifacts"]["events"]),
+    )
     preflight_context = (
-        telemetry.step("hf.resource_preflight", source=str(event_path))
+        telemetry.step("hf.resource_preflight", source=str(motif_event_path))
         if telemetry
         else nullcontext()
     )
     with preflight_context:
         report = require_in_memory_execution(
-            event_path,
+            motif_event_path,
             expansion_factor=4.0,
             columns=("timestamp", "from_address", "to_address"),
         )
@@ -881,15 +1159,18 @@ def execute_hf(
         if telemetry:
             telemetry.progress("hf.ordering_variants", variant=variant, status_detail="starting")
         graph = RaphtoryExperimentGraph.from_parquet(
-            event_path,
+            motif_event_path,
             variant,
             paths.data / "duckdb_tmp" / "hf" / variant,
             telemetry=telemetry,
         )
-        motif_counts = graph.sweep(protocol["deltas"], target_addresses)
+        motif_counts = graph.sweep_all(protocol["deltas"], target_addresses)
         del graph
         long_counts = pd.concat(
-            [counts.reset_index().assign(delta=delta, variant=variant) for delta, counts in motif_counts.items()],
+            [
+                counts.reset_index().assign(delta=delta, variant=variant)
+                for delta, counts in motif_counts.items()
+            ],
             ignore_index=True,
         )
         write_parquet_exclusive(paths.features / f"hf_motifs_{variant}.parquet", long_counts)
@@ -917,7 +1198,7 @@ def execute_hf(
     return _aggregate_hf_results(paths, paths, protocol, targets, variant_results)
 
 
-def execute_hf_v6(
+def execute_hf_v8(
     paths,
     protocol: dict,
     stage_manager,
@@ -925,7 +1206,7 @@ def execute_hf_v6(
     scratch_directory: Path,
     telemetry: RunTelemetry | None = None,
 ) -> dict:
-    """Checkpointed v6 execution preserving established public filenames."""
+    """Checkpointed v8 HF execution preserving established public filenames."""
     import json
 
     dataset = protocol["datasets"]["huggingface"]
@@ -936,6 +1217,10 @@ def execute_hf_v6(
         _artifact_path(paths.root, dataset["artifacts"]["folds"])
     )
     event_path = _artifact_path(paths.root, dataset["artifacts"]["events"])
+    motif_event_path = _artifact_path(
+        paths.root,
+        dataset["artifacts"].get("motif_events", dataset["artifacts"]["events"]),
+    )
     target_addresses = targets["address"].astype(str)
 
     with stage_manager.stage("hf-baseline", {"dataset": "huggingface"}) as stage:
@@ -960,7 +1245,7 @@ def execute_hf_v6(
         graph = None
         if not all((checkpoints.root / checkpoint_id).exists() for checkpoint_id in checkpoint_ids):
             graph = RaphtoryExperimentGraph.from_parquet(
-                event_path,
+                motif_event_path,
                 variant,
                 scratch_directory / "hf" / variant,
                 telemetry=telemetry,
@@ -985,9 +1270,13 @@ def execute_hf_v6(
                         "ordering_variant": variant,
                         "delta": int(delta),
                         "targets_sha256": dataset["artifacts"]["targets_sha256"],
-                        "events_sha256": dataset["artifacts"]["events_sha256"],
+                        "motif_events_sha256": dataset["artifacts"].get(
+                            "motif_events_sha256",
+                            dataset["artifacts"]["events_sha256"],
+                        ),
+                        "motif_roles_retained": 40,
                     },
-                    lambda delta=int(delta), graph=graph: graph.count(
+                    lambda delta=int(delta), graph=graph: graph.count_all(
                         delta,
                         target_addresses,
                     ),

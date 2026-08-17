@@ -1,4 +1,4 @@
-"""Resumable, integrity-chained protocol-v6 experiment execution."""
+"""Resumable, integrity-chained current-protocol experiment execution."""
 
 from __future__ import annotations
 
@@ -22,13 +22,18 @@ from src.experiments.constants import (
     DELTA_SELECTION,
     DELTAS,
     EVENT_EXECUTION,
+    HF_CONFIRMATION_EXCLUSION_POLICY,
     HF_COHORT_ELIGIBILITY,
+    HF_RELEASE_IDENTITY,
     HF_REPRESENTATION_ANALYSIS,
+    HF_TRIANGLE_ANALYSIS,
+    HF_TRIANGLE_WINDOW_ANALYSIS,
     MULTICLASS_LOGISTIC_PARAMS,
     N_BOOTSTRAPS,
     N_PERMUTATIONS,
     PROTOCOL_VERSION,
     REALCATS_CATEGORY_ELIGIBILITY,
+    REALCATS_BINARY_REPLICATION,
     REALCATS_RESEARCH_QUESTIONS,
     RESOURCE_CONSTANTS,
     replication_seed_definition,
@@ -101,6 +106,25 @@ def _verify_locked_scientific_definition(protocol: dict) -> None:
         raise RuntimeError("Temporal-window selection rules changed after preparation")
     if protocol.get("hf_representation_analysis") != HF_REPRESENTATION_ANALYSIS:
         raise RuntimeError("HF representation-analysis definition changed after preparation")
+    if protocol.get("hf_triangle_analysis") != HF_TRIANGLE_ANALYSIS:
+        raise RuntimeError("HF triangle-analysis definition changed after preparation")
+    if protocol.get("hf_triangle_window_analysis") != HF_TRIANGLE_WINDOW_ANALYSIS:
+        raise RuntimeError("HF triangle-window definition changed after preparation")
+    if protocol.get("hf_release_identity") != HF_RELEASE_IDENTITY:
+        raise RuntimeError("HF release identity changed after preparation")
+    if (
+        protocol.get("hf_confirmation_exclusion_policy")
+        != HF_CONFIRMATION_EXCLUSION_POLICY
+    ):
+        raise RuntimeError("HF confirmation-exclusion policy changed after preparation")
+    expected_binary_replication = REALCATS_BINARY_REPLICATION
+    if protocol.get("execution_profile") == "smoke":
+        expected_binary_replication = {
+            **REALCATS_BINARY_REPLICATION,
+            "smoke_override": True,
+        }
+    if protocol.get("realcats_binary_replication") != expected_binary_replication:
+        raise RuntimeError("Real-CATS binary replication changed after preparation")
     replication = protocol.get("replication", {})
     try:
         expected_replication = replication_seed_definition(replication["index"])
@@ -141,6 +165,27 @@ def _verify_locked_scientific_definition(protocol: dict) -> None:
             f"Protocol-v{PROTOCOL_VERSION} resource constants changed after preparation"
         )
     selected = set(protocol.get("research_questions", []))
+    if (
+        protocol.get("execution_profile") == "thesis"
+        and {"rq1", "rq2"} & selected
+    ):
+        if int(replication.get("index", -1)) < int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_replication_index"]
+        ):
+            raise RuntimeError("HF replication index is below the v8 locked minimum")
+        if len(exclusions) < int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_reference_runs"]
+        ):
+            raise RuntimeError("HF prior-run exclusion references are incomplete")
+        unique_prior = int(
+            protocol["datasets"]["huggingface"]
+            .get("confirmation_exclusions", {})
+            .get("unique_prior_node_ids", 0)
+        )
+        if unique_prior < int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_unique_prior_targets"]
+        ):
+            raise RuntimeError("HF prior-target exclusion lineage is incomplete")
     realcats_selected = selected & REALCATS_RESEARCH_QUESTIONS
     if realcats_selected and realcats_selected != REALCATS_RESEARCH_QUESTIONS:
         raise RuntimeError("RQ3 and RQ4 must share one locked Real-CATS execution")
@@ -186,13 +231,29 @@ def _derive_citable(
         reasons.append("synthetic validation did not pass")
     if generated_audit.get("files_checked", 0) <= 0:
         reasons.append("no generated result artifacts were schema-validated")
-    selected = set(protocol.get("research_questions", []))
     orders = protocol.get("ordering_variants", [])
     deltas = protocol.get("deltas", [])
     if not validation_only and orders != [
         "canonical", "reverse", "random_0", "random_1", "random_2", "random_3", "random_4"
     ]:
         reasons.append("ordering-sensitivity variants are not thesis-locked")
+    selected = set(protocol.get("research_questions", []))
+    if int(protocol.get("protocol_version", 0)) >= 8 and {"rq1", "rq2"} & selected:
+        replication = protocol.get("replication", {})
+        references = replication.get("hf_exclusion_references", [])
+        exclusions = (
+            protocol.get("datasets", {})
+            .get("huggingface", {})
+            .get("confirmation_exclusions", {})
+        )
+        if len(references) < int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_reference_runs"]
+        ):
+            reasons.append("protocol-v8 HF exclusion run count is incomplete")
+        if int(exclusions.get("unique_prior_node_ids", 0)) < int(
+            HF_CONFIRMATION_EXCLUSION_POLICY["minimum_unique_prior_targets"]
+        ):
+            reasons.append("protocol-v8 HF prior-target exclusion coverage is incomplete")
     required_public: list[Path] = [root / "metrics" / "synthetic_validation.json"]
     expected_checkpoints = 0
     if {"rq1", "rq2"} & selected:
@@ -202,10 +263,13 @@ def _derive_citable(
                 root / "features" / "hf_baseline.parquet",
                 root / "tables" / "rq1_hypothesis_tests.csv",
                 root / "tables" / "rq1_representation_tests.csv",
+                root / "tables" / "rq1_triangle_ablation.csv",
+                root / "tables" / "rq1_triangle_window_analysis.csv",
                 root / "tables" / "rq1_role_diagnostics.csv",
                 root / "tables" / "rq1_xgboost_robustness.csv",
                 root / "tables" / "rq2_delta_comparisons.csv",
                 root / "tables" / "rq2_motif_coverage.csv",
+                root / "tables" / "rq2_representation_delta_selection.csv",
                 root / "metrics" / "hf_ordering_sensitivity.json",
                 root / "metrics" / "hf_representation_sensitivity.json",
             ]
@@ -213,6 +277,12 @@ def _derive_citable(
     if selected & REALCATS_RESEARCH_QUESTIONS:
         layer_count = len(protocol["datasets"]["realcats"]["artifacts"]["layers"])
         expected_checkpoints += layer_count * len(orders) * len(deltas)
+        binary_layer_count = len(
+            protocol["datasets"]["realcats"]["artifacts"].get(
+                "binary_layers", {}
+            )
+        )
+        expected_checkpoints += binary_layer_count * len(orders) * len(deltas)
         required_public.extend(
             [
                 root / "tables" / "rq3_global_results.csv",
@@ -221,6 +291,10 @@ def _derive_citable(
                 root / "tables" / "rq4_category_results.csv",
                 root / "metrics" / "realcats_ordering_sensitivity.json",
                 root / "metrics" / "realcats_rq4_ordering_sensitivity.json",
+                root / "features" / "realcats_binary_baseline.parquet",
+                root / "tables" / "realcats_binary_rq1_results.csv",
+                root / "tables" / "realcats_binary_rq2_results.csv",
+                root / "metrics" / "realcats_binary_ordering_sensitivity.json",
             ]
         )
     if "blte" in selected:
@@ -372,9 +446,9 @@ def execute_experiment(
                     selected = set(protocol["research_questions"])
                     scratch = attempt.directory / "scratch" / "duckdb"
                     if {"rq1", "rq2"} & selected:
-                        from src.experiments.rq_binary import execute_hf_v6
+                        from src.experiments.rq_binary import execute_hf_v8
 
-                        results["huggingface"] = execute_hf_v6(
+                        results["huggingface"] = execute_hf_v8(
                             paths,
                             protocol,
                             stages,
@@ -383,9 +457,20 @@ def execute_experiment(
                             telemetry=telemetry,
                         )
                     if REALCATS_RESEARCH_QUESTIONS <= selected:
-                        from src.experiments.rq_multiclass import execute_realcats_v6
+                        from src.experiments.rq_multiclass import execute_realcats_v8
+                        from src.experiments.rq_realcats_binary import (
+                            execute_realcats_binary,
+                        )
 
-                        results["realcats"] = execute_realcats_v6(
+                        results["realcats"] = execute_realcats_v8(
+                            paths,
+                            protocol,
+                            stages,
+                            checkpoints,
+                            scratch,
+                            telemetry=telemetry,
+                        )
+                        results["realcats_binary"] = execute_realcats_binary(
                             paths,
                             protocol,
                             stages,

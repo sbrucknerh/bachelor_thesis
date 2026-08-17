@@ -694,10 +694,10 @@ This leads to the next step. If Ethereum is treated as a temporal transaction gr
 
 \subsection{Types of Coordinated Malicious Behaviour on Ethereum}
 \label{sec:scam_types}
-The Ethereum blockchain hosts a broad range of fraudulent and malicious activities, made possible by the combination of pseudo-anonymity, programmable smart contracts, and the irreversibility of on-chain transactions. A taxonomy of cybercrime on the Ethereum blockchain derived from 5,644 verified malicious addresses identifies 19 distinct categories of fraud, with the total stolen funds across the observation period reaching \$1.65 billion on-chain alone, a figure that exceeds self-reported losses to the U.S. Federal Trade Commission by a factor of almost 16, underscoring the scale of underreporting \citep{hornuf2025cybercrime}. This thesis focuses on the subset of malicious activity that is \emph{coordinated}, meaning it involves multiple addresses interacting in structured, time-local patterns. The following categories are most relevant.
+The Ethereum blockchain hosts a broad range of fraudulent and malicious activities, made possible by the combination of pseudo-anonymity, programmable smart contracts, and the irreversibility of on-chain transactions. A taxonomy of cybercrime on the Ethereum blockchain derived from 5,644 verified malicious addresses identifies 19 distinct categories of fraud, with the total stolen funds across the observation period reaching \$1.65 billion on-chain alone, a figure that exceeds self-reported losses to the U.S. Federal Trade Commission by a factor of almost 16, underscoring the scale of underreporting \citep{hornuf2025cybercrime}. Two sets of categories are distinguished below. The empirical comparison in RQ3 and RQ4 uses the nine exact Real-CATS labels that pass the minimum-size rule: Blackmail Scam, Contract Exploit Scam, Fake Returns Scam, Hack Scam, Impersonation Scam, NFT Airdrop Scam, Phishing Scam, Pigbutchering Scam, and Rug Pull Scam \citep{shi2025realcats}. Ponzi schemes, pump-and-dump schemes, money laundering, and giveaway scams remain useful examples of temporal mechanisms, but they are not treated as inferential Real-CATS classes in this thesis. Real-CATS labels reported behaviour types rather than independently verified coordination events, so coordination is a proposed network interpretation, not an additional ground-truth label.
 
-\paragraph{Ponzi Schemes.}
-Ponzi schemes are the largest category of on-chain cybercrime by aggregate stolen value, accounting for approximately 60\% of all funds transferred to verified malicious addresses on Ethereum \citep{hornuf2025cybercrime}. Operators promise high returns to investors and use incoming deposits from new participants to pay earlier ones, creating the appearance of a functioning investment operation \citep{bartoletti2020smart}. On Ethereum, Ponzi logic is often encoded directly in smart contracts, which execute the redistribution of funds automatically and transparently \citep{chen2020survey}. The transaction structure is inherently coordinated: funds flow from many victim addresses into a central contract address, which then redistributes them outward in a pattern that recurs as long as new participants enter. This creates characteristic fan-in and fan-out motif patterns in the transaction graph.
+\paragraph{Ponzi Schemes (broader context).}
+Ponzi schemes are the largest category of on-chain cybercrime by aggregate stolen value, accounting for approximately 60\% of all funds transferred to verified malicious addresses on Ethereum \citep{hornuf2025cybercrime}. Operators promise high returns to investors and use incoming deposits from new participants to pay earlier ones, creating the appearance of a functioning investment operation \citep{bartoletti2020smart}. On Ethereum, Ponzi logic is often encoded directly in smart contracts, which execute the redistribution of funds automatically and transparently \citep{chen2020survey}. Funds may therefore flow from many participant addresses into a central contract and later be redistributed outward, producing plausible fan-in and fan-out motifs. Real-CATS has no exact Ponzi label, however, and the thesis does not infer Ponzi membership from another category such as Investment Scam or Fake Returns Scam.
 
 \begin{figure}[ht]
   \centering
@@ -717,7 +717,7 @@ Ponzi schemes are the largest category of on-chain cybercrime by aggregate stole
   \label{fig:motif-ponzi}
 \end{figure}
 
-\paragraph{Phishing.}
+\paragraph{Phishing (evaluated).}
 Phishing attacks involve deceiving users into approving malicious smart contract interactions or transferring funds to attacker-controlled addresses \citep{chen2020phishing}. In the Ethereum context, phishing has evolved beyond simple address impersonation to include signature-based token approval theft, where a victim signs a transaction that grants the attacker unlimited transfer rights over their tokens \citep{hornuf2025cybercrime}. The coordination aspect manifests in the use of drainer contracts: a central attacker-controlled contract collects funds from many victims in rapid succession, often within short time windows, producing a repeated fan-in temporal pattern anchored at the malicious contract address.
 
 \begin{figure}[ht]
@@ -737,8 +737,8 @@ Phishing attacks involve deceiving users into approving malicious smart contract
   \label{fig:motif-phishing}
 \end{figure}
 
-\paragraph{Pump-and-Dump Schemes.}
-Pump-and-dump schemes involve a coordinated group of addresses accumulating a low-liquidity token, artificially inflating its price through simultaneous buy activity, and then selling their holdings once uninformed traders enter the market \citep{li2021cryptocurrency, hornuf2025cybercrime}. The coordination is explicit and time-critical: the buy phase and the sell phase each involve multiple addresses acting within narrow time windows in order to maximize price impact and exit before the market corrects. This produces dense, time-local clusters of transactions among a set of addresses, which are directly recoverable as temporal motifs.
+\paragraph{Pump-and-Dump Schemes (broader context).}
+Pump-and-dump schemes involve a coordinated group of addresses accumulating a low-liquidity token, artificially inflating its price through simultaneous buy activity, and then selling their holdings once uninformed traders enter the market \citep{li2021cryptocurrency, hornuf2025cybercrime}. The coordination is explicit and time-critical: the buy phase and the sell phase each involve multiple addresses acting within bounded periods in order to maximize price impact and exit before the market corrects. Such activity could produce dense, time-local transaction patterns, but Real-CATS has no pump-and-dump label. Its temporal window is therefore not estimated in RQ4.
 
 \begin{figure}[ht]
   \centering
@@ -761,7 +761,7 @@ Pump-and-dump schemes involve a coordinated group of addresses accumulating a lo
   \label{fig:motif-pumpdump}
 \end{figure}
 
-\paragraph{Rug Pulls and Exit Scams.}
+\paragraph{Rug Pulls and Exit Scams (evaluated as Rug Pull Scam).}
 A rug pull occurs when the developers of a token project attract liquidity, typically by depositing token reserves into a decentralized exchange, and then abruptly withdraw all deposited funds, rendering the token worthless \citep{hornuf2025cybercrime, xia2021rugpull}. Exit scams follow a similar pattern at the level of initial coin offerings: funds raised from investors are transferred out of the project contract to attacker-controlled addresses immediately or within a short period after fundraising closes. Both patterns produce a concentrated outflow from a contract address to a small set of beneficiary addresses within a narrow time window, a temporal interaction structure that differs structurally from ordinary liquidity provision.
 
 \begin{figure}[ht]
@@ -775,14 +775,14 @@ A rug pull occurs when the developers of a token project attract liquidity, typi
     \draw[scamedge]      (l2) -- node[edgelbl,right] {2} (p);
     \draw[scamedgeheavy] (p)  -- node[edgelbl,above] {3} (dev);
   \end{tikzpicture}
-  \caption[Rug pull temporal motif]{Rug pull / exit scam. Topologically identical
-    to phishing, but in a larger time window. Liquidity is added gradually (edges~1,~2),
-    then the whole pool is drained in one sudden transfer (edge~3).}
+  \caption[Rug pull temporal motif]{Illustrative rug-pull sequence. Liquidity is
+    added (edges~1,~2), then the pool is drained in a concentrated transfer
+    (edge~3). The diagram does not prescribe which empirical window is optimal.}
   \label{fig:motif-rugpull}
 \end{figure}
 
-\paragraph{Money Laundering.}
-Money laundering on Ethereum typically involves moving illicitly obtained funds through a series of intermediate addresses to obscure their origin before depositing them at an exchange or converting them to a less traceable asset \citep{lal2021money}. This process, known as \emph{layering}, produces multi-hop transfer chains in which each hop occurs in rapid succession, as extended delay increases the risk of detection or address flagging. Temporal cycle analysis of Ethereum transactions has shown that money laundering exhibits distinct cyclic transfer patterns not observed in benign activity \citep{lal2021money}, making it a particularly strong candidate for temporal motif-based detection.
+\paragraph{Money Laundering (broader context).}
+Money laundering on Ethereum typically involves moving illicitly obtained funds through a series of intermediate addresses to obscure their origin before depositing them at an exchange or converting them to a less traceable asset \citep{lal2021money}. This process, known as \emph{layering}, can produce multi-hop transfer chains whose individual hops occur quickly even when the wider laundering operation lasts much longer. Temporal cycle analysis of Ethereum transactions has found cyclic transfer patterns associated with laundering activity \citep{lal2021money}, making it a candidate for temporal-motif analysis. Real-CATS has no money-laundering label, so this thesis does not estimate a laundering-specific window or compare it empirically with pump-and-dump activity.
 
 \begin{figure}[ht]
   \centering
@@ -801,8 +801,8 @@ Money laundering on Ethereum typically involves moving illicitly obtained funds 
   \label{fig:motif-laundering}
 \end{figure}
 
-\paragraph{Giveaway Scams.}
-Giveaway scams involve the impersonation of reputable entities such as exchanges, public figures, or projects to solicit cryptocurrency transfers under the false promise of proportional returns \citep{hornuf2025cybercrime}. Structurally, they produce a rapid accumulation of inbound transfers from many victim addresses to a single attacker address within a short window, after which the address is typically abandoned. These constitute the second-largest category of Ethereum cybercrime by aggregate stolen value, with on-chain transfers totalling \$274 million in the period studied \citep{hornuf2025cybercrime}.
+\paragraph{Giveaway Scams (below the inferential threshold).}
+Giveaway scams involve the impersonation of reputable entities such as exchanges, public figures, or projects to solicit cryptocurrency transfers under the false promise of proportional returns \citep{hornuf2025cybercrime}. They may produce a burst of inbound transfers from victims to an attacker address, followed by little further activity. Real-CATS contains this exact label, but only 27 active addresses in the release used here, below the pre-specified threshold of 100; it is therefore described but excluded from RQ3 and RQ4 inference.
 
 \begin{figure}[ht]
   \centering
@@ -813,7 +813,7 @@ Giveaway scams involve the impersonation of reputable entities such as exchanges
     \node[scamnode, fill=scamCoral]                          (a)  at ( 0,0)   {};
     \node[font=\small, below=1.5mm of a] (alab) {Attacker};
     \node[font=\footnotesize\itshape, text=gray, below=0.5mm of alab]
-      {abandoned --- no outflow};
+      {abandoned: no outflow};
     \draw[scamedge] (v1) -- node[edgelbl,left]  {1} (a);
     \draw[scamedge] (v2) -- node[edgelbl,right] {2} (a);
     \draw[scamedge] (v3) -- node[edgelbl,right] {3} (a);
@@ -824,23 +824,73 @@ Giveaway scams involve the impersonation of reputable entities such as exchanges
   \label{fig:motif-giveaway}
 \end{figure}
 
+\paragraph{Impersonation Scam (evaluated).}
+Impersonation scams use the identity of a trusted person, service, or project to
+induce a victim to transfer assets or approve an interaction. They overlap with
+the social mechanism of phishing, but Real-CATS records Impersonation Scam as a
+separate exact label. Possible on-chain patterns include repeated victim-to-scammer
+transfers and consolidation through common beneficiary addresses; the experiment
+does not assume that either pattern must be present.
+
+\paragraph{Contract Exploit Scam and Hack Scam (evaluated separately).}
+A contract exploit abuses a defect in deployed code, whereas the broader Hack Scam
+label covers compromises whose entry point need not be a smart-contract flaw
+\citep{shi2025realcats}. Both can be followed by rapid sweeps, relay transfers, or
+distribution across token and internal-transaction layers. The two labels are not
+merged in this thesis, because doing so would erase the distinction supplied by the
+dataset before RQ3 tests whether their fingerprints can be separated.
+
+\paragraph{Blackmail Scam and Fake Returns Scam (evaluated separately).}
+Blackmail scams demand payment through coercion, while fake-return schemes solicit
+funds by promising a payment or investment return that is not delivered. Either may
+produce repeated inbound transfers, but neither label prescribes one transaction
+topology. Their temporal fingerprints are therefore learned from the recorded
+histories rather than defined from a hand-written motif template.
+
+\paragraph{NFT Airdrop Scam (evaluated).}
+NFT airdrop scams use unsolicited or fraudulent token distributions to attract a
+victim to a malicious interaction. Their transactions can be concentrated in the
+ERC-721 and ERC-1155 layers and can appear as distribution stars followed by later
+victim interactions. Keeping the Real-CATS layers separate allows RQ3 to retain
+this layer-specific information.
+
+\paragraph{Pigbutchering Scam (evaluated).}
+Pigbutchering scams combine social engineering with a longer confidence-building
+phase before repeated transfers are solicited. This can yield a transaction history
+that is temporally more extended than a single theft event, but the duration is not
+fixed in advance. RQ4 tests the selected window instead of assigning one from this
+description.
+
 \vspace{0.5em}
-While the categories above differ in their mechanism and intent, they share a common structural property from the perspective of this thesis: all involve multiple addresses interacting in time-local, recurring patterns that leave distinguishable footprints in the temporal transaction graph. Table~\ref{tab:scam_types} summarizes the key characteristics of each category with respect to their temporal interaction structure.
+The descriptions above motivate why temporal structure may be informative; they do
+not define the fingerprints or their time windows. Table~\ref{tab:scam_types}
+therefore summarizes only the nine exact labels used for inference and states the
+network pattern that each label could plausibly expose. These are hypotheses for
+interpretation, not rules used to construct labels or features. The broader Ponzi,
+pump-and-dump, money-laundering, and giveaway examples remain part of the domain
+context, but no result in Chapter~\ref{ch:results} assigns them an empirical
+$\delta$.
 
 \begin{table}[htbp]
 \centering
-\caption{Summary of coordinated malicious behaviour types on Ethereum and their characteristic temporal interaction patterns.}
+\caption{The nine exact Real-CATS categories evaluated in RQ3 and RQ4 and their
+hypothesized temporal-network interpretation. The interpretations motivate the
+analysis but do not form part of the labels.}
 \label{tab:scam_types}
-\begin{tabular}{p{3.2cm} p{5.2cm} p{4.8cm}}
+\footnotesize
+\begin{tabular}{p{3.4cm} p{4.5cm} p{5.1cm}}
 \toprule
-\textbf{Type} & \textbf{Mechanism} & \textbf{Temporal Pattern} \\
+\textbf{Exact category} & \textbf{Reported mechanism} & \textbf{Possible temporal-network signal} \\
 \midrule
-Ponzi Scheme     & Redistribution of new deposits to old investors via contract & Cyclic fan-in / fan-out at contract address \\
-Phishing         & Approval theft or direct transfer to drainer contract         & Rapid fan-in to single attacker address \\
-Pump-and-Dump    & Coordinated buy/sell in narrow time window                    & Dense bidirectional cluster among colluding addresses \\
-Rug Pull         & Liquidity withdrawal from exchange contract                   & Concentrated outflow from contract to beneficiary set \\
-Money Laundering & Multi-hop layering to obscure fund origin                     & Sequential chained transfers with short inter-hop delays \\
-Giveaway Scam    & Impersonation to solicit inbound transfers                    & Short-window fan-in followed by address abandonment \\
+Blackmail Scam & Coercive payment demand & One or repeated inbound payments; no fixed topology assumed \\
+Contract Exploit Scam & Abuse of deployed contract code & Contract-centred sweeps and multi-layer outflows \\
+Fake Returns Scam & False promise of repayment or investment return & Repeated deposits and selective outward transfers \\
+Hack Scam & Compromise not limited to a contract flaw & Sweeps, relays, or rapid distribution after compromise \\
+Impersonation Scam & Misrepresentation as a trusted entity & Victim fan-in and consolidation at shared beneficiaries \\
+NFT Airdrop Scam & Fraudulent token distribution or claim & Token-layer distribution stars and follow-up interactions \\
+Phishing Scam & Deceptive transfer or malicious approval & Victim fan-in followed by attacker-controlled sweeps \\
+Pigbutchering Scam & Trust-building followed by repeated solicitation & Multi-stage deposits over an extended interaction \\
+Rug Pull Scam & Withdrawal of project or pool liquidity & Accumulation followed by concentrated contract outflow \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -861,7 +911,7 @@ Giveaway Scam    & Impersonation to solicit inbound transfers                   
 
 This chapter describes how the detection approach is put into practice. The
 method is implemented as a single program that turns raw Ethereum transaction
-records into a decision about whether each address behaves maliciously. The
+records into malicious-address scores and category-level comparisons. The
 program is not used interactively. It runs a fixed sequence of steps, always in
 the same order, so that the same data and the same settings always lead to the
 same result.
@@ -909,7 +959,7 @@ the remaining six to the execution phase.
         often each temporal motif occurs among the transactions around it.
         Because a motif only counts when its transactions fall close enough
         together in time, the counting is repeated for a range of time windows,
-        from five minutes up to one week. This step is described in
+        from five minutes up to 30 days. This step is described in
         Section~\ref{sec:motif_extraction}. Each completed count is stored as an
         immutable checkpoint before the next one begins.
 
@@ -934,7 +984,7 @@ the remaining six to the execution phase.
   \item \textbf{Analysing the results.} The program then answers the research
         questions. It compares the three views to see whether the motif
         fingerprint improves detection over the simpler features (RQ1) and which
-        time window makes coordinated behaviour most visible (RQ2). It then checks
+        time window maximizes the fingerprint's usefulness for detection (RQ2). It then checks
         whether different categories of malicious behaviour have distinct
         fingerprints (RQ3), and whether the window that shows a category best
         differs from one category to the next (RQ4). Each comparison is
@@ -1069,8 +1119,11 @@ rather than a single malicious flag. The categories are:
 
 \textit{Suitability.} Real-CATS is the dataset used for RQ3 and RQ4. Its detailed
 categories are what make both questions possible, because they allow the motif
-fingerprints of different kinds of coordinated behaviour to be compared directly,
-rather than only a single malicious-versus-benign split. The labels are also
+fingerprints of different reported malicious behaviours to be compared directly,
+rather than only a single malicious-versus-benign split. The labels do not state
+whether an address belongs to a coordinated campaign, so the experiment tests
+category-level fingerprint differences rather than independently verified
+coordination. The labels are also
 independent of the main dataset, since they come from public abuse reports
 instead of the process behind the HuggingFace release. The categories are very
 unevenly filled, with phishing and impersonation together accounting for most of
@@ -1115,7 +1168,7 @@ Labelled addresses & 114{,}739     & 73{,}034 active  & 28{,}591      & n/a \\
 Malicious share    & 47.6\,\%      & 0.23\,\%         & 44.0\,\%      & n/a \\
 Date range         & 2015--2025    & 2017--2019       & per release   & controlled \\
 Category labels    & no            & no               & yes (9)       & no \\
-Role               & RQ1, RQ2      & RQ1 (secondary)  & RQ3, RQ4      & validation \\
+Role               & RQ1, RQ2      & RQ1 (optional)   & RQ3, RQ4      & validation \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1343,17 +1396,20 @@ becoming nonzero as the window grows.
 
 \subsection{Temporal-window sweep}
 
-The counting is repeated over a fixed grid of seven windows,
+The counting is repeated over a fixed grid of nine windows,
 \[
-    \delta \in \{300,\,1800,\,3600,\,21600,\,86400,\,259200,\,604800\}
+    \delta \in \{300,\,1800,\,3600,\,21600,\,86400,\,259200,\,604800,\,
+                  1209600,\,2592000\}
     \text{ seconds},
 \]
 which correspond to five minutes, 30 minutes, one hour, six hours, one day, three
-days, and one week. All windows use the same addresses and the same train and
-test split, and the window is chosen only on the development data, as described
-in Section~\ref{sec:evaluation_protocol}. RQ2 studies how detection changes
-across this grid, and RQ4 asks whether different categories of behaviour are
-best seen at different windows.
+days, one week, two weeks, and 30 days. All windows use the same addresses and
+the same train and test split, and the window is chosen only on the development
+data, as described in Section~\ref{sec:evaluation_protocol}. RQ2 studies how
+detection changes across this grid, and RQ4 asks whether different categories of
+behaviour are best seen at different windows. A selected window is the maximum
+span allowed for a three-edge motif; it is not an estimate of the total duration
+of a fraud campaign.
 
 \section{Detection methods}
 \label{sec:detection_methods}
@@ -1384,7 +1440,7 @@ held constant, any difference in detection between the views can only come from
 the features, which is what makes this a fair test of RQ1.
 
 RQ2 then asks at which time window the motifs are most telling. For this the
-combined view is evaluated at each of the seven windows from
+combined view is evaluated at each of the nine windows from
 Section~\ref{sec:motif_extraction}. The baseline does not depend on the window, so
 it stays the same throughout and serves as a fixed reference line.
 
@@ -1752,10 +1808,10 @@ does not remove these complete local scans.
 
 Timing the earlier pipeline showed that reading the data and fitting the models
 were not the main cost. The dominant operation is Raphtory's local temporal motif
-routine. The complete HF protocol requires seven windows under seven timestamp
+routine. The complete HF protocol requires nine windows under seven timestamp
 orderings, and Real-CATS repeats the same grid within five layers. The graph is
 therefore built once per ordering (and, for Real-CATS, per layer and ordering)
-and reused across its seven windows, instead of being rebuilt for each window.
+and reused across its nine windows, instead of being rebuilt for each window.
 
 \subsubsection{Alternatives considered}
 
@@ -1812,11 +1868,12 @@ protocol when preparation finishes. The main ones are shown below.
 \begin{lstlisting}[language=Python,
   caption={Selected locked experiment constants.},
   label={lst:config}]
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 RANDOM_SEED = 42
 CV_SEEDS = (42, 43, 44)
 DELTAS = (300, 1800, 3600, 21600,
-          86400, 259200, 604800)
+          86400, 259200, 604800,
+          1209600, 2592000)
 N_PERMUTATIONS = N_BOOTSTRAPS = 10_000
 MOTIF_ROLE_NAMES = STAR_ROLE_NAMES + TWO_NODE_ROLE_NAMES
 HF_COHORT_ELIGIBILITY = {
@@ -1845,8 +1902,8 @@ Before execution, a read-only preflight checks the recorded RAM and disk budget
 without creating a lock, log record, temporary directory, or timestamp change in
 the run. Execution then creates an immutable
 \texttt{execution\_definition.json}. This second definition separates operational
-choices---the thread allocation, direct or coordinated mode, coordinator
-identity, and concrete worker thread settings---from the analytical model
+choices, including the thread allocation, direct or coordinated mode, coordinator
+identity, and concrete worker thread settings, from the analytical model
 parameters in the protocol. A resumed run must use the same allocation. The
 thread limits are set before importing NumPy, scikit-learn, or the native
 libraries, which prevents numerical thread pools from silently exceeding that
@@ -1886,7 +1943,7 @@ filenames consumed by the Results chapter.
 
 Preparation and execution have separate resume rules. During Real-CATS
 preparation, the SQLite index records each completed address and can be resumed
-only before the protocol is locked. During protocol-v4 execution, every attempt
+only before the protocol is locked. During protocol-v6 execution, every attempt
 has its own ID and scratch directory. HF commits one motif checkpoint for every
 ordering and window; Real-CATS commits one for every layer, ordering, and
 window. A new attempt may reuse earlier valid commits. A completed run rejects
@@ -1935,58 +1992,46 @@ results/experiments/<run-id>/
 \end{lstlisting}
 
 
-Develop your hypotheses, describe your mental model for the research question.
-
-
 \chapter{Results}
 \label{ch:results}
 
-\IfFileExists{generated/results_macros.tex}{%
-  \input{generated/results_provenance}%
-  \input{generated/results_macros}%
-  \input{generated/results_validation}%
-}{%
-  \newcommand{\ResPreliminaryBanner}{\begin{center}\emph{Results are not yet generated. Run the experiments and \texttt{scripts/results\_to\_latex.py} to fill in this chapter.}\end{center}}%
-  \newcommand{\ResCohortLabelled}{--}%
-  \newcommand{\ResCohortInactive}{--}%
-  \newcommand{\ResCohortEligible}{--}%
-  \newcommand{\ResPrevalenceN}{--}%
-  \newcommand{\ResControlledN}{--}%
-  \newcommand{\ResHFSourceEdges}{--}%
-  \newcommand{\ResHFSelectedEdges}{--}%
-  \newcommand{\ResSyntheticRoles}{--}%
-  \newcommand{\ResSyntheticBoundary}{is pending}%
-  \newcommand{\ResSyntheticOutcome}{is pending}%
-  \newcommand{\ResBLTEDelta}{--}%
-  \newcommand{\ResBLTEBaselineAP}{--}%
-  \newcommand{\ResBLTEMotifsAP}{--}%
-  \newcommand{\ResBLTECombinedAP}{--}%
-}
+% These files are part of the final thesis result set. Compilation should stop
+% if they are absent rather than silently replacing findings with placeholders.
+\input{generated/results_provenance}
+\input{generated/results_macros}
+\input{generated/results_validation}
 
 \ResPreliminaryBanner
 
 This chapter reports the findings for the four research questions. RQ1 and RQ2
-are evaluated on the two HuggingFace cohorts, and RQ3 and RQ4 on the Real-CATS
-criminal categories, all following the protocol fixed in
-Section~\ref{sec:evaluation_protocol}. Every table and figure is produced directly
-from the locked run artifacts.
+are evaluated in two disjoint HuggingFace confirmations, each containing a
+prevalence and a controlled cohort. RQ3 and RQ4 are evaluated on the nine
+eligible Real-CATS categories. All three thesis-profile runs passed protocol-v6
+integrity and citability verification. The tables are generated from the locked
+artifacts identified by \texttt{\ResRunIds}; no exploratory result is used.
 
 \section{Data Integrity and Cohort Construction}
 \label{sec:results_provenance}
 
-The HuggingFace target set begins with \ResCohortLabelled\ labelled addresses. Of
-these, \ResCohortInactive\ take part in no transfer within the collected graph and
-so cannot form a motif, and after the minimum-activity and top-tail rules of
-Section~\ref{sec:evaluation_protocol} \ResCohortEligible\ addresses remain
-eligible. From this eligible population the study draws a prevalence cohort of
-\ResPrevalenceN\ addresses and a disjoint controlled cohort of \ResControlledN\
-addresses. Table~\ref{tab:res_cohorts} records the full attrition.
+The HuggingFace source contains \ResCohortLabelled\ labelled targets and
+\ResHFSourceEdges\ transfers. Of the targets, \ResCohortInactive\ have no
+incident transfer and 26{,}618 have fewer than the required three transfers. A
+further 52 top-tail hubs are removed by the pre-specified within-stratum rule,
+leaving \ResCohortEligible\ eligible addresses before exclusions for earlier
+runs. The two confirmation samples exclude all earlier target addresses and
+campaign groups before sampling; the replication audit reports zero address and
+zero campaign-group overlap between them. Table~\ref{tab:res_cohorts} gives the
+resulting sample and incident-subgraph sizes.
 
 \IfFileExists{generated/results_cohorts.tex}{\input{generated/results_cohorts}}{\ResPendingTable{HuggingFace cohort attrition.}{tab:res_cohorts}}
 
-The graph actually built for these cohorts consists of \ResHFSelectedEdges\
-transfers, the subset of the \ResHFSourceEdges\ source transfers that touch a
-target address (Section~\ref{sec:graph_construction}).
+The first confirmation contains 8{,}903 targets and 17{,}381{,}820 incident
+transfers; the second contains 8{,}697 targets and 24{,}714{,}450 incident
+transfers. These are independent samples from the same eligible population, not
+two evaluations of the same test addresses. For Real-CATS, 11{,}225 labelled
+criminal addresses have usable events and 10{,}871 belong to the nine categories
+that meet the minimum class size. All five transaction layers contribute to the
+category analysis.
 
 \section{RQ1: Incremental Signal of Temporal Motifs}
 
@@ -1995,41 +2040,95 @@ non-motif baseline. For each cohort the three feature views of
 Section~\ref{sec:detection_methods} are compared on identical addresses and folds.
 Figure~\ref{fig:res_rq1_ablation} shows the average precision of the three views,
 and Table~\ref{tab:res_rq1} reports the combined-minus-baseline difference with its
-confidence interval, the permutation $p$-value, and the resulting decision.
+confidence interval, the permutation $p$-value, and the resulting decision for
+both confirmations.
 
 \begin{figure}[ht]
   \centering
-  \ResGraphic{0.48}{rq1_ablation_controlled}
-  \ResGraphic{0.48}{rq1_ablation_prevalence}
+  \ResGraphic{0.48}{rq1_ablation_controlled_rep1}
+  \ResGraphic{0.48}{rq1_ablation_prevalence_rep1}\\[4pt]
+  \ResGraphic{0.48}{rq1_ablation_controlled_rep2}
+  \ResGraphic{0.48}{rq1_ablation_prevalence_rep2}
   \caption{RQ1 ablation: average precision of the baseline, motifs, and combined
-  views for the controlled (left) and prevalence (right) cohorts.}
+  views for the controlled (left) and prevalence (right) cohorts. The first row
+  is confirmation~1 and the second row confirmation~2.}
   \label{fig:res_rq1_ablation}
 \end{figure}
 
 \IfFileExists{generated/results_rq1.tex}{\input{generated/results_rq1}}{\ResPendingTable{RQ1 feature-view comparison.}{tab:res_rq1}}
 
+In the controlled cohort, adding the fingerprint raises average precision by
+0.0127 in each confirmation. Both confidence intervals exclude zero and both
+permutation tests reject the no-improvement null hypothesis
+($p=0.0066$ and $p=0.0215$). The decision is unchanged under all seven
+within-timestamp orderings. The prevalence result is less stable: the increment
+is 0.0330 in confirmation~1 ($p=0.0022$), but only 0.0080 in confirmation~2,
+whose interval includes zero ($p=0.2748$). RQ1 is therefore supported for the
+activity- and contract-controlled comparison, but not consistently replicated
+under the natural class distribution.
+
+The motif-only model remains below the full non-motif baseline, so the result is
+incremental rather than evidence that motifs can replace conventional features.
+The pre-specified representation analysis in
+Table~\ref{tab:res_rq1_representations} nevertheless shows that the 32-role shape
+contains substantially more information than total motif count alone. Its AP
+advantage ranges from 0.234 to 0.306 across the four samples and remains
+significant after correction. By contrast, adding the full fingerprint to a
+diagnostic baseline already augmented with motif composition and volume yields no
+corrected significant improvement. This indicates that the useful signal is in
+the distribution of motif roles rather than its scalar total, while an alternative
+composition-plus-volume parameterization captures essentially the same information.
+
+\IfFileExists{generated/results_rq1_representations.tex}{\input{generated/results_rq1_representations}}{\ResPendingTable{RQ1 representation diagnostics.}{tab:res_rq1_representations}}
+
 \section{RQ2: Sensitivity to the Temporal Window}
 
-RQ2 asks at which time window coordinated behaviour is most visible.
+RQ2 asks which time window maximizes the usefulness of the fingerprint for
+detection.
 Figure~\ref{fig:res_rq2_delta} traces the combined-view average precision across
-the seven windows, with the baseline as a flat reference, and
-Table~\ref{tab:res_rq2} compares the selected window against every alternative
-after the Benjamini--Hochberg correction.
+the nine windows, with the baseline as a flat reference. Table~\ref{tab:res_rq2}
+reports the development-CV maximum, the one-standard-error alternative, and the
+corrected uniqueness decision.
 
 \begin{figure}[ht]
   \centering
-  \ResGraphic{0.48}{rq2_delta_performance_controlled}
-  \ResGraphic{0.48}{rq2_delta_performance_prevalence}
+  \ResGraphic{0.48}{rq2_delta_performance_controlled_rep1}
+  \ResGraphic{0.48}{rq2_delta_performance_prevalence_rep1}\\[4pt]
+  \ResGraphic{0.48}{rq2_delta_performance_controlled_rep2}
+  \ResGraphic{0.48}{rq2_delta_performance_prevalence_rep2}
   \caption{RQ2 temporal-window sensitivity for the controlled (left) and
-  prevalence (right) cohorts.}
+  prevalence (right) cohorts. The first row is confirmation~1 and the second row
+  confirmation~2.}
   \label{fig:res_rq2_delta}
 \end{figure}
 
 \IfFileExists{generated/results_rq2.tex}{\input{generated/results_rq2}}{\ResPendingTable{RQ2 selected window against alternatives.}{tab:res_rq2}}
 
+The nominal maxima reproduce exactly: both controlled cohorts select two weeks,
+whereas both prevalence cohorts select 30 days. All seven ordering variants make
+the same maximum selection within each confirmation. The shorter one-standard-error
+window is one week for both controlled cohorts, but it is one day in the first
+prevalence confirmation and 30 days in the second. After the pairwise bootstrap
+comparisons are corrected, no selected maximum is uniquely better than every
+alternative. The defensible answer to RQ2 is therefore a broad long-window region:
+two weeks is the repeatable maximum under the controlled design and 30 days under
+the prevalence design, but the experiment does not identify one universal optimum.
+
+Fingerprint coverage rises monotonically with the window. At 30 days, however,
+25.7\% and 25.6\% of controlled-cohort addresses and 28.2\% and 28.2\% of
+prevalence-cohort addresses still have an all-zero fingerprint in confirmations
+1 and 2, respectively. The longer-window gains therefore occur despite persistent
+sparsity and should not be interpreted as every address acquiring a motif.
+
 \section{RQ3: Distinct Motif Fingerprints per Category}
 
 RQ3 asks whether the criminal categories have distinct motif fingerprints.
+Here, a category is one of the nine exact Real-CATS labels listed in
+Table~\ref{tab:scam_types}; it is not a separately verified label for coordination.
+The inferential sample contains 10{,}871 addresses: Blackmail Scam (202), Contract
+Exploit Scam (234), Fake Returns Scam (154), Hack Scam (220), Impersonation Scam
+(2{,}099), NFT Airdrop Scam (127), Phishing Scam (7{,}525), Pigbutchering Scam
+(131), and Rug Pull Scam (179).
 Table~\ref{tab:res_rq3_global} reports how well the categories can be told apart
 overall, together with the permutation test that checks the result against chance,
 and Table~\ref{tab:res_rq3_labels} gives the detection for each category on its
@@ -2048,6 +2147,22 @@ confusion between them.
 \IfFileExists{generated/results_rq3_global.tex}{\input{generated/results_rq3_global}}{\ResPendingTable{RQ3 overall category separability.}{tab:res_rq3_global}}
 \IfFileExists{generated/results_rq3_labels.tex}{\input{generated/results_rq3_labels}}{\ResPendingTable{RQ3 per-category detection.}{tab:res_rq3_labels}}
 
+Under canonical ordering, development CV selects a global window of 30 days. The
+held-out macro AP is 0.188 and macro F1 is 0.201. Although these absolute values
+show that the nine-way task remains difficult, the label-permutation test rejects
+the null of no category information ($p<0.001$). The conclusion is the same for
+all seven timestamp orderings, whose selected global windows are either two weeks
+or 30 days. RQ3 is therefore supported in the statistical sense: category labels
+are associated with distinguishable fingerprint distributions, but the observed
+separation is not strong enough to treat the fingerprints as a high-accuracy
+stand-alone category classifier.
+
+The one-vs-rest AP values range from 0.025 for NFT Airdrop Scam to 0.756 for
+Phishing Scam. These values must be read together with the class shares in
+Table~\ref{tab:res_rq3_labels}; in particular, the large AP for phishing partly
+reflects that phishing accounts for 69.2\% of the inferential sample. They are not
+estimates of how common a category is outside Real-CATS.
+
 \section{RQ4: Category-Specific Temporal Windows}
 
 RQ4 asks whether the window that shows a category best differs from one category
@@ -2062,38 +2177,61 @@ the windows.
 \begin{figure}[ht]
   \centering
   \ResGraphic{0.75}{rq4_label_delta_curves}
-  \caption{RQ4: detection of each category across the seven temporal windows.}
+  \caption{RQ4: detection of each category across the nine temporal windows.}
   \label{fig:res_rq4}
 \end{figure}
 
 \IfFileExists{generated/results_rq4_global.tex}{\input{generated/results_rq4_global}}{\ResPendingTable{RQ4 category-specific versus global temporal windows.}{tab:res_rq4_global}}
 \IfFileExists{generated/results_rq4_categories.tex}{\input{generated/results_rq4_categories}}{\ResPendingTable{RQ4 per-category temporal-window comparisons.}{tab:res_rq4_categories}}
 
+The canonical development split selects five different windows: one day for
+Blackmail Scam, three days for Rug Pull Scam, one week for NFT Airdrop Scam, two
+weeks for Fake Returns Scam and Pigbutchering Scam, and 30 days for Contract
+Exploit Scam, Hack Scam, Impersonation Scam, and Phishing Scam. These selections
+are descriptive development results. On the held-out test set, using each
+category's selected window instead of the single 30-day window changes macro AP by
+only 0.0054 (95\,\% CI $[-0.0094, 0.0207]$, $p=0.2173$). None of the nine
+per-category improvements remains significant after Benjamini--Hochberg
+correction.
+
+The selected category windows also vary across the seven within-timestamp
+orderings. For example, the rug-pull selection ranges from 30 minutes to three
+days, while contract-exploit selections range from one day to 30 days. RQ4 is
+therefore not supported: the data produces different nominal maxima, but does not
+show that category-specific windows generalize better than one global window.
+Consequently, the chapter does not assign empirical windows to Ponzi,
+pump-and-dump, money-laundering, or giveaway mechanisms. The first three have no
+matching tested Real-CATS label, and Giveaway Scam falls below the pre-specified
+minimum class size.
+
 \section{Robustness and Validation}
 
 \paragraph{Ordering robustness.} Each result is recomputed under all seven orderings
 of Section~\ref{sec:evaluation_protocol}, and a conclusion is retained only when its
 direction and decision agree across all of them. The per-ordering decisions are
-collected in Section~\ref{sec:results_hypotheses}.
+collected in Section~\ref{sec:results_hypotheses}. The controlled RQ1 result and
+the RQ3 permutation decision are ordering-robust. The prevalence RQ1 decision is
+internally robust within each confirmation but differs between confirmations,
+and RQ4 is neither significant nor stable in its selected category windows.
 
 \paragraph{Counter validation.} The deterministic synthetic fixtures confirm that
-the motif counter is correct. All \ResSyntheticRoles\ catalogue positions covered
-by the selected validation run were recovered. The current protocol extends this gate to the
-triangle positions excluded from the experiment features. The window-boundary
-check \ResSyntheticBoundary, and the overall validation \ResSyntheticOutcome.
+the motif counter is correct. All \ResSyntheticRoles\ catalogue positions,
+including the eight triangle positions excluded from the experiment features,
+were recovered. The temporal-window boundary check \ResSyntheticBoundary, and the
+overall validation \ResSyntheticOutcome.
 
-\paragraph{BLTE replication.} On the secondary, highly imbalanced BLTE dataset the
-combined view reaches an average precision of \ResBLTECombinedAP\ at the
-\ResBLTEDelta\ window, against \ResBLTEBaselineAP\ for the baseline and
-\ResBLTEMotifsAP\ for motifs alone. BLTE is reported only as a robustness check,
-because only 169 of its active addresses are labelled as scams
-(Section~\ref{sec:data_acquisition}).
+\paragraph{BLTE scope.} No protocol-v6 BLTE run is included in the final citable
+result set. The exploratory BLTE files are therefore not used as evidence for any
+research question. BLTE remains an optional secondary replication dataset for
+future work, as described in Section~\ref{sec:data_acquisition}.
 
 \section{Summary of Hypothesis Decisions}
 \label{sec:results_hypotheses}
 
 Table~\ref{tab:res_hypothesis} collects the decision for each research question
-across all orderings.
+across both confirmations and all orderings. In this table, ``supported'' refers
+to the tested claim; the detailed RQ1 table states the corresponding null-hypothesis
+decisions explicitly.
 
 \IfFileExists{generated/results_hypothesis.tex}{\input{generated/results_hypothesis}}{\ResPendingTable{Summary of hypothesis decisions.}{tab:res_hypothesis}}
 

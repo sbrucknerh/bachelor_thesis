@@ -63,6 +63,7 @@ class RaphtoryExperimentGraph:
         ordering_variant: str,
         temporary_directory: str | Path,
         telemetry: RunTelemetry | None = None,
+        source_label: str | None = None,
     ) -> "RaphtoryExperimentGraph":
         try:
             from raphtory import Graph
@@ -71,7 +72,7 @@ class RaphtoryExperimentGraph:
 
         path = Path(events_path)
         event_count = int(pq.ParquetFile(path).metadata.num_rows)
-        source_label = path.stem
+        source_label = str(source_label or path.stem)
         stage = f"motifs.graph_load.{source_label}.{ordering_variant}"
         context = (
             telemetry.step(
@@ -155,12 +156,21 @@ class RaphtoryExperimentGraph:
         return self._count(delta, targets, retain_triangles=False)
 
     def count_all(self, delta: int, targets: Iterable[str]) -> pd.DataFrame:
-        """Return all 40 roles for exact full-neighbourhood validation fixtures."""
+        """Return all 40 roles when the supplied graph contains target neighborhoods."""
         return self._count(delta, targets, retain_triangles=True)
 
     def sweep(self, deltas: Iterable[int], targets: Iterable[str]) -> dict[int, pd.DataFrame]:
         target_values = tuple(str(target) for target in targets)
         return {int(delta): self.count(int(delta), target_values) for delta in deltas}
+
+    def sweep_all(
+        self, deltas: Iterable[int], targets: Iterable[str]
+    ) -> dict[int, pd.DataFrame]:
+        target_values = tuple(str(target) for target in targets)
+        return {
+            int(delta): self.count_all(int(delta), target_values)
+            for delta in deltas
+        }
 
 
 def count_layered_motifs(

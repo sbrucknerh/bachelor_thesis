@@ -1,58 +1,37 @@
 # Coordinated Malicious Behaviour Detection with Temporal Motifs
 
-This repository contains the experiment pipeline for a bachelor thesis on
-detecting malicious Ethereum addresses with temporal motifs.
-
-- `scripts/run_results.py` runs the reproducible thesis experiments.
-- `main.py` is an exploratory pipeline. Its outputs are not thesis evidence.
+This repository contains the reproducible experiment pipeline for a bachelor
+thesis on malicious Ethereum address detection. Use `scripts/run_results.py` for
+thesis evidence. `main.py` is exploratory and its outputs are not citable.
 
 ## Requirements
 
 - Python 3.11 or newer
-- Git and an internet connection for the initial setup
-- A Kaggle account and API token for the Real-CATS transaction archive
-- A local filesystem with enough free space for prepared data and checkpoints
+- Git and enough local storage for the datasets and result checkpoints
+- A Kaggle account only for downloading the Real-CATS transaction archive
 
-The thesis environment is pinned in `requirements-results.txt`. Raphtory motif
-counting is CPU-based; the pipeline does not require a GPU.
+Dependencies are pinned in `requirements-results.txt`. Motif counting uses CPU
+threads; the GPU is not used.
 
-## Setup
+## Automatic Setup
 
-Clone the project first:
-
-```bash
-git clone <repository-url>
-cd bachelor_thesis
-```
-
-### Option A: Installation Script (recommended)
-
-The Hugging Face dataset is public and requires no Hugging Face token.
-Real-CATS transactions are hosted on Kaggle, so create a Kaggle token on the
-[Kaggle API settings page](https://www.kaggle.com/settings/api), then run:
+Create a Kaggle token at [Kaggle settings](https://www.kaggle.com/settings/api),
+then run:
 
 ```bash
 export KAGGLE_API_TOKEN="PASTE_TOKEN_HERE"
 ./scripts/setup_results.sh
 ```
 
-The script is safe to rerun. It:
-
-- creates `venv/` and installs the pinned dependencies;
-- downloads the three required Hugging Face files, approximately 21.6 GB;
-- downloads the Real-CATS labels and transaction archive;
-- downloads BLTE for the smoke test;
-- validates the dependency, Parquet, ZIP, and label schemas.
-
-Use `--smoke` to run the bounded end-to-end test immediately after setup, or
-`--check-only` to validate an existing installation without downloading data:
+The idempotent script creates `venv/`, installs dependencies, downloads the
+pinned datasets, and validates their schemas. Useful variants are:
 
 ```bash
-./scripts/setup_results.sh --smoke
 ./scripts/setup_results.sh --check-only
+./scripts/setup_results.sh --smoke
 ```
 
-### Option B: Manual Setup
+## Manual Setup
 
 1. Create the environment:
 
@@ -62,7 +41,7 @@ venv/bin/pip install -r requirements-results.txt
 venv/bin/pip install kaggle==2.2.4
 ```
 
-2. Download the three Hugging Face files:
+2. Download the three pinned Hugging Face files:
 
 ```bash
 venv/bin/hf download fesevu/ethereum_fraud_dataset_by_activity \
@@ -74,7 +53,7 @@ venv/bin/hf download fesevu/ethereum_fraud_dataset_by_activity \
   --local-dir data/raw/huggingface_ethereum_fraud
 ```
 
-3. Download Real-CATS:
+3. Download Real-CATS labels and transactions:
 
 ```bash
 git clone https://github.com/sjdseu/Real-CATS.git data/raw/realcats_dataset
@@ -84,11 +63,10 @@ git -C data/raw/realcats_dataset checkout --detach \
 mkdir -p data/raw/realcats_transactions
 export KAGGLE_API_TOKEN="PASTE_TOKEN_HERE"
 venv/bin/kaggle datasets download lvd312393/real-cats \
-  --file real-cats.zip \
-  --path data/raw/realcats_transactions
+  --file real-cats.zip --path data/raw/realcats_transactions
 ```
 
-4. Download BLTE and validate the installation:
+4. Download BLTE and validate everything:
 
 ```bash
 git clone \
@@ -96,208 +74,145 @@ git clone \
   data/raw/ethereum_dataset_labelled
 git -C data/raw/ethereum_dataset_labelled checkout --detach \
   497df9faf15c914becb3fcd121618e7a20da9c24
-
 ./scripts/setup_results.sh --check-only
 ```
 
-Both setup methods use these sources:
+Sources: [Hugging Face](https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity),
+[Real-CATS labels](https://github.com/sjdseu/Real-CATS),
+[Real-CATS transactions](https://www.kaggle.com/datasets/lvd312393/real-cats), and
+[BLTE](https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network).
 
-- [Hugging Face Ethereum Fraud Dataset](https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity)
-- [Real-CATS labels](https://github.com/sjdseu/Real-CATS)
-- [Real-CATS transactions](https://www.kaggle.com/datasets/lvd312393/real-cats)
-- [BLTE](https://github.com/salam-ammari/Labeled-Transactions-based-Dataset-of-Ethereum-Network)
+## Run Procedure
 
-During experiments, Hugging Face data is streamed in bounded batches from the
-local Parquet file rather than loaded completely into RAM. It must therefore be
-downloaded once by either setup method.
+### 1. Smoke test
 
-## Usage
-
-### 1. Run the smoke test
-
-Run this after setup and before using server time:
+Run the non-citable, bounded test before using server time:
 
 ```bash
 venv/bin/python scripts/run_results.py smoke \
-  --run-id smoke_$(date +%Y%m%d_%H%M%S) \
-  --sla-minutes 60
+  --run-id smoke_$(date +%Y%m%d_%H%M%S) --sla-minutes 60
 ```
 
-It checks every execution path but uses bounded data and reduced resampling, so
-`results/smoke/<run-id>` is always marked `citable: false`.
+### 2. Full thesis run
 
-### 2. Run all four RQs
-
-For this thesis, the new representation analysis was designed after inspecting
-the v5 HF run. The first v6 run must therefore use a disjoint cohort:
+Protocol v8 is a final post-hoc confirmation. Copy the three earlier HF result
+roots to the server, preserving `protocol.json`, `protocol.sha256`, and
+`data/hf_targets.parquet`. Then all four RQs and the external Real-CATS binary
+replication run with one command:
 
 ```bash
 venv/bin/python scripts/run_results.py run-thesis \
-  --run-id thesis_confirmation_1 \
+  --run-id thesis_final_v8 \
   --threads 20 \
-  --replication-index 1 \
-  --exclude-hf-run results/experiments/thesis_final_20260731_hf
-```
-
-Copy the prior HF result root to the server first. Only `protocol.json`,
-`protocol.sha256`, and `data/hf_targets.parquet` are needed, with that directory
-layout preserved. For a genuinely new study with no inspected pilot cohort, use
-`--run-id thesis_v6_initial --threads 20` and omit the last two options.
-
-The command prepares and locks HF and Real-CATS, performs resource admission,
-runs them in parallel when possible, checkpoints each window, creates all
-artifacts, and requires citable verification before returning success.
-
-On the provided 20-core, 128 GB RAM, 4 TB server, parallel execution normally
-assigns 10 CPU threads to each dataset. The GPU is not used. The previous
-seven-window run took about four hours; protocol v6 adds two windows and
-secondary diagnostics, so plan for approximately 5-7 hours. The live ETA is
-the better estimate once motif checkpoints start completing.
-
-Run inside `tmux`. The terminal and `overall_progress.json` show total and
-current-step ETAs; `run_log.jsonl` contains fsynced events and five-minute
-heartbeats. If `--run-id` is omitted, a timestamped ID is generated.
-
-### 3. Run the independent HF confirmation
-
-Use all 20 cores for the second, HF-only confirmation. Exclude every earlier HF
-cohort and increment the replication index:
-
-```bash
-venv/bin/python scripts/run_results.py run-hf \
-  --run-id thesis_confirmation_2 \
-  --threads 20 \
-  --replication-index 2 \
+  --replication-index 3 \
   --exclude-hf-run results/experiments/thesis_final_20260731_hf \
-  --exclude-hf-run results/experiments/thesis_confirmation_1_hf
+  --exclude-hf-run results/experiments/thesis_confirmation_1_hf \
+  --exclude-hf-run results/experiments/thesis_confirmation_2_hf
 ```
 
-The runner rejects a confirmation index without an exclusion reference. Never
-select the best rerun. Report both v6 runs with:
+The runner rejects incomplete exclusion lineage, source-file mismatches,
+overlapping cohorts, insufficient resources, and non-citable output. It chooses
+parallel or sequential HF/Real-CATS execution from a read-only resource check.
+On the supplied 20-core, 128 GB, 4 TB server, allow roughly 12-30 hours for v8;
+the terminal replaces this initial range with a measured total ETA.
+
+For an HF-only v8 confirmation, replace `run-thesis` with `run-hf` and keep the
+same replication and exclusion options.
+
+### 3. Monitor or resume
+
+Run the job inside `tmux`. Monitor the root-level total ETA and fsynced log:
 
 ```bash
-venv/bin/python scripts/run_results.py aggregate-hf-replications \
-  results/replications/hf_confirmation \
-  results/experiments/thesis_confirmation_1_hf \
-  results/experiments/thesis_confirmation_2_hf
+tail -f results/experiments/thesis_final_v8_hf/run_log.jsonl
 ```
 
-The aggregator rejects overlap or incompatible definitions, reports every
-supplied run, and does not pool p-values.
+Rerun the same command with `--resume` after interruption. Committed checkpoints
+are hash-verified and reused; public artifacts are never overwritten.
 
-### 4. Monitor or resume
+### 4. Verify and export
 
-```bash
-tail -f results/experiments/thesis_confirmation_1_hf/run_log.jsonl
-```
-
-Resume the complete run with exactly the same replication and exclusion options:
-
-```bash
-venv/bin/python scripts/run_results.py run-thesis \
-  --run-id thesis_confirmation_1 \
-  --threads 20 \
-  --replication-index 1 \
-  --exclude-hf-run results/experiments/thesis_final_20260731_hf \
-  --resume
-```
-
-For `run-hf`, use the same pattern with that command and its original options.
-Committed checkpoints are hash-checked and reused; outputs are never replaced.
-
-### 5. Verify and export
-
-The workflows verify automatically. Repeat the checks manually before writing:
+The one-command workflow verifies automatically. Manual checks are:
 
 ```bash
 venv/bin/python scripts/run_results.py verify \
-  results/experiments/thesis_confirmation_1_hf \
-  --require-citable
-
+  results/experiments/thesis_final_v8_hf --require-citable
 venv/bin/python scripts/run_results.py verify \
-  results/experiments/thesis_confirmation_1_realcats \
-  --require-citable
-```
+  results/experiments/thesis_final_v8_realcats --require-citable
 
-```bash
 venv/bin/python scripts/results_to_latex.py writing/generated \
-  results/experiments/thesis_confirmation_1_hf \
-  results/experiments/thesis_confirmation_1_realcats
+  results/experiments/thesis_final_v8_hf \
+  results/experiments/thesis_final_v8_realcats
 ```
 
-Both verifications must succeed. The exporter creates RQ1-RQ4 fragments in
-`writing/generated/`; figures remain in each run's `figures/` directory.
+Do not cite a run unless both verification commands succeed.
 
 ## Manual Execution
 
-The one-command workflow above is recommended. For debugging, the same work can
-be controlled stage by stage:
+For debugging, prepare, inspect, and execute each locked root separately:
 
 ```bash
-# Prepare the two locked experiments
 venv/bin/python scripts/run_results.py prepare \
-  --run-id hf_confirmation_1 --profile thesis --rq rq1 rq2 \
-  --replication-index 1 \
-  --exclude-hf-run results/experiments/thesis_final_20260731_hf
+  --run-id hf_v8 --profile thesis --rq rq1 rq2 \
+  --replication-index 3 \
+  --exclude-hf-run results/experiments/thesis_final_20260731_hf \
+  --exclude-hf-run results/experiments/thesis_confirmation_1_hf \
+  --exclude-hf-run results/experiments/thesis_confirmation_2_hf
 
 venv/bin/python scripts/run_results.py prepare \
-  --run-id realcats_confirmation_1 --profile thesis --rq rq3 rq4 \
-  --replication-index 1
+  --run-id realcats_v8 --profile thesis --rq rq3 rq4 \
+  --replication-index 3
 
-# Check combined resource admission without changing either run
 venv/bin/python scripts/run_results.py preflight \
-  results/experiments/hf_confirmation_1 \
-  results/experiments/realcats_confirmation_1
+  results/experiments/hf_v8 results/experiments/realcats_v8
 
-# Execute both roots with a combined 20-thread budget
 venv/bin/python scripts/run_results.py execute-parallel \
-  results/experiments/hf_confirmation_1 \
-  results/experiments/realcats_confirmation_1 \
-  --threads 20
+  results/experiments/hf_v8 results/experiments/realcats_v8 --threads 20
 ```
 
-Use `execute --resume` for one interrupted root or `execute-parallel --resume`
-when both coordinated workers were interrupted. Run
-`scripts/run_results.py <command> --help` for less common path and lock options.
+BLTE remains an optional, separate activity-matched replication:
 
-## Experiment Summary
+```bash
+venv/bin/python scripts/run_results.py prepare \
+  --run-id blte_v8 --profile thesis --rq blte
+venv/bin/python scripts/run_results.py execute \
+  results/experiments/blte_v8 --threads 20
+```
 
-| Question | Dataset | Analysis |
+## Experiment Scope
+
+| Question | Primary data | Analysis |
 |---|---|---|
-| RQ1 | Hugging Face | Baseline versus baseline plus motifs; prespecified volume, composition, presence, and incoming-role diagnostics |
-| RQ2 | Hugging Face | Development-CV sweep from 5 minutes to 30 days; primary choice maximizes average precision |
-| RQ3 | Real-CATS | Multiclass category distinguishability with a held-out label-permutation test |
-| RQ4 | Real-CATS | Global versus category-specific delta selection with paired bootstrap inference |
+| RQ1 | Hugging Face | Baseline versus motifs; 32-role, triangle-only, and 40-role comparisons on identical folds |
+| RQ2 | Hugging Face | Development-CV window sweep from 5 minutes to 30 days for each representation |
+| RQ3 | Real-CATS | Exact-category multiclass fingerprint distinguishability |
+| RQ4 | Real-CATS | Global versus category-specific temporal windows |
 
-RQ2 selects from 5 minutes, 30 minutes, 1 hour, 6 hours, 1 day, 3 days,
-1 week, 2 weeks, and 30 days. It uses the highest mean development-CV AP;
-exact ties choose the smaller delta. The one-standard-error choice is reported
-only as a secondary parsimony result.
+Real-CATS also supplies an HF-disjoint secondary RQ1/RQ2 check. It compares
+`CE.tsv` with `BE.tsv`, requires at least three usable events, and matches
+criminal and benign addresses one-to-one within fixed activity bins. Source
+activity is used only for cohort matching and never as a model feature. All five
+transaction layers are retained separately. BLTE applies the same activity-bin
+matching principle.
 
-The RQ1 representation tests all use that same development-selected window and
-the same held-out addresses. Canonical-order p-values are corrected across the
-eight locked secondary contrasts. The three `star_*_iii` roles are specified
-before execution; role-level direct-count scores are descriptive, not fitted
-model performance.
+The pinned Hugging Face `edges_all` file contains 380,566,661 rows in the
+canonical released graph table. The repository's raw-address, weekly, and
+monthly Parquets are alternate representations or copies and do not add
+relationships beyond that canonical release, so they
+are not downloaded. Preparation scans the full local file in batches; it does
+not load it all into pandas. The release itself contains upstream activity,
+value, neighbor, and pair caps. Reversing those caps would require a new chain
+query, which this project intentionally does not perform. No BigQuery account or
+paid data service is used.
 
-Real-CATS categories use exact, non-`Other` labels with at least 100 active
-addresses. Labels are not merged after inspecting results. Because Real-CATS
-does not provide a separate coordination label, RQ3 and RQ4 concern temporal
-fingerprints associated with its malicious-behaviour categories, not a direct
-supervised test of coordination itself.
+HF triangle counts are complete only within the released target-neighborhood
+closure, not within the full Ethereum chain. Real-CATS RQ3/RQ4 uses the 32 star
+and two-node roles because its ego histories cannot guarantee neighbor-to-neighbor
+triangle completeness.
 
-The Hugging Face source is scanned from local Parquet in bounded batches, while
-motif counting uses the selected target-incident subgraph. Real-CATS retains
-normal, internal, ERC-20, ERC-721, and ERC-1155 transfers as separate layers.
+Result roots contain immutable `features/`, `predictions/`, `metrics/`,
+`tables/`, `figures/`, checkpoints, and integrity manifests. Protocol v6 and v7
+runs remain read-only verifiable; new execution uses protocol v8.
 
-BLTE is optional secondary validation and is not required for the primary run
-to be citable. Synthetic data is used only for motif-catalogue and boundary
-validation.
-
-Result roots contain `features/`, `predictions/`, `metrics/`, `tables/`, and
-`figures/`, plus hash-verified checkpoints and manifests. Protocol v1-v5 runs
-are legacy read-only artifacts and cannot replace a verified protocol-v6 run.
-
-Run `venv/bin/pytest -q` for development checks. Use
-`venv/bin/python scripts/run_results.py --help` for command details. `main.py`
-remains available for quick exploration, but its outputs are not citable.
+Run `venv/bin/pytest -q` for development checks and
+`venv/bin/python scripts/run_results.py --help` for all CLI options.

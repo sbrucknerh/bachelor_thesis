@@ -16,8 +16,11 @@ from src.experiments.constants import (
     DELTAS,
     N_BOOTSTRAPS,
     N_PERMUTATIONS,
+    MIN_FULLY_VERIFIABLE_PROTOCOL_VERSION,
     PROTOCOL_VERSION,
     REALCATS_RESEARCH_QUESTIONS,
+    SUPPORTED_FULL_PROTOCOL_VERSIONS,
+    HF_CONFIRMATION_EXCLUSION_POLICY,
 )
 
 
@@ -53,12 +56,54 @@ def _derive_citable_read_only(root: Path, protocol: dict) -> tuple[bool, list[st
     expected_checkpoints = 0
     if {"rq1", "rq2"} & selected:
         expected_checkpoints += len(orders) * len(protocol.get("deltas", []))
+        version = int(protocol.get("protocol_version", 0))
+        if version >= 7:
+            triangle = protocol.get("hf_triangle_analysis", {})
+            artifacts = protocol.get("datasets", {}).get("huggingface", {}).get(
+                "artifacts", {}
+            )
+            if not triangle.get("enabled", False):
+                reasons.append("HF triangle analysis is not enabled")
+            if not artifacts.get("motif_events") or not artifacts.get(
+                "motif_events_sha256"
+            ):
+                reasons.append("HF neighborhood graph is missing")
+            if version == 7 and not protocol.get("replication", {}).get(
+                "hf_exclusion_references", []
+            ):
+                reasons.append(
+                    "protocol-v7 HF triangle extension has no prior-run exclusions"
+                )
+        if version >= 8:
+            exclusions = protocol["datasets"]["huggingface"].get(
+                "confirmation_exclusions", {}
+            )
+            if len(protocol.get("replication", {}).get(
+                "hf_exclusion_references", []
+            )) < int(HF_CONFIRMATION_EXCLUSION_POLICY["minimum_reference_runs"]):
+                reasons.append("protocol-v8 HF exclusion run count is incomplete")
+            if int(exclusions.get("unique_prior_node_ids", 0)) < int(
+                HF_CONFIRMATION_EXCLUSION_POLICY["minimum_unique_prior_targets"]
+            ):
+                reasons.append(
+                    "protocol-v8 HF prior-target exclusion coverage is incomplete"
+                )
     if selected & REALCATS_RESEARCH_QUESTIONS:
         expected_checkpoints += (
             len(protocol["datasets"]["realcats"]["artifacts"]["layers"])
             * len(orders)
             * len(protocol.get("deltas", []))
         )
+        if int(protocol.get("protocol_version", 0)) >= 8:
+            expected_checkpoints += (
+                len(
+                    protocol["datasets"]["realcats"]["artifacts"].get(
+                        "binary_layers", {}
+                    )
+                )
+                * len(orders)
+                * len(protocol.get("deltas", []))
+            )
     actual_checkpoints = (
         sum(path.is_dir() for path in (root / "checkpoints").iterdir())
         if (root / "checkpoints").exists()
@@ -158,7 +203,7 @@ def verify_run(run_root: str | Path, require_citable: bool = False) -> dict:
     protocol_sha = paths.protocol_hash.read_text(encoding="ascii").strip()
     prepared = _verify_prepared(root, protocol)
     version = int(protocol.get("protocol_version", 1))
-    if version < PROTOCOL_VERSION:
+    if version < MIN_FULLY_VERIFIABLE_PROTOCOL_VERSION:
         report = {
             "integrity_ok": True,
             "protocol_version": version,
@@ -170,7 +215,7 @@ def verify_run(run_root: str | Path, require_citable: bool = False) -> dict:
         if require_citable:
             raise VerificationError("Legacy protocol runs cannot be thesis-citable")
         return report
-    if version != PROTOCOL_VERSION:
+    if version not in SUPPORTED_FULL_PROTOCOL_VERSIONS:
         raise VerificationError(f"Unsupported protocol version: {version}")
 
     definition, definition_sha = _verify_definition(root, protocol_sha)
@@ -216,7 +261,7 @@ def verify_run(run_root: str | Path, require_citable: bool = False) -> dict:
     report = {
         "integrity_ok": True,
         "protocol_version": version,
-        "legacy_read_only": False,
+        "legacy_read_only": version < PROTOCOL_VERSION,
         "completed": manifest.get("status") == "complete",
         "citable": citable,
         "prepared_artifacts_checked": prepared,

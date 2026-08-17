@@ -17,6 +17,11 @@ def _finite_numeric(frame, context: str) -> None:
 def validate_prepared_inputs(run_root: Path, protocol: dict) -> dict:
     import pandas as pd
 
+    from src.experiments.constants import (
+        HF_CONFIRMATION_EXCLUSION_POLICY,
+        HF_RELEASE_IDENTITY,
+    )
+
     audit: dict = {}
     enforce_class_coverage = protocol.get("execution_profile") != "smoke"
     for name, dataset in protocol.get("datasets", {}).items():
@@ -101,6 +106,73 @@ def validate_prepared_inputs(run_root: Path, protocol: dict) -> dict:
             "targets": int(len(targets)),
             "label_column": label_column,
         }
+        if name == "huggingface" and artifacts.get("motif_events"):
+            extraction = dataset.get("edge_extraction", {}).get(
+                "released_neighborhood", {}
+            )
+            if extraction.get("scope") != "released_graph_target_neighborhood_closure":
+                raise RuntimeError("HF triangle graph has an invalid extraction scope")
+            if extraction.get("full_ethereum_completeness") is not False:
+                raise RuntimeError(
+                    "HF triangle graph must not claim full-Ethereum completeness"
+                )
+            incident_edges = int(extraction.get("incident_edges", -1))
+            selected_edges = int(extraction.get("selected_edges", -1))
+            if incident_edges <= 0 or selected_edges < incident_edges:
+                raise RuntimeError("HF triangle graph lost target-incident edges")
+            audit[name]["motif_graph_edges"] = selected_edges
+            audit[name]["triangle_scope"] = extraction["scope"]
+            if int(protocol.get("protocol_version", 0)) >= 8 and protocol.get(
+                "execution_profile"
+            ) != "smoke":
+                release = dataset.get("release_identity", {})
+                if not release.get("complete_pinned_release_match", False):
+                    raise RuntimeError("HF input is not the complete pinned release")
+                if release.get("observed_sha256") != HF_RELEASE_IDENTITY["sha256"]:
+                    raise RuntimeError("HF release hashes differ from the locked identity")
+                exclusions = dataset.get("confirmation_exclusions", {})
+                if int(exclusions.get("unique_prior_node_ids", 0)) < int(
+                    HF_CONFIRMATION_EXCLUSION_POLICY[
+                        "minimum_unique_prior_targets"
+                    ]
+                ):
+                    raise RuntimeError("HF prior-target exclusion lineage is incomplete")
+        if name == "realcats" and int(protocol.get("protocol_version", 0)) >= 8:
+            binary_targets = pd.read_parquet(run_root / artifacts["binary_targets"])
+            binary_folds = pd.read_parquet(run_root / artifacts["binary_folds"])
+            hf_exclusions = pd.read_parquet(
+                run_root / artifacts["binary_hf_exclusions"]
+            )
+            binary_targets["address"] = binary_targets["address"].astype(str)
+            if binary_targets["address"].duplicated().any():
+                raise RuntimeError("Real-CATS binary targets are not unique")
+            if set(binary_targets["label"].astype(int)) != {0, 1}:
+                raise RuntimeError("Real-CATS binary targets do not contain both classes")
+            counts = binary_targets["label"].astype(int).value_counts()
+            if counts.nunique() != 1:
+                raise RuntimeError("Real-CATS binary targets are not activity matched 1:1")
+            if binary_targets["usable_events"].lt(3).any():
+                raise RuntimeError("Real-CATS binary target has fewer than three events")
+            overlap = set(binary_targets["address"]) & set(
+                hf_exclusions["address"].astype(str)
+            )
+            if overlap:
+                raise RuntimeError("Real-CATS binary targets overlap HF labels")
+            if set(binary_targets["split"]) != {"development", "test"}:
+                raise RuntimeError("Real-CATS binary split is incomplete")
+            for split, scoped in binary_targets.groupby("split"):
+                if set(scoped["label"].astype(int)) != {0, 1}:
+                    raise RuntimeError(
+                        f"Real-CATS binary {split} split is missing a class"
+                    )
+            if not set(binary_folds["address"].astype(str)) <= set(
+                binary_targets.loc[
+                    binary_targets["split"] == "development", "address"
+                ]
+            ):
+                raise RuntimeError("Real-CATS binary folds contain non-development targets")
+            audit[name]["binary_targets"] = int(len(binary_targets))
+            audit[name]["binary_hf_overlap"] = 0
     return audit
 
 
@@ -109,8 +181,7 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
     import pandas as pd
 
     from src.experiments.constants import (
-        HF_DIAGNOSTIC_ARM_NAMES,
-        HF_DIAGNOSTIC_COMPARISONS,
+        ALL_MOTIF_ROLE_NAMES,
         MOTIF_ROLE_NAMES,
     )
 
@@ -118,7 +189,13 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
     for path in sorted((run_root / "features").glob("*.parquet")):
         frame = pd.read_parquet(path)
         _finite_numeric(frame, str(path))
-        motif_columns = [column for column in frame if "star_" in column or "two_node_" in column]
+        motif_columns = [
+            column
+            for column in frame
+            if "star_" in column
+            or "two_node_" in column
+            or "triangle_" in column
+        ]
         if motif_columns and (frame[motif_columns] < 0).any().any():
             raise RuntimeError(f"{path} contains negative motif counts")
         if "address" in frame and "delta" not in frame and frame["address"].duplicated().any():
@@ -183,8 +260,10 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
         }
         if not required_representation <= set(representation):
             raise RuntimeError("RQ1 representation table is missing required columns")
+        representation_definition = protocol["hf_representation_analysis"]
         expected_comparisons = {
-            comparison for comparison, _, _ in HF_DIAGNOSTIC_COMPARISONS
+            str(item["comparison"])
+            for item in representation_definition["formal_comparisons"]
         }
         expected_cohorts = set(
             pd.read_parquet(
@@ -203,6 +282,41 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
             if set(rows["ordering_variant"].astype(str)) != {"canonical"}:
                 raise RuntimeError("RQ1 formal representation tests must be canonical only")
 
+        if int(protocol.get("protocol_version", 0)) >= 7:
+            triangle_ablation = pd.read_csv(
+                run_root / "tables" / "rq1_triangle_ablation.csv"
+            )
+            expected_triangle_comparisons = {
+                "baseline_triangles_vs_baseline",
+                "combined_vs_combined_without_triangles",
+            }
+            if set(triangle_ablation["comparison"].astype(str)) != (
+                expected_triangle_comparisons
+            ):
+                raise RuntimeError("RQ1 triangle ablation comparisons are incomplete")
+            if set(triangle_ablation["cohort"].astype(str)) != expected_cohorts:
+                raise RuntimeError("RQ1 triangle ablation is missing a locked cohort")
+        if int(protocol.get("protocol_version", 0)) >= 8:
+            triangle_windows = pd.read_csv(
+                run_root / "tables" / "rq1_triangle_window_analysis.csv"
+            )
+            required_triangle_windows = {
+                "cohort",
+                "ordering_variant",
+                "all_40_selected_delta",
+                "non_triangle_32_selected_delta",
+                "triangles_only_selected_delta",
+                "observed_delta_ap",
+            }
+            if not required_triangle_windows <= set(triangle_windows):
+                raise RuntimeError("RQ1 triangle-window table is incomplete")
+            if set(triangle_windows["cohort"].astype(str)) != expected_cohorts:
+                raise RuntimeError("RQ1 triangle-window table is missing a cohort")
+            if set(triangle_windows["ordering_variant"].astype(str)) != {
+                "canonical"
+            }:
+                raise RuntimeError("RQ1 triangle-window inference must be canonical only")
+
         roles = pd.read_csv(run_root / "tables" / "rq1_role_diagnostics.csv")
         role_required = {
             "cohort",
@@ -216,8 +330,21 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
         }
         if not role_required <= set(roles):
             raise RuntimeError("RQ1 role diagnostics are missing required columns")
+        expected_roles = (
+            ALL_MOTIF_ROLE_NAMES
+            if int(
+                protocol.get("event_execution", {}).get(
+                    "hf_motif_roles_retained",
+                    protocol.get("event_execution", {}).get(
+                        "motif_roles_retained", len(MOTIF_ROLE_NAMES)
+                    ),
+                )
+            )
+            == len(ALL_MOTIF_ROLE_NAMES)
+            else MOTIF_ROLE_NAMES
+        )
         for (cohort, scope), rows in roles.groupby(["cohort", "scope"]):
-            if set(rows["role"].astype(str)) != set(MOTIF_ROLE_NAMES):
+            if set(rows["role"].astype(str)) != set(expected_roles):
                 raise RuntimeError(
                     f"RQ1 role diagnostics are incomplete for {cohort}/{scope}"
                 )
@@ -236,7 +363,7 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
             "baseline",
             "motifs",
             "combined",
-            *HF_DIAGNOSTIC_ARM_NAMES,
+            *representation_definition["diagnostic_arms"],
         }
         expected_xgboost_arms = {
             "baseline_xgboost",
@@ -272,6 +399,18 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
                         raise RuntimeError(
                             f"{stem} primary arm {arm} is missing a locked delta"
                         )
+                if int(protocol.get("protocol_version", 0)) >= 8:
+                    for arm in (
+                        "motifs_without_triangles",
+                        "combined_without_triangles",
+                        "triangles_only",
+                        "baseline_triangles",
+                    ):
+                        rows = metrics.loc[metrics["arm"] == arm]
+                        if set(rows["delta"].astype(int)) != deltas:
+                            raise RuntimeError(
+                                f"{stem} v8 arm {arm} is missing a locked delta"
+                            )
     if "rq2" in selected:
         rq2 = pd.read_csv(run_root / "tables" / "rq2_delta_comparisons.csv")
         required = {
@@ -282,7 +421,7 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
             "p_value_bh",
         }
         if not required <= set(rq2):
-            raise RuntimeError("RQ2 comparison table is missing protocol-v6 columns")
+            raise RuntimeError("RQ2 comparison table is missing locked protocol columns")
         observed_deltas = set(
             pd.concat(
                 [
@@ -313,6 +452,20 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
             raise RuntimeError("RQ2 coverage table is missing a locked delta")
         if set(coverage["scope"].astype(str)) != {"all", "development", "test"}:
             raise RuntimeError("RQ2 coverage table is missing a required population scope")
+        if int(protocol.get("protocol_version", 0)) >= 8:
+            if "representation" not in coverage or set(
+                coverage["representation"].astype(str)
+            ) != {"all_40_roles", "non_triangle_32_roles", "triangles_only"}:
+                raise RuntimeError("RQ2 coverage table is missing a v8 representation")
+            representation_deltas = pd.read_csv(
+                run_root / "tables" / "rq2_representation_delta_selection.csv"
+            )
+            if set(representation_deltas["representation"].astype(str)) != {
+                "all_40_roles",
+                "non_triangle_32_roles",
+                "triangles_only",
+            }:
+                raise RuntimeError("RQ2 representation window selections are incomplete")
     if {"rq3", "rq4"} <= selected:
         rq4_global = pd.read_csv(
             run_root / "tables" / "rq4_global_results.csv"
@@ -353,4 +506,30 @@ def validate_generated_results(run_root: Path, protocol: dict) -> dict:
         )
         if not result_deltas <= deltas:
             raise RuntimeError("RQ4 tables contain an unlocked delta")
+        if int(protocol.get("protocol_version", 0)) >= 8:
+            binary_rq1 = pd.read_csv(
+                run_root / "tables" / "realcats_binary_rq1_results.csv"
+            )
+            binary_rq2 = pd.read_csv(
+                run_root / "tables" / "realcats_binary_rq2_results.csv"
+            )
+            expected_variants = set(protocol["ordering_variants"])
+            if set(binary_rq1["ordering_variant"].astype(str)) != expected_variants:
+                raise RuntimeError("Real-CATS binary RQ1 variants are incomplete")
+            if set(binary_rq2["ordering_variant"].astype(str)) != expected_variants:
+                raise RuntimeError("Real-CATS binary RQ2 variants are incomplete")
+            if not set(binary_rq1["selected_delta"].astype(int)) <= deltas:
+                raise RuntimeError("Real-CATS binary RQ1 selected an unlocked delta")
+            for variant in expected_variants:
+                metrics = pd.read_csv(
+                    run_root
+                    / "metrics"
+                    / f"realcats_binary_{variant}_metrics.csv"
+                )
+                for arm in ("baseline", "motifs", "combined"):
+                    rows = metrics.loc[metrics["arm"] == arm]
+                    if set(rows["delta"].astype(int)) != deltas:
+                        raise RuntimeError(
+                            f"Real-CATS binary {variant}/{arm} misses a delta"
+                        )
     return audit

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from src.experiments.artifacts import create_run_paths, write_json_exclusive
-from src.experiments.constants import MOTIF_ROLE_NAMES
+from src.experiments.constants import ALL_MOTIF_ROLE_NAMES, MOTIF_ROLE_NAMES
 from src.experiments.execution_artifacts import (
     StageManager,
     canonical_checkpoint_hash,
@@ -35,6 +35,16 @@ def test_checkpoint_hash_has_canonical_address_order_and_types():
     first.iloc[0, 0] = -1
     with pytest.raises(ValueError, match="nonnegative"):
         canonical_checkpoint_hash(first)
+
+
+def test_checkpoint_hash_accepts_locked_40_role_catalogue():
+    counts = pd.DataFrame(
+        0,
+        index=pd.Index(["0xa"], name="address"),
+        columns=ALL_MOTIF_ROLE_NAMES,
+        dtype="int64",
+    )
+    assert len(canonical_checkpoint_hash(counts)) == 64
 
 
 def test_execution_definition_locks_resume_threads(tmp_path, monkeypatch):
@@ -109,6 +119,11 @@ def test_hf_confirmation_requires_prior_run_exclusion(tmp_path):
             ["rq1", "rq2"],
             replication_index=1,
         )
+
+
+def test_thesis_triangle_extension_rejects_initial_hf_cohort(tmp_path):
+    with pytest.raises(ValueError, match="final post-hoc HF confirmation"):
+        prepare_experiment(tmp_path, "post-hoc", ["rq1", "rq2"])
 
 
 def test_hf_initial_analysis_rejects_exclusion_reference(tmp_path):

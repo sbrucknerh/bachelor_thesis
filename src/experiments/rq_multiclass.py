@@ -413,7 +413,7 @@ def execute_realcats(
     return sensitivity
 
 
-def execute_realcats_v6(
+def execute_realcats_v8(
     paths,
     protocol: dict,
     stage_manager,

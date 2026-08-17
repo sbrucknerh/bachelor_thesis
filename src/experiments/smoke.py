@@ -23,12 +23,17 @@ from src.experiments.constants import (
     DEFAULT_XGB_PARAMS,
     DELTA_SELECTION,
     EVENT_EXECUTION,
+    HF_CONFIRMATION_EXCLUSION_POLICY,
     HF_COHORT_ELIGIBILITY,
+    HF_RELEASE_IDENTITY,
     HF_REPRESENTATION_ANALYSIS,
+    HF_TRIANGLE_ANALYSIS,
+    HF_TRIANGLE_WINDOW_ANALYSIS,
     MULTICLASS_LOGISTIC_PARAMS,
     PROTOCOL_VERSION,
     RANDOM_SEED,
     REALCATS_CATEGORY_ELIGIBILITY,
+    REALCATS_BINARY_REPLICATION,
     REALCATS_LAYER_FILES,
     RESOURCE_CONSTANTS,
     replication_seed_definition,
@@ -36,6 +41,7 @@ from src.experiments.constants import (
 from src.experiments.datasets import (
     count_target_activity,
     discover_hf_snapshot,
+    extract_released_neighborhood_edges,
     extract_target_edges,
     load_hf_targets,
     select_dual_hf_cohorts,
@@ -157,6 +163,7 @@ def _prepare_smoke_hf(paths, snapshot: Path, telemetry: RunTelemetry) -> dict:
     target_path = paths.data / "hf_targets.parquet"
     fold_path = paths.data / "hf_cv_folds.parquet"
     event_path = paths.data / "hf_incident_edges.parquet"
+    motif_event_path = paths.data / "hf_released_neighborhood_edges.parquet"
     write_parquet_exclusive(target_path, selected)
     write_parquet_exclusive(fold_path, folds)
     with telemetry.step(
@@ -171,19 +178,19 @@ def _prepare_smoke_hf(paths, snapshot: Path, telemetry: RunTelemetry) -> dict:
             telemetry=telemetry,
             max_rows=SMOKE_HF_SOURCE_ROWS,
         )
+    with telemetry.step(
+        "smoke.prepare.hf.neighborhood_extraction",
+        rows_limit=SMOKE_HF_SOURCE_ROWS,
+    ):
+        neighborhood_extraction = extract_released_neighborhood_edges(
+            edge_source,
+            event_path,
+            motif_event_path,
+            telemetry=telemetry,
+            max_rows=SMOKE_HF_SOURCE_ROWS,
+        )
 
     attrition["smoke_source_rows"] = SMOKE_HF_SOURCE_ROWS
-    endpoints = pd.read_parquet(
-        event_path, columns=["from_address", "to_address"]
-    )
-    approximate_nodes = int(
-        pd.unique(
-            pd.concat(
-                [endpoints["from_address"], endpoints["to_address"]],
-                ignore_index=True,
-            )
-        ).size
-    )
     return {
         "snapshot_revision": snapshot.name,
         "smoke_bounded": True,
@@ -206,14 +213,21 @@ def _prepare_smoke_hf(paths, snapshot: Path, telemetry: RunTelemetry) -> dict:
             "targets": _relative(target_path, paths.root),
             "folds": _relative(fold_path, paths.root),
             "events": _relative(event_path, paths.root),
+            "motif_events": _relative(motif_event_path, paths.root),
             "targets_sha256": sha256_file(target_path),
             "folds_sha256": sha256_file(fold_path),
             "events_sha256": sha256_file(event_path),
+            "motif_events_sha256": sha256_file(motif_event_path),
         },
         "attrition": attrition,
-        "edge_extraction": extraction,
+        "edge_extraction": {
+            "incident": extraction,
+            "released_neighborhood": neighborhood_extraction,
+        },
         "resource_metadata": {
-            "approximate_distinct_nodes": approximate_nodes,
+            "exact_distinct_nodes": int(
+                neighborhood_extraction["neighborhood_nodes"]
+            ),
             "target_count": int(len(selected)),
         },
     }
@@ -390,10 +404,35 @@ def _prepare_smoke_realcats(
         )
         folds = _rq3_cv_assignments(inferential, RANDOM_SEED)
 
+        binary_targets = inferential[["address", "campaign_group"]].sort_values(
+            "address"
+        ).reset_index(drop=True)
+        binary_targets["label"] = [index % 2 for index in range(len(binary_targets))]
+        binary_targets["source_activity"] = 3
+        binary_targets["usable_events"] = 3
+        binary_targets["activity_bin"] = "smoke"
+        binary_targets["split"] = stratified_outer_split(
+            binary_targets, label_column="label", seed=RANDOM_SEED
+        ).values
+        binary_folds = repeated_group_folds(
+            binary_targets.loc[binary_targets["split"] == "development"],
+            seeds=(RANDOM_SEED,),
+            stratum_column="label",
+        )
+
     target_path = paths.data / "realcats_targets.parquet"
     fold_path = paths.data / "realcats_cv_folds.parquet"
+    binary_target_path = paths.data / "realcats_binary_targets.parquet"
+    binary_fold_path = paths.data / "realcats_binary_cv_folds.parquet"
+    binary_hf_exclusion_path = paths.data / "realcats_binary_hf_exclusions.parquet"
     write_parquet_exclusive(target_path, targets)
     write_parquet_exclusive(fold_path, folds)
+    write_parquet_exclusive(binary_target_path, binary_targets)
+    write_parquet_exclusive(binary_fold_path, binary_folds)
+    write_parquet_exclusive(
+        binary_hf_exclusion_path,
+        pd.DataFrame({"address": pd.Series(dtype="string")}),
+    )
     return {
         "smoke_bounded": True,
         "sources": {
@@ -417,19 +456,49 @@ def _prepare_smoke_realcats(
                 layer: _relative(path, paths.root)
                 for layer, path in layer_paths.items()
             },
+            "binary_targets": _relative(binary_target_path, paths.root),
+            "binary_folds": _relative(binary_fold_path, paths.root),
+            "binary_hf_exclusions": _relative(
+                binary_hf_exclusion_path, paths.root
+            ),
+            "binary_layers": {
+                layer: _relative(path, paths.root)
+                for layer, path in layer_paths.items()
+            },
             "selection_sha256": sha256_file(selection_path),
             "targets_sha256": sha256_file(target_path),
             "folds_sha256": sha256_file(fold_path),
             "layers_sha256": {
                 layer: sha256_file(path) for layer, path in layer_paths.items()
             },
+            "binary_targets_sha256": sha256_file(binary_target_path),
+            "binary_folds_sha256": sha256_file(binary_fold_path),
+            "binary_hf_exclusions_sha256": sha256_file(
+                binary_hf_exclusion_path
+            ),
+            "binary_layers_sha256": {
+                layer: sha256_file(path) for layer, path in layer_paths.items()
+            },
         },
         "selection": selection_audit,
         "attrition": attrition,
         "conversion": conversion,
+        "binary_replication": {
+            "definition": {
+                **REALCATS_BINARY_REPLICATION,
+                "smoke_override": True,
+            },
+            "selection": "synthetic_balanced_labels_over_bounded_real_histories",
+            "hf_address_overlap": "not_applicable_non_citable_smoke",
+        },
         "resource_metadata": {
             "target_count": int(len(inferential)),
             "exact_distinct_nodes_by_layer": {
+                layer: int(conversion[f"{layer}_exact_distinct_nodes"])
+                for layer in REALCATS_LAYER_FILES
+            },
+            "binary_target_count": int(len(binary_targets)),
+            "binary_exact_distinct_nodes_by_layer": {
                 layer: int(conversion[f"{layer}_exact_distinct_nodes"])
                 for layer in REALCATS_LAYER_FILES
             },
@@ -490,15 +559,25 @@ def prepare_smoke_experiment(
     datasets["realcats"] = _prepare_smoke_realcats(
         paths, realcats_zip_path, realcats_label_dir, telemetry
     )
-    datasets["blte"] = _prepare_blte(paths, blte_path, telemetry=telemetry)
+    datasets["blte"] = _prepare_blte(
+        paths,
+        blte_path,
+        split_seed=RANDOM_SEED,
+        cv_seeds=(RANDOM_SEED,),
+        telemetry=telemetry,
+    )
     hf_resource = datasets["huggingface"].get(
-        "resource_metadata", {"approximate_distinct_nodes": 0, "target_count": 0}
+        "resource_metadata", {"exact_distinct_nodes": 0, "target_count": 0}
     )
     realcats_resource = datasets["realcats"].get(
         "resource_metadata",
         {
             "target_count": 0,
+            "binary_target_count": 0,
             "exact_distinct_nodes_by_layer": {
+                layer: 0 for layer in REALCATS_LAYER_FILES
+            },
+            "binary_exact_distinct_nodes_by_layer": {
                 layer: 0 for layer in REALCATS_LAYER_FILES
             },
         },
@@ -524,9 +603,17 @@ def prepare_smoke_experiment(
         "primary_metric": "average_precision",
         "delta_selection": DELTA_SELECTION,
         "hf_representation_analysis": HF_REPRESENTATION_ANALYSIS,
+        "hf_triangle_analysis": HF_TRIANGLE_ANALYSIS,
+        "hf_triangle_window_analysis": HF_TRIANGLE_WINDOW_ANALYSIS,
+        "hf_release_identity": HF_RELEASE_IDENTITY,
+        "hf_confirmation_exclusion_policy": HF_CONFIRMATION_EXCLUSION_POLICY,
         "realcats_category_eligibility": {
             **REALCATS_CATEGORY_ELIGIBILITY,
             "minimum_active_addresses": SMOKE_REALCATS_MINIMUM_CLASS_SIZE,
+            "smoke_override": True,
+        },
+        "realcats_binary_replication": {
+            **REALCATS_BINARY_REPLICATION,
             "smoke_override": True,
         },
         "alpha": 0.05,
@@ -556,18 +643,27 @@ def prepare_smoke_experiment(
         "resource_estimates": {
             "huggingface": {
                 "node_count_method": "exact_bounded_smoke_endpoints",
-                "approximate_distinct_nodes": hf_resource["approximate_distinct_nodes"],
-                "node_count_admission": hf_resource["approximate_distinct_nodes"],
+                "exact_distinct_nodes": hf_resource["exact_distinct_nodes"],
+                "node_count_admission": hf_resource["exact_distinct_nodes"],
                 "target_count": hf_resource["target_count"],
-                "max_feature_columns": 50,
+                "max_feature_columns": 60,
             },
             "realcats": {
                 "node_count_method": "exact_sqlite_union_distinct_per_layer",
                 "target_count": realcats_resource["target_count"],
-                "max_feature_columns": 160,
+                "max_feature_columns": 245,
                 "layers": {
                     layer: {"exact_distinct_nodes": count}
                     for layer, count in realcats_resource["exact_distinct_nodes_by_layer"].items()
+                },
+                "binary_replication": {
+                    "target_count": realcats_resource["binary_target_count"],
+                    "layers": {
+                        layer: {"exact_distinct_nodes": count}
+                        for layer, count in realcats_resource[
+                            "binary_exact_distinct_nodes_by_layer"
+                        ].items()
+                    },
                 },
             },
             "blte": {
@@ -580,8 +676,13 @@ def prepare_smoke_experiment(
         "resource_constants": RESOURCE_CONSTANTS,
         "source_scope": {
             "huggingface_preparation": "bounded_source_prefix_smoke_only",
-            "huggingface_motif_graph": "target_incident_subgraph",
+            "huggingface_baseline_graph": "target_incident_subgraph",
+            "huggingface_motif_graph": "released_graph_target_neighborhood_closure",
+            "huggingface_triangle_completeness": (
+                "complete_within_bounded_release_prefix_not_full_ethereum"
+            ),
             "realcats_layers": list(REALCATS_LAYER_FILES),
+            "realcats_binary_replication": "bounded_smoke_path_only",
             "blte_scope": "smoke_only",
         },
         "runtime": runtime,
