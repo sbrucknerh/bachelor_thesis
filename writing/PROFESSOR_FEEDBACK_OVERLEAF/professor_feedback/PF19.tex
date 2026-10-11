@@ -1,0 +1,65 @@
+% BEGIN PROFESSOR FEEDBACK PF19: Results - RQ1
+\section{RQ1: Incremental Signal of Temporal Motif Fingerprints}
+
+Adding local motif-role features increases average precision in all six
+HuggingFace comparisons. Three of these increases are statistically significant.
+Figure~\ref{fig:res_rq1_ablation} compares the baseline, motif-only, and combined
+feature sets in the 40-role analysis. Table~\ref{tab:res_rq1} shows the same
+comparison for all three samples. The addresses and data splits
+remain identical within each comparison, so only the feature set changes.
+
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{0.48}{rq1_ablation_controlled_rep3}
+  \ResGraphic{0.48}{rq1_ablation_prevalence_rep3}
+  \caption{RQ1 feature comparison in the 40-role HuggingFace analysis using the
+  default timestamp ordering. The controlled cohort is shown on the left and
+  the prevalence cohort on the right.}
+  \label{fig:res_rq1_ablation}
+\end{figure}
+
+\IfFileExists{generated/results_rq1.tex}{\input{generated/results_rq1}}{\ResPendingTable{RQ1 feature-view comparison.}{tab:res_rq1}}
+
+Three of the six improvements are statistically significant. Both cohorts are
+significant in one 32-role sample, while only the controlled cohort is
+significant in the other. Neither cohort is significant in the 40-role
+analysis. In that analysis, average precision rises from 0.7351 to
+0.7587 in the controlled cohort. The difference is 0.0237, with a 95\,\%
+confidence interval of $[-0.0142,0.0615]$ and $p=0.1330$. In the prevalence
+cohort, it rises from 0.5986 to 0.6146. Here the difference is 0.0161, with a
+confidence interval of $[-0.0342,0.0653]$ and $p=0.2659$. The direction remains
+positive under all seven timestamp orderings, but the confidence intervals
+include zero.
+
+The motif-only model has lower AP than the non-motif baseline in every
+sample. The
+role-by-role fingerprint performs better than using only the total number of
+motifs. In the 40-role analysis, its AP advantage over motif volume is 0.1173 in
+the controlled cohort and 0.1528 in the prevalence cohort. Both differences
+remain significant after correction for multiple comparisons. Once the baseline
+is supplemented with motif composition and volume, adding the full role-by-role
+fingerprint does not give a significant improvement.
+
+\IfFileExists{generated/results_rq1_representations.tex}{\input{generated/results_rq1_representations}}{\ResPendingTable{RQ1 representation diagnostics.}{tab:res_rq1_representations}}
+
+Table~\ref{tab:res_rq1_triangles} examines the eight triangle roles separately.
+Adding them directly to the baseline changes AP by 0.0012 in the controlled
+cohort and by 0.0001 in the prevalence cohort. Using all 40 roles instead of the
+32 star and two-node roles changes AP by 0.0071 and 0.0041, respectively. None
+of these differences is significant.
+
+\IfFileExists{generated/results_rq1_triangles.tex}{\input{generated/results_rq1_triangles}}{\ResPendingTable{RQ1 triangle-role ablation.}{tab:res_rq1_triangles}}
+
+In the binary Real-CATS comparison, the selected window is 30 days.
+Baseline AP is 0.9344 and combined AP is 0.9356.
+The difference is 0.0011 with a confidence interval of $[-0.0018,0.0042]$ and
+$p=0.2440$. F1 decreases from 0.8481 to 0.8351. The positive AP direction is not
+preserved under every timestamp ordering. The motif-only model still reaches an
+AP of 0.8708.
+
+\IfFileExists{generated/results_realcats_binary.tex}{\input{generated/results_realcats_binary}}{\ResPendingTable{Binary Real-CATS comparison.}{tab:res_realcats_binary}}
+
+For the XGBoost comparison, the AP difference is 0.0217 in the controlled cohort
+($p=0.1224$) and $-0.0119$ in the prevalence cohort ($p=0.7470$).
+% END PROFESSOR FEEDBACK PF19
+

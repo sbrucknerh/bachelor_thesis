@@ -1,0 +1,11 @@
+% BEGIN PROFESSOR FEEDBACK PF04: Foundations - Blockchain fundamentals
+\section{Blockchain and Ethereum fundamentals}
+First, we will cover what a Blockchain is and how Ethereum works and handles transactions. 
+A blockchain is a distributed ledger in which transactions are grouped into blocks and linked chronologically so that later blocks reference earlier ones through cryptographic hashes \citep{nakamoto2008bitcoin, buterin2014ethereum}. This makes the ledger append-only, because changing a past record would require rewriting the block and all of the blocks that follow under the network’s consensus rules \citep{nakamoto2008bitcoin}. For this thesis, the important part is not the consensus mechanism itself, but that blockchain data is ordered, time-stamped, and persistent.
+
+Ethereum extends this basic blockchain idea with account-based state and smart-contract execution \citep{buterin2014ethereum}. The relevant transaction record can be represented as a tuple $(s,r,v,t,g)$, where $s$ is the sender, $r$ the receiver, $v$ the transferred value, $t$ the timestamp, and $g$ the gas usage (transaction fee) \citep{alemari2021labeled, sanjalawe2023atd}. Ethereum distinguishes between externally owned accounts (EOAs), which are controlled by private keys and initiate transactions directly, and contract accounts, which execute code when invoked \citep{buterin2014ethereum, alemari2021labeled}.
+
+Because multiple transactions can occur between the same pair of addresses at different times, with different values and gas costs, Ethereum is naturally modeled as a weighted temporal directed multigraph \citep{kovanen2011temporal, paranjape2017motifs}. This is the abstraction used in the remainder of the chapter. In contrast, Bitcoin follows an unspent transaction output (UTXO) model, where transactions consume and create unspent outputs rather than directly transferring value between persistent accounts \citep{nakamoto2008bitcoin}.
+
+With this data model established, the next section introduces the formal graph representation.
+% END PROFESSOR FEEDBACK PF04

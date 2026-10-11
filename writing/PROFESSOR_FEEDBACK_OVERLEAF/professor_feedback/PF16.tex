@@ -1,0 +1,73 @@
+% BEGIN PROFESSOR FEEDBACK PF16: Implementation - Reproducibility
+\subsection{Reproducibility}
+
+The study is built around a strict separation between fixing the experiment and
+running it, so that no choice can be influenced by the test results. All settings live
+in one place, \texttt{src/experiments/constants.py}, and are copied into the run's
+protocol when preparation finishes. The main ones are shown below.
+
+\begin{lstlisting}[language=Python,
+  caption={Selected fixed experiment settings.},
+  label={lst:config}]
+RANDOM_SEED = 42
+CV_SEEDS = (42, 43, 44)
+DELTAS = (300, 1800, 3600, 21600,
+          86400, 259200, 604800,
+          1209600, 2592000)
+N_PERMUTATIONS = N_BOOTSTRAPS = 10_000
+HF_COHORT_ELIGIBILITY = {
+    "minimum_incident_edges": 3,
+    "activity_upper_quantile": 0.995,
+}
+\end{lstlisting}
+
+When preparation finishes it writes \texttt{protocol.json}, which records the data
+(the source revisions and a checksum of the source, the prepared files, the exact
+target addresses, and the cohort and fold assignments), every model, window,
+ordering, resampling, and seed value, and checksums of the code and of the
+installed package and Python versions. A checksum is a short code computed from a
+file that changes whenever the file changes, so it flags any later edit. From that
+point the protocol and the prepared data are fixed. When a run is executed it
+recomputes all of these checksums and refuses to produce a single feature or metric
+if the code, the data, the versions, or the settings differ from what was locked. Fixed seeds make
+the cohort sampling, the folds, and the resampling repeatable, and the
+deterministic synthetic templates of Section~\ref{sec:dataset_synthetic} check that
+the subgraph counter assigns the roles it should, including right at the edge of a
+time window. The thesis profile fixes all settings above. A separate development
+profile may reduce only the numbers of permutation and bootstrap repetitions and
+is always marked non-citable.
+
+Before execution, a read-only preflight checks the recorded random-access memory
+(RAM) and disk budget
+without creating a lock, log record, temporary directory, or timestamp change in
+the run. Execution then records its operational settings in the immutable
+\texttt{execution\_\allowbreak definition.json}. This second definition separates operational
+choices, including the thread allocation, direct or coordinated mode, coordinator
+identity, and concrete worker thread settings, from the analytical model
+parameters in the protocol. A resumed run must use the same allocation. The
+thread limits are set before importing NumPy, scikit-learn, or the native
+libraries, which prevents numerical thread pools from silently exceeding that
+allocation.
+
+Exact equality is required for integer motif counts, address order, splits,
+selected windows, and hypothesis decisions. Independently recomputed floating
+probabilities and metrics are compared within a numerical tolerance because
+Basic Linear Algebra Subprograms (BLAS), XGBoost, and Parquet encoders need not be byte-identical under different
+thread allocations. Reusing an existing verified checkpoint or stage, in
+contrast, is byte-preserving. Portable Document Format (PDF) timestamps are
+removed so their hashes do not
+change only because of generation time.
+
+Scientific guards run before finalisation. They reject overlapping or duplicate
+targets, campaign groups that cross a split, inconsistent folds, missing
+classes, negative motif counts, non-finite features or metrics, duplicate
+prediction rows, probabilities outside $[0,1]$, and multi-class probability
+vectors that do not sum to one within numerical tolerance. Conflicting
+duplicate labels in Real-CATS are rejected, while identical duplicates are
+collapsed and counted in the preparation audit. All five layer files are
+required even when one is empty. Checkpoint content is hashed from a fixed
+Arrow representation with named columns, 64-bit integer counts, and addresses
+sorted by their 8-bit Unicode Transformation Format (UTF-8) bytes,
+independently of its Parquet storage encoding.
+% END PROFESSOR FEEDBACK PF16
+

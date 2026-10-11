@@ -1,0 +1,207 @@
+% BEGIN PROFESSOR FEEDBACK PF07: Foundations - Behaviour categories and illustrations
+\subsection{Types of Coordinated Malicious Behaviour on Ethereum}
+\label{sec:scam_types}
+The Ethereum blockchain hosts a broad range of fraudulent and malicious activities, made possible by the combination of pseudo-anonymity, programmable smart contracts, and the irreversibility of on-chain transactions. A taxonomy of cybercrime on the Ethereum blockchain derived from 5,644 verified malicious addresses identifies 19 distinct categories of fraud, with the total stolen funds across the observation period reaching \$1.65 billion on-chain alone, a figure that exceeds self-reported losses to the United States Federal Trade Commission by a factor of almost 16, underscoring the scale of underreporting \citep{hornuf2025cybercrime}. Two sets of categories are distinguished below. The empirical comparison in RQ3 and RQ4 uses the nine exact Real-CATS labels that pass the minimum-size rule: Blackmail Scam, Contract Exploit Scam, Fake Returns Scam, Hack Scam, Impersonation Scam, NFT Airdrop Scam, Phishing Scam, Pigbutchering Scam, and Rug Pull Scam \citep{shi2025realcats}. Ponzi schemes, pump-and-dump schemes, money laundering, and giveaway scams remain useful examples of temporal mechanisms, but they are not treated as inferential Real-CATS classes in this thesis. Real-CATS labels reported behaviour types rather than independently verified coordination events, so coordination is a proposed network interpretation, not an additional ground-truth label.
+
+\paragraph{Ponzi Schemes.}
+Ponzi schemes are the largest category of on-chain cybercrime by aggregate stolen value, accounting for approximately 60\% of all funds transferred to verified malicious addresses on Ethereum \citep{hornuf2025cybercrime}. Operators promise high returns to investors and use incoming deposits from new participants to pay earlier ones, creating the appearance of a functioning investment operation \citep{bartoletti2020smart}. On Ethereum, Ponzi logic is often encoded directly in smart contracts, which execute the redistribution of funds automatically and transparently \citep{chen2020survey}. Funds may therefore flow from many participant addresses into a central contract and later be redistributed outward, producing plausible fan-in and fan-out candidate patterns. Real-CATS has no exact Ponzi label, however, and the thesis does not infer Ponzi membership from another category such as Investment Scam or Fake Returns Scam.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamCoral,  label=above:{Investor 1}] (i1) at (-1.5,2.3) {};
+    \node[scamnode, fill=scamPurple, label=above:{Investor 2}] (i2) at ( 1.5,2.3) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Contract}]   (c)  at ( 0,0)    {};
+    % reciprocal pair between Investor 1 and Contract (deposit, then payout)
+    \draw[scamedge] (i1) to[bend left=20] node[edgelbl,left]  {1} (c);
+    \draw[scamedge] (c)  to[bend left=20] node[edgelbl,right] {3} (i1);
+    % single deposit edge from Investor 2
+    \draw[scamedge] (i2) to[bend right=8] node[edgelbl,right] {2} (c);
+  \end{tikzpicture}
+  \caption[Ponzi candidate pattern]{Illustrative Ponzi sequence. Two deposits
+    arrive (edges~1,~2). The payout to the earlier investor (edge~3) follows a fresh deposit,
+    so $t_1 < t_2 < t_3$.}
+  \label{fig:motif-ponzi}
+\end{figure}
+
+\paragraph{Phishing.}
+Phishing attacks involve deceiving users into approving malicious smart contract interactions or transferring funds to attacker-controlled addresses \citep{chen2020phishing}. In the Ethereum context, phishing has evolved beyond simple address impersonation to include signature-based token approval theft, where a victim signs a transaction that grants the attacker unlimited transfer rights over their tokens \citep{hornuf2025cybercrime}. The coordination aspect manifests in the use of drainer contracts: a central attacker-controlled contract collects funds from many victims in rapid succession, often within short time windows, producing a repeated fan-in temporal pattern anchored at the malicious contract address.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamPurple, label=above:{Victim 1}] (v1) at (-2.2,2.2) {};
+    \node[scamnode, fill=scamPurple, label=above:{Victim 2}] (v2) at (-0.6,2.2) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Drainer}]  (d)  at (-1.4,0)   {};
+    \node[scamnode, fill=scamCoral,  label=below:{Attacker}] (a)  at ( 1.6,0)   {};
+    \draw[scamedge] (v1) -- node[edgelbl,left]  {1} (d);
+    \draw[scamedge] (v2) -- node[edgelbl,right] {2} (d);
+    \draw[scamedge] (d)  -- node[edgelbl,above] {3} (a);
+  \end{tikzpicture}
+  \caption[Phishing transfer sequence]{Phishing drainer. Victims are drained into a
+    central contract within a tight window (edges~1,~2), which then sweeps the
+    pooled funds to the attacker (edge~3).}
+  \label{fig:motif-phishing}
+\end{figure}
+
+\paragraph{Pump-and-Dump Schemes.}
+Pump-and-dump schemes involve a coordinated group of addresses accumulating a low-liquidity token, artificially inflating its price through simultaneous buy activity, and then selling their holdings once uninformed traders enter the market \citep{li2021cryptocurrency, hornuf2025cybercrime}. The coordination is explicit and time-critical: the buy phase and the sell phase each involve multiple addresses acting within bounded periods in order to maximize price impact and exit before the market corrects. Such activity could produce dense, time-local transaction patterns, but Real-CATS has no pump-and-dump label. Its temporal window is therefore not estimated in RQ4.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamCoral,  label=below:{Colluder 1}] (c1) at (-2.6,0) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Pool}]       (p)  at ( 0,0)   {};
+    \node[scamnode, fill=scamCoral,  label=below:{Colluder 2}] (c2) at ( 2.6,0) {};
+    \node[scamnode, fill=scamPurple, label=above:{Retail}]     (u)  at ( 0,2)   {};
+    % reciprocal pairs: buy (1,2) then sell (4,5)
+    \draw[scamedge] (c1) to[bend left=25]  node[edgelbl,above] {1} (p);
+    \draw[scamedge] (p)  to[bend left=25]  node[edgelbl,below] {4} (c1);
+    \draw[scamedge] (c2) to[bend right=25] node[edgelbl,above] {2} (p);
+    \draw[scamedge] (p)  to[bend right=25] node[edgelbl,below] {5} (c2);
+    % retail buys the pump, between the two phases
+    \draw[scamedge] (u)  -- node[edgelbl,right] {3} (p);
+  \end{tikzpicture}
+  \caption[Pump-and-dump transfer sequence]{Pump-and-dump. Each colluder buys
+    (edges~1,~2) and later sells (edges~4,~5) against the same pool, with the
+    retail victim's buy (edge~3) in between: $\{1,2\} \prec 3 \prec \{4,5\}$.}
+  \label{fig:motif-pumpdump}
+\end{figure}
+
+\paragraph{Rug Pulls and Exit Scams.}
+A rug pull occurs when the developers of a token project attract liquidity, typically by depositing token reserves into a decentralized exchange, and then abruptly withdraw all deposited funds, rendering the token worthless \citep{hornuf2025cybercrime, xia2021rugpull}. Exit scams follow a similar pattern at the level of initial coin offerings: funds raised from investors are transferred out of the project contract to attacker-controlled addresses immediately or within a short period after fundraising closes. Both patterns produce a concentrated outflow from a contract address to a small set of beneficiary addresses within a narrow time window, a temporal interaction structure that differs structurally from ordinary liquidity provision.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamPurple, label=above:{Provider 1}] (l1) at (-2.2,2.2) {};
+    \node[scamnode, fill=scamPurple, label=above:{Provider 2}] (l2) at (-0.6,2.2) {};
+    \node[scamnode, fill=scamTeal,   label=below:{Pool}]      (p)   at (-1.4,0)   {};
+    \node[scamnode, fill=scamCoral,  label=below:{Developer}] (dev) at ( 1.6,0)   {};
+    \draw[scamedge]      (l1) -- node[edgelbl,left]  {1} (p);
+    \draw[scamedge]      (l2) -- node[edgelbl,right] {2} (p);
+    \draw[scamedgeheavy] (p)  -- node[edgelbl,above] {3} (dev);
+  \end{tikzpicture}
+  \caption[Rug pull transfer sequence]{Illustrative rug-pull sequence. Liquidity is
+    added (edges~1,~2), then the pool is drained in a concentrated transfer
+    (edge~3). The diagram does not prescribe which empirical window is optimal.}
+  \label{fig:motif-rugpull}
+\end{figure}
+
+\paragraph{Money Laundering.}
+Money laundering on Ethereum typically involves moving illicitly obtained funds through a series of intermediate addresses to obscure their origin before depositing them at an exchange or converting them to a less traceable asset \citep{lal2021money}. This process, known as \emph{layering}, can produce multi-hop transfer chains whose individual hops occur quickly even when the wider laundering operation lasts much longer. Temporal cycle analysis of Ethereum transactions has found cyclic transfer patterns associated with laundering activity \citep{lal2021money}, making it a candidate for temporal-motif analysis. Real-CATS has no money-laundering label, so this thesis does not estimate a laundering-specific window or compare it empirically with pump-and-dump activity.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamCoral, label=above:{Source}]   (s)  at (-3, 0.6) {};
+    \node[scamnode, fill=scamTeal,  label=below:{Mule 1}]   (m1) at (-1,-0.6) {};
+    \node[scamnode, fill=scamTeal,  label=above:{Mule 2}]   (m2) at ( 1, 0.6) {};
+    \node[scamnode, fill=scamBlue,  label=below:{Exchange}] (e)  at ( 3,-0.6) {};
+    \draw[scamedge] (s)  -- node[edgelbl,above] {1} (m1);
+    \draw[scamedge] (m1) -- node[edgelbl,above] {2} (m2);
+    \draw[scamedge] (m2) -- node[edgelbl,above] {3} (e);
+  \end{tikzpicture}
+  \caption[Money laundering transfer sequence]{Money laundering (layering). Funds hop
+    through intermediary nodes rapidly before cashing out (edges~1--3).
+    The chain length~$k$ varies.}
+  \label{fig:motif-laundering}
+\end{figure}
+
+\paragraph{Giveaway Scams.}
+Giveaway scams involve the impersonation of reputable entities such as exchanges, public figures, or projects to solicit cryptocurrency transfers under the false promise of proportional returns \citep{hornuf2025cybercrime}. They may produce a burst of inbound transfers from victims to an attacker address, followed by little further activity. Real-CATS contains this exact label, but only 27 active addresses in the release used here, below the pre-specified threshold of 100. It is therefore described but excluded from RQ3 and RQ4 inference.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \node[scamnode, fill=scamPurple, label=above:{Victim 1}] (v1) at (-2,2.3) {};
+    \node[scamnode, fill=scamPurple, label=above:{Victim 2}] (v2) at ( 0,2.8) {};
+    \node[scamnode, fill=scamPurple, label=above:{Victim 3}] (v3) at ( 2,2.3) {};
+    \node[scamnode, fill=scamCoral]                          (a)  at ( 0,0)   {};
+    \node[font=\small, below=1.5mm of a] (alab) {Attacker};
+    \node[font=\footnotesize\itshape, text=gray, below=0.5mm of alab]
+      {abandoned: no outflow};
+    \draw[scamedge] (v1) -- node[edgelbl,left]  {1} (a);
+    \draw[scamedge] (v2) -- node[edgelbl,right] {2} (a);
+    \draw[scamedge] (v3) -- node[edgelbl,right] {3} (a);
+  \end{tikzpicture}
+  \caption[Giveaway transfer sequence]{Giveaway scam. A single inbound burst from
+    many victims (edges~1--3). The illustrated feature is the absence of any
+    outgoing edge from the hub within the window.}
+  \label{fig:motif-giveaway}
+\end{figure}
+
+\paragraph{Impersonation Scam.}
+Impersonation scams use the identity of a trusted person, service, or project to
+induce a victim to transfer assets or approve an interaction. They overlap with
+the social mechanism of phishing, but Real-CATS records Impersonation Scam as a
+separate exact label. Possible on-chain patterns include repeated victim-to-scammer
+transfers and consolidation through common beneficiary addresses. The experiment
+does not assume that either pattern must be present.
+
+\paragraph{Contract Exploit Scam and Hack Scam.}
+A contract exploit abuses a defect in deployed code, whereas the broader Hack Scam
+label covers compromises whose entry point need not be a smart-contract flaw
+\citep{shi2025realcats}. Both can be followed by rapid sweeps, relay transfers, or
+distribution across token and internal-transaction layers. The two labels are not
+merged in this thesis, because doing so would erase the distinction supplied by the
+dataset before RQ3 tests whether their fingerprints can be separated.
+
+\paragraph{Blackmail Scam and Fake Returns Scam.}
+Blackmail scams demand payment through coercion, while fake-return schemes solicit
+funds by promising a payment or investment return that is not delivered. Either may
+produce repeated inbound transfers, but neither label prescribes one transaction
+topology. Their temporal fingerprints are therefore learned from the recorded
+histories rather than defined from a hand-written temporal template.
+
+\paragraph{NFT Airdrop Scam.}
+NFT airdrop scams use unsolicited or fraudulent token distributions to attract a
+victim to a malicious interaction. Ethereum Request for Comments (ERC) token
+standards define how these assets are represented and transferred. The
+transactions can be concentrated in the ERC-721 and ERC-1155 layers and can
+appear as distribution stars followed by later
+victim interactions. Keeping the Real-CATS layers separate allows RQ3 to retain
+this layer-specific information.
+
+\paragraph{Pigbutchering Scam.}
+Pigbutchering scams combine social engineering with a longer confidence-building
+phase before repeated transfers are solicited. This can yield a transaction history
+that is temporally more extended than a single theft event, but the duration is not
+fixed in advance. RQ4 therefore selects windows from the data and tests whether
+using a separate window for each category improves classification over one shared
+window.
+
+\vspace{0.5em}
+The descriptions above motivate why temporal structure may be informative. They do
+not define the fingerprints or their time windows. Table~\ref{tab:scam_types}
+therefore summarizes only the nine exact labels used for inference and states the
+network pattern that each label could plausibly expose. These are hypotheses for
+interpretation, not rules used to construct labels or features. The broader Ponzi,
+pump-and-dump, money-laundering, and giveaway examples remain part of the domain
+context, but no result in Chapter~\ref{ch:results} assigns them an empirical
+$\delta$.
+
+\begin{table}[htbp]
+\centering
+\caption{The nine exact Real-CATS categories evaluated in RQ3 and RQ4 and their
+hypothesized temporal-network interpretation.}
+\label{tab:scam_types}
+\footnotesize
+\begin{tabular}{p{3.4cm} p{4.5cm} p{5.1cm}}
+\toprule
+\textbf{Exact category} & \textbf{Reported mechanism} & \textbf{Possible temporal-network signal} \\
+\midrule
+Blackmail Scam & Coercive payment demand & One or repeated inbound payments, with no fixed topology assumed \\
+Contract Exploit Scam & Abuse of deployed contract code & Contract-centred sweeps and multi-layer outflows \\
+Fake Returns Scam & False promise of repayment or investment return & Repeated deposits and selective outward transfers \\
+Hack Scam & Compromise not limited to a contract flaw & Sweeps, relays, or rapid distribution after compromise \\
+Impersonation Scam & Misrepresentation as a trusted entity & Victim fan-in and consolidation at shared beneficiaries \\
+NFT Airdrop Scam & Fraudulent token distribution or claim & Token-layer distribution stars and follow-up interactions \\
+Phishing Scam & Deceptive transfer or malicious approval & Victim fan-in followed by attacker-controlled sweeps \\
+Pigbutchering Scam & Trust-building followed by repeated solicitation & Multi-stage deposits over an extended interaction \\
+Rug Pull Scam & Withdrawal of project or pool liquidity & Accumulation followed by concentrated contract outflow \\
+\bottomrule
+\end{tabular}
+\end{table}
+% END PROFESSOR FEEDBACK PF07
+

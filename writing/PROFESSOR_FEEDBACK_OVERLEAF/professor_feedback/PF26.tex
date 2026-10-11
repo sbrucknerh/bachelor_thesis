@@ -1,0 +1,38 @@
+% BEGIN PROFESSOR FEEDBACK PF26: Discussion - Temporal window
+\subsection{Choice of the temporal window}
+
+RQ2 asks how window size affects fingerprint usefulness. Over the tested range,
+longer windows generally increase both detection AP and the number of addresses
+with a nonzero fingerprint. This answers the question without requiring a unique
+optimum. The
+40-role HuggingFace analysis selects 30 days for both cohorts, while two weeks
+remains within one standard error of the maximum. Both 32-role controlled
+cohorts select two weeks, and all three prevalence cohorts select 30 days. The
+Real-CATS binary
+comparison also selects 30 days, but a window of only three days is within one
+standard error of its maximum. These results point towards a broader range of
+longer windows rather than one clearly best setting.
+
+Motif coverage helps explain this pattern. In the 40-role HuggingFace analysis,
+coverage increases from 12.2\% to 77.7\% in the controlled cohort and from
+11.1\% to 75.9\% in the prevalence cohort between five minutes and 30 days.
+A short window leaves most
+addresses with an all-zero fingerprint because their relevant transfers do not
+occur close enough together. Increasing $\delta$ allows more three-edge
+sequences to be counted and gives the model information for more addresses. The
+parallel increase in coverage and AP suggests that part of the benefit of a
+longer window comes from reduced sparsity. The experiment does not show how much
+of the improvement is caused by coverage and how much comes from a more suitable
+behavioural time scale.
+
+This distinction is important for interpreting RQ2. A selected window defines
+the maximum time span of one three-edge motif. It does not measure the duration
+of a fraud campaign. A 30-day window can contain a rapid transaction sequence in
+the same way as a five-minute window, but it also admits sequences whose edges
+are much farther apart. The selected value therefore reflects a compromise
+between observing enough motifs and keeping the events temporally close. Since
+30 days is the upper boundary of the tested grid, the results also cannot show
+whether performance would continue to increase at still larger windows. The
+supported conclusion is limited to the tested range.
+% END PROFESSOR FEEDBACK PF26
+

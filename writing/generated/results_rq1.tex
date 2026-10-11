@@ -1,17 +1,19 @@
 \begin{table}[ht]
 \centering
-\caption{RQ1: average precision of each feature view at the selected window for both disjoint confirmations (canonical ordering), the combined-minus-baseline difference with its 95\,\% confidence interval, the permutation $p$-value, and the decision.}
+\caption{RQ1: average precision of each feature view at the selected window for three non-overlapping samples using the default timestamp ordering. The table also reports the combined-minus-baseline difference with its 95\,\% confidence interval and permutation $p$-value.}
 \label{tab:res_rq1}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}r l l r r r r c c l@{}}
 \toprule
-\textbf{Rep.} & \textbf{Cohort} & \textbf{$\delta$} & \textbf{Base} & \textbf{Motifs} & \textbf{Comb.} & \textbf{$\Delta$AP} & \textbf{95\,\% CI} & \textbf{$p$} & \textbf{Decision} \\
+\textbf{Sample} & \textbf{Cohort} & \textbf{$\delta$} & \textbf{Base} & \textbf{Motifs} & \textbf{Comb.} & \textbf{$\Delta$AP} & \textbf{95\,\% CI} & \textbf{$p$} & \textbf{Significant?} \\
 \midrule
-1 & Controlled & 2 weeks & 0.891 & 0.739 & 0.903 & 0.013 & [0.003, 0.023] & 0.007 & reject \\
-1 & Prevalence & 30 days & 0.756 & 0.526 & 0.789 & 0.033 & [0.011, 0.056] & 0.002 & reject \\
-2 & Controlled & 2 weeks & 0.889 & 0.699 & 0.902 & 0.013 & [0.002, 0.024] & 0.021 & reject \\
-2 & Prevalence & 30 days & 0.713 & 0.464 & 0.721 & 0.008 & [-0.018, 0.033] & 0.275 & not rejected \\
+1 & Controlled & 2 weeks & 0.891 & 0.739 & 0.903 & 0.013 & [0.003, 0.023] & 0.007 & yes \\
+1 & Prevalence & 30 days & 0.756 & 0.526 & 0.789 & 0.033 & [0.011, 0.056] & 0.002 & yes \\
+2 & Controlled & 2 weeks & 0.889 & 0.699 & 0.902 & 0.013 & [0.002, 0.024] & 0.021 & yes \\
+2 & Prevalence & 30 days & 0.713 & 0.464 & 0.721 & 0.008 & [-0.018, 0.033] & 0.275 & no \\
+3 & Controlled & 30 days & 0.735 & 0.393 & 0.759 & 0.024 & [-0.014, 0.062] & 0.133 & no \\
+3 & Prevalence & 30 days & 0.599 & 0.278 & 0.615 & 0.016 & [-0.034, 0.065] & 0.266 & no \\
 \bottomrule
 \end{tabular}
 \end{table}

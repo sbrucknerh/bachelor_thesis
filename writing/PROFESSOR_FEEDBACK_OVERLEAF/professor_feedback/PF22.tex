@@ -1,0 +1,42 @@
+% BEGIN PROFESSOR FEEDBACK PF22: Results - RQ4
+\section{RQ4: Category-Specific Temporal Windows}
+
+The comparison of category-specific and shared windows gives a test-set macro
+AP difference of 0.0009, which is not statistically significant. The best
+window for each category is selected on the development data and then evaluated
+on the same held-out addresses as the shared two-week window.
+Table~\ref{tab:res_rq4_global} reports the overall comparison, and
+Table~\ref{tab:res_rq4_categories} gives the result for each category.
+Figure~\ref{fig:res_rq4} shows how the development score changes across the
+tested windows.
+
+\begin{figure}[ht]
+  \centering
+  \ResGraphic{1.0}{rq4_label_delta_curves}
+  \caption{RQ4: mean development-CV average precision for each category across
+  the nine temporal windows using the default timestamp ordering.}
+  \label{fig:res_rq4}
+\end{figure}
+
+\IfFileExists{generated/results_rq4_global.tex}{\input{generated/results_rq4_global}}{\ResPendingTable{RQ4 category-specific versus shared temporal windows.}{tab:res_rq4_global}}
+\IfFileExists{generated/results_rq4_categories.tex}{\input{generated/results_rq4_categories}}{\ResPendingTable{RQ4 per-category temporal-window comparisons.}{tab:res_rq4_categories}}
+
+The development data selects six different windows under the default ordering.
+They range from six hours for Blackmail Scam to 30 days for Phishing Scam. Three
+categories select one week, two select two weeks, and the remaining categories
+select one day or three days.
+
+On the held-out test set, using the category-specific windows instead of the
+shared two-week window changes macro AP by only 0.0009. The 95\,\% confidence
+interval is $[-0.0153,0.0139]$ and $p=0.5386$. Rug Pull Scam and Blackmail Scam
+show the largest positive changes, at 0.0252 and 0.0230, but both confidence
+intervals include zero. None of the nine category-level differences remains
+significant after correction for multiple comparisons.
+
+The selections also depend on how transactions with the same timestamp are
+ordered. Only Impersonation Scam and Pigbutchering Scam select the same window
+under all seven orderings. The selected window changes at least once for every
+other category. For example, Phishing Scam selects 30 days under six orderings
+but one week when the default tie order is reversed.
+% END PROFESSOR FEEDBACK PF22
+

@@ -21,6 +21,20 @@
 %% ----------------------------------------------------------
 %%  [2] Temporal Motifs in Time-Dependent Networks
 %% ----------------------------------------------------------
+% BEGIN PROFESSOR FEEDBACK: Hellinger-transform reference
+@article{legendre2001transformations,
+  author    = {Legendre, Pierre and Gallagher, Eugene D.},
+  title     = {Ecologically meaningful transformations for ordination
+               of species data},
+  journal   = {Oecologia},
+  year      = {2001},
+  volume    = {129},
+  number    = {2},
+  pages     = {271--280},
+  doi       = {10.1007/s004420100716}
+}
+% END PROFESSOR FEEDBACK: Hellinger-transform reference
+
 @article{kovanen2011temporal,
   author    = {Kovanen, Lauri and Karsai, M{\'{a}}rton and
                Kaski, Kimmo and Kert{\'{e}}sz, J{\'{a}}nos and
@@ -79,11 +93,11 @@
 
 @misc{fesevu2025ethfraud,
   author       = {fesevu},
-  title        = {Ethereum Fraud Dataset by Activity},
+  title        = {{Ethereum} Fraud Dataset by Activity},
   year         = {2025},
   publisher    = {Hugging Face},
   howpublished = {\url{https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity}},
-  note         = {Accessed: 2025-08-01}
+  note         = {Accessed: 2026-10-08}
 }
 
 %% ----------------------------------------------------------
@@ -152,7 +166,7 @@
 
 @misc{nakamoto2008bitcoin,
   author       = {Nakamoto, Satoshi},
-  title        = {Bitcoin: A Peer-to-Peer Electronic Cash System},
+  title        = {{Bitcoin}: A Peer-to-Peer Electronic Cash System},
   year         = {2008},
   howpublished = {\url{https://bitcoin.org/bitcoin.pdf}},
   note         = {Accessed: 2026}
@@ -209,8 +223,11 @@
   url       = {https://arxiv.org/abs/2503.19573}
 }
 
+% BEGIN PROFESSOR FEEDBACK ROUND 2: McDonnell author names
 @article{McDonnell2014,
-  author    = {McDonnell, Mark D. and Yaveroglu, Osman N. and Schmerl, Brenton A. and Iannella, Nicolangelo and Ward, Lawrence M.},
+  author    = {McDonnell, Mark D. and Yavero{\u{g}}lu, {\"O}mer Nebil
+               and Schmerl, Brett A. and Iannella, Nicolangelo
+               and Ward, Lawrence M.},
   title     = {Motif-Role-Fingerprints: The Building-Blocks of Motifs, Clustering-Coefficients and Transitivities in Directed Networks},
   journal   = {PLOS ONE},
   volume    = {9},
@@ -220,6 +237,7 @@
   doi       = {10.1371/journal.pone.0114503},
   publisher = {Public Library of Science}
 }
+% END PROFESSOR FEEDBACK ROUND 2: McDonnell author names
 
 @misc{wood2014ethereum,
   author       = {Wood, Gavin},
@@ -229,40 +247,46 @@
   url          = {https://ethereum.github.io/yellowpaper/paper.pdf}
 }
 
-%% adjusted during protocol-v3 review: key renamed wu2021temporal ->
-%% wu2020temporal; the entry's year was already (correctly) 2020, only the key
-%% was mislabeled.
+% BEGIN PROFESSOR FEEDBACK ROUND 2: Lin author list and DOI
+% The existing citation key is retained for Overleaf compatibility.
 @article{wu2020temporal,
-  author    = {Wu, Jiajing and Liu, Jieli and Zhao, Weili and Zheng, Zibin},
+  author    = {Lin, Dan and Wu, Jiajing and Yuan, Qi and Zheng, Zibin},
   title     = {Modeling and Understanding {Ethereum} Transaction Records via a Complex Network Approach},
   journal   = {IEEE Transactions on Circuits and Systems II: Express Briefs},
   volume    = {67},
   number    = {11},
   pages     = {2737--2741},
   year      = {2020},
-  doi       = {10.1109/TCSII.2020.2968587}
+  doi       = {10.1109/TCSII.2020.2968376}
 }
+% END PROFESSOR FEEDBACK ROUND 2: Lin author list and DOI
 
+% BEGIN PROFESSOR FEEDBACK ROUND 2: Lee page range
 @inproceedings{lee2020ethereum,
   author    = {Lee, Xi Tong and Khan, Arijit and Sen Gupta, Sourav and Ong, Yu Hann and Liu, Xuan},
   title     = {Measurements, Analyses, and Insights on the Entire {Ethereum} Blockchain Network},
   booktitle = {Proceedings of The Web Conference 2020 (WWW '20)},
-  pages     = {662--672},
+  pages     = {155--166},
   year      = {2020},
   publisher = {ACM},
   doi       = {10.1145/3366423.3380103}
 }
+% END PROFESSOR FEEDBACK ROUND 2: Lee page range
 
-%% VERIFY (protocol-v3 review): publication year is ambiguous -- the PDF below
-%% was hosted in 2019, but indexes report a January 2021 publication with four
-%% authors (Wittek, Wittek, Ionita, Pohlmann). Confirm which version you used;
-%% the text key stays pohlmann2019anomaly until confirmed.
-@article{pohlmann2019anomaly,
-  author    = {Wittek, Kevin and Wittek, Neslihan and Pohlmann, Norbert},
+% Metadata checked against the publisher's repository and full text.
+% The 2020 conference paper was deposited on 27 January 2021.
+% The existing citation key is retained for compatibility.
+@inproceedings{pohlmann2019anomaly,
+  author    = {Wittek, Kevin and Wittek, Neslihan and Ioni{\c{t}}{\u{a}}, Andrei
+               and Pohlmann, Norbert},
   title     = {Statistical Anomaly Detection in {Ethereum} Transaction Graphs},
-  journal   = {Proceedings of the 17th Annual Conference on Privacy, Security and Trust (PST)},
-  year      = {2019},
-  url       = {https://norbert-pohlmann.com/wp-content/uploads/2019/08/416-Statistical-anomaly-detection-in-ETHEREUM-transaction-graphs-Prof.-N.-Pohlmann.pdf}
+  booktitle = {Konferenzband zum Scientific Track der Blockchain Autumn School 2020},
+  publisher = {Hochschule Mittweida},
+  address   = {Mittweida},
+  pages     = {106--110},
+  year      = {2020},
+  doi       = {10.48446/opus-11872},
+  url       = {https://monami.hs-mittweida.de/frontdoor/index/index/docId/11872}
 }
 
 @article{liu2023temporal,
@@ -282,12 +306,14 @@
 }
 
 
-@inproceedings{temporal_sampling_ethereum,
-  author    = {Alomari, Ahmad and Cheng, Xiuzhen},
-  title     = {Probabilistic Temporal Sampling for Anomaly Detection in {Ethereum} Transaction Networks},
-  booktitle = {OpenReview},
-  year      = {2023},
-  url       = {https://openreview.net/pdf?id=AhyjbXSmUN}
+% The public OpenReview version lists anonymous authors and NeurIPS 2025.
+% No named authors or acceptance status are inferred from the anonymous paper.
+@misc{temporal_sampling_ethereum,
+  author       = {{Anonymous}},
+  title        = {Probabilistic Temporal Sampling for Anomaly Detection in {Ethereum} Networks},
+  year         = {2025},
+  howpublished = {OpenReview. \url{https://openreview.net/pdf?id=AhyjbXSmUN}},
+  note         = {Anonymous manuscript submitted to NeurIPS 2025}
 }
 
 %% adjusted during protocol-v3 review: previous entry ("OpenReview / ICLR,
@@ -307,9 +333,8 @@
 %% adjusted during protocol-v3 review: previous entry cited the CESifo working
 %% paper (No. 10598, which is from 2023, not 2024); the published version is in
 %% the Journal of Banking & Finance (2025), cited below.
-%% VERIFY: the figures quoted in the thesis ($1.65B on-chain, 19 categories,
-%% ~16x FTC underreporting, $274M giveaways, ~60% Ponzi share) were taken from
-%% the working paper -- re-check them against the journal version.
+%% The journal version also reports the $1.65B total, 19 categories,
+%% almost 16x FTC comparison, and approximately 60% Ponzi share.
 @article{hornuf2025cybercrime,
   author    = {Hornuf, Lars and Momtaz, Paul P. and Nam, Rachel J. and Yuan, Ye},
   title     = {Cybercrime on the {Ethereum} Blockchain},
@@ -332,18 +357,18 @@
   doi       = {10.1016/j.future.2019.08.014}
 }
 
-@inproceedings{li2021cryptocurrency,
+@misc{li2021cryptocurrency,
   author    = {Li, Tao and Shin, Donghwa and Wang, Baolian},
   title     = {Cryptocurrency Pump-and-Dump Schemes},
-  booktitle = {SSRN Working Paper},
+  howpublished = {SSRN Working Paper. \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3267041}},
   year      = {2021},
   url       = {https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3267041}
 }
 
-@inproceedings{xia2021rugpull,
+@article{xia2021rugpull,
   author    = {Xia, Pengcheng and Wang, Haoyu and Zhang, Bingyu and Ji, Ren and Gao, Binhui and Wu, Lei and Luo, Xiapu and Guo, Yajin},
-  title     = {Trade or Trick? {Detecting} and Characterizing Scam Tokens on Uniswap Decentralized Exchange},
-  booktitle = {Proceedings of the ACM on Measurement and Analysis of Computing Systems},
+  title     = {Trade or Trick? {Detecting} and Characterizing Scam Tokens on {Uniswap} Decentralized Exchange},
+  journal   = {Proceedings of the ACM on Measurement and Analysis of Computing Systems},
   volume    = {5},
   number    = {3},
   year      = {2021},
@@ -363,14 +388,18 @@
   doi       = {10.1038/s41598-024-75348-7}
 }
 
+% BEGIN PROFESSOR FEEDBACK ROUND 2: Li authors and revised preprint
+% The existing citation key is retained, but this entry identifies version 2.
 @article{mo2022motifgcn,
-  author    = {Mo, Chong and Li, Song and Tso, Geoffrey K. F. and Zhou,
-               Jiandong and Qi, Yiyan and Zhu, Mingjie},
-  title     = {Motif-aware temporal {GCN} for fraud detection in signed
-               cryptocurrency trust networks},
-  journal   = {arXiv preprint arXiv:2211.13123},
-  year      = {2022}
+  author    = {Li, Song and Zhou, Jiandong and Mo, Chong and Li, Jin
+               and Tso, Geoffrey K. F. and Tian, Yuxing},
+  title     = {Motif-aware group signed temporal {GCN} for anomaly
+               detection in {Bitcoin} trust networks},
+  journal   = {arXiv preprint arXiv:2211.13123v2},
+  year      = {2023},
+  url       = {https://arxiv.org/abs/2211.13123v2}
 }
+% END PROFESSOR FEEDBACK ROUND 2: Li authors and revised preprint
 
 
 @inproceedings{ostapowicz2019detecting,
@@ -433,8 +462,7 @@
   number    = {1},
   pages     = {1--16},
   year      = {2020},
-  doi       = {10.1145/3398071},
-  note      = {VERIFY: confirm this is the intended reference}
+  doi       = {10.1145/3398071}
 }
 
 @article{chen2020survey,
@@ -447,6 +475,44 @@
   number    = {3},
   pages     = {1--43},
   year      = {2020},
-  doi       = {10.1145/3391195},
-  note      = {VERIFY: confirm this is the intended reference}
+  doi       = {10.1145/3391195}
 }
+
+% BEGIN PROFESSOR FEEDBACK ROUND 2: Additional related-work references
+@article{weber2019bitcoin,
+  author    = {Weber, Mark and Domeniconi, Giacomo and Chen, Jie
+               and Weidele, Daniel Karl I. and Bellei, Claudio
+               and Robinson, Tom and Leiserson, Charles E.},
+  title     = {Anti-Money Laundering in {Bitcoin}: Experimenting with
+               Graph Convolutional Networks for Financial Forensics},
+  journal   = {arXiv preprint arXiv:1908.02591},
+  year      = {2019},
+  url       = {https://arxiv.org/abs/1908.02591}
+}
+
+@article{wu2022mixing,
+  author    = {Wu, Jiajing and Liu, Jieli and Chen, Weili and Huang,
+               Huawei and Zheng, Zibin and Zhang, Yan},
+  title     = {Detecting Mixing Services via Mining {Bitcoin}
+               Transaction Network With Hybrid Motifs},
+  journal   = {IEEE Transactions on Systems, Man, and Cybernetics: Systems},
+  volume    = {52},
+  number    = {4},
+  pages     = {2237--2249},
+  year      = {2022},
+  doi       = {10.1109/TSMC.2021.3049278},
+  url       = {https://arxiv.org/abs/2001.05233}
+}
+
+@inproceedings{wang2023temporal,
+  author    = {Wang, Yunfei and Wang, Hao and Lu, Xiaozhen
+               and Zhou, Lu and Liu, Liang},
+  title     = {Detecting {Ethereum} Phishing Scams with Temporal
+               Motif Features of Subgraph},
+  booktitle = {2023 IEEE Symposium on Computers and Communications (ISCC)},
+  pages     = {631--636},
+  year      = {2023},
+  publisher = {IEEE},
+  doi       = {10.1109/ISCC58397.2023.10218023}
+}
+% END PROFESSOR FEEDBACK ROUND 2: Additional related-work references

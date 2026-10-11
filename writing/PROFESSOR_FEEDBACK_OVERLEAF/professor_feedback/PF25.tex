@@ -1,0 +1,67 @@
+% BEGIN PROFESSOR FEEDBACK PF25: Discussion - Detection value
+\subsection{Detection value of temporal motifs}
+
+RQ1 concerns the complete fingerprint representation. The comparison tests
+whether adding local motif-role features to the 17 conventional features improves
+detection. Since the roles combine structure, direction, focal-node position,
+and edge order, the result does not isolate a causal contribution of temporal
+ordering.
+
+The first result is that temporal motifs contain a useful signal, but that their
+additional value depends on which other features are already present. Adding the
+motif fingerprint to the baseline increases AP in all six HuggingFace
+comparisons. Three of these increases are significant. The non-significant
+comparisons include the prevalence cohort of one 32-role sample and both
+cohorts of the 40-role analysis. In that analysis, the improvements are 0.0237 and
+0.0161, but both confidence intervals include zero. The
+binary Real-CATS comparison is even closer, with an AP difference of only
+0.0011. It also produces a lower F1 score after the local motif-role features are added.
+The positive direction is therefore not enough to conclude that motifs provide
+a reliable improvement over the baseline.
+
+This does not mean that the motif fingerprint contains no information. The
+motif-only models can still rank addresses to some degree, and the Real-CATS
+motif-only model reaches an AP of 0.8708. More importantly, the
+role-by-role fingerprint performs better than total motif volume alone. In the
+40-role HuggingFace analysis, this difference is 0.1173 AP in the controlled
+cohort and 0.1528 AP in the prevalence cohort. This shows that the distribution
+of activity across motif roles is more informative than the number of motifs by
+itself.
+
+The result changes once conventional features are added. A baseline supplemented
+with motif composition and motif volume performs similarly to the full combined
+model across all three HuggingFace samples. The detailed role counts therefore
+contain a signal,
+but much of that signal overlaps with information that can already be obtained
+from simpler summaries. This overlap is plausible because many transaction
+patterns affect several feature groups at the same time. A rapid fan-out, for
+example, changes the motif fingerprint, but it can also increase the number of
+outgoing transfers, the out-degree, and the number of transaction partners. The
+comparison does not isolate the exact source of this overlap, but it shows that
+the complete fingerprint adds little once these related properties are present.
+
+The triangle analysis leads to the same interpretation. Extending the
+HuggingFace graph makes it possible to retain all eight triangle roles, but
+adding them changes AP by at most 0.0071 in the reported comparisons. None of
+these differences is significant. Triangle motifs may still be useful in other
+graphs or for other kinds of malicious behaviour. The present results only show
+that they do not strengthen address detection in these cohorts.
+
+The strong baseline performance is consistent with earlier Ethereum detection
+work based on transaction aggregates and static graph features
+\citep{chen2022phishing, sanjalawe2023atd}. The motif-only results also agree
+with the observation of \citet{arnold2024motifs} that local motif signatures can
+expose behavioural differences that disappear in global counts. This thesis
+tests the next step by asking whether that information improves a detector on
+held-out addresses. The comparison shows that a descriptive signal does not
+automatically provide additional predictive value. The result
+also differs from the improvement reported by \citet{liu2023temporal} on
+non-blockchain financial networks. This suggests that results from one type of
+transaction network do not necessarily transfer to another, especially when
+the labels and baseline features are different.
+
+Temporal motif features have also been used for Ethereum phishing detection
+\citep{wang2023temporal}. The present results qualify the usefulness of this
+representation under the labels and evaluation protocol used here. They do not
+provide a direct comparison with that earlier detector.
+% END PROFESSOR FEEDBACK PF25

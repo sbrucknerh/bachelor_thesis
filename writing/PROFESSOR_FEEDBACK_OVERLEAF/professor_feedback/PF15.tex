@@ -1,0 +1,69 @@
+% BEGIN PROFESSOR FEEDBACK PF15: Implementation - Project structure
+\subsection{Project structure and entry points}
+
+The repository keeps the exploratory and the evidence-producing code apart. The
+interactive command-line interface (CLI) in \texttt{main.py} is for development
+and inspection, while the thesis
+results come only from \texttt{scripts/run\_results.py}, whose \texttt{prepare} and
+\texttt{execute} subcommands call the separate \texttt{src/experiments} package.
+The same entry point provides read-only \texttt{preflight} and \texttt{verify}
+commands, execution \texttt{--resume}, and a coordinated
+\texttt{execute-parallel} command for running the HF and Real-CATS roots on one
+server.
+Keeping the two apart stops exploratory shortcuts, such as row limits or changed
+defaults, from leaking into the results. The main files are shown below, and
+Figure~\ref{fig:pipeline_architecture} shows how they connect across the two
+phases of a run.
+
+\begin{lstlisting}[caption={Project layout (abbreviated).},
+  label={lst:layout}]
+bachelor_thesis/
+main.py              CLI entry point, pipeline orchestrator
+config.py            Exploratory defaults only
+requirements.txt     Environment definition
+requirements-results.txt Exact numerical Results environment
+scripts/run_results.py  Locked Results prepare/execute CLI
+src/
+ experiments/
+   constants.py     Locked constants and verified role catalogue
+   prepare.py       Source conversion, cohorts, folds, protocol lock
+   datasets.py      HuggingFace streaming and BLTE loading
+   realcats.py      SQLite deduplication and layer export
+   ordering.py      DuckDB external event ordering
+   features.py      Baseline and fingerprint transformations
+   motifs.py        Arrow-to-Raphtory loading and motif sweep
+   modeling.py      Fixed estimators and development selection
+   statistics.py    Metrics, permutations, bootstrap, BH correction
+   splits.py        Group-aware and stratified partition construction
+   rq_binary.py     RQ1/RQ2 execution and persistence
+   rq_multiclass.py RQ3/RQ4 execution and persistence
+   secondary.py     Conditional BLTE and synthetic validation
+   synthetic_fixtures.py  Local-role and boundary validation templates
+   execute.py       Verification and RQ orchestration
+   execution_control.py Locks, attempts, threads, state transitions
+   execution_artifacts.py Checkpoints, stages, result inventory
+   coordination.py  Same-host HF/Real-CATS coordination
+   verify.py        Read-only integrity and citability checks
+   validation.py    Prepared-data and result-schema guards
+   artifacts.py     Exclusive writes, hashes, runtime provenance
+   resources.py     Read-only memory/disk projection and admission
+   telemetry.py     Timing log and five-minute heartbeat
+   types.py         Shared data contracts (dataclasses)
+   visualization.py Chapter-ready figures
+ graph_construction.py  Exploratory NetworkX graph features
+ motifs/            Exploratory alternative motif backends
+data/raw/            Raw datasets (gitignored)
+results/experiments/ Locked run directories
+\end{lstlisting}
+
+\begin{figure}[p]
+  \centering
+  \ResGraphic{1.0}{01-pipeline}
+  \caption{The locked Results pipeline. The preparation phase fixes the cohorts
+  and writes the locked artifacts, and the execution phase then computes the
+  local role counts, trains the models, and runs the statistical tests. Italic labels name
+  the source modules in \texttt{src/experiments}.}
+  \label{fig:pipeline_architecture}
+\end{figure}
+% END PROFESSOR FEEDBACK PF15
+

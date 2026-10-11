@@ -1,0 +1,30 @@
+% BEGIN PROFESSOR FEEDBACK PF35: Foundations - Graph-theory citations
+\section{Graph-theory foundations}
+\label{sec:graph}
+
+A graph is a mathematical structure consisting of a set of nodes $V$ and a set 
+of edges $E$, where nodes represent entities and edges represent pairwise 
+relations between them \citep{newman2010networks}. In the context of this
+thesis, nodes correspond to Ethereum addresses and edges correspond to 
+transactions between them.
+
+Because transactions have a clearly defined sender and receiver, the 
+appropriate structure is a \emph{directed graph}, where an edge $(u, v) \in E$ 
+represents a directed relation from node $u$ to node $v$ 
+\citep{newman2010networks}. Since the same pair of addresses may transact
+multiple times, each with a distinct value and timestamp, the data is more 
+precisely represented as a \emph{directed multigraph}, in which multiple edges 
+between the same ordered pair of nodes are permitted 
+\citep{paranjape2017motifs, sanjalawe2023atd}.
+
+For a node $v$, the \emph{in-degree} $d^-(v)$ counts the number of incoming 
+edges and the \emph{out-degree} $d^+(v)$ counts the number of outgoing edges 
+\citep{newman2010networks}. These degree measures serve as basic node-level
+features and are used as baselines in the classification experiments in 
+Chapter~\ref{ch:method}.
+
+The directed multigraph provides the structural foundation for the graph model 
+used throughout this thesis. The following section extends this static 
+representation by incorporating the timestamps of transactions, which is 
+necessary to capture the temporal ordering of interactions.
+% END PROFESSOR FEEDBACK PF35

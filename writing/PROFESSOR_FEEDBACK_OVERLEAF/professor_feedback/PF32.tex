@@ -1,0 +1,77 @@
+% BEGIN PROFESSOR FEEDBACK PF32: Appendix - Engineering challenges
+\appendix
+\input{text/appendix}
+
+\chapter{Engineering challenges}
+\label{app:engineering_challenges}
+
+The final design came out of an audit of the earlier exploratory pipeline against
+what the four research questions actually need. The audit turned up both speed
+bottlenecks and risks to the validity of the results, and the decisions below
+address them.
+
+\section{Locating the bottleneck}
+
+The largest data problem is the size of the HuggingFace source, which is never
+held in memory as a whole. The preparation phase scans the locally cached table in
+small batches and measures how active each target is. It writes the
+target-incident transfers and then performs a second scan for the released-neighbourhood
+closure needed by triangles. This keeps the memory demand bounded while making
+the target triangle counts complete relative to the release. Keeping the source
+locally removes download time and network failures, but does not remove the
+complete local scans or the larger closure graph.
+
+Timing the earlier pipeline showed that reading the data and fitting the models
+were not the main cost. The dominant operation is Raphtory's local temporal motif
+routine. The complete HF protocol requires nine windows under seven timestamp
+orderings, and Real-CATS repeats the same grid within five layers. The graph is
+therefore built once per ordering (and, for Real-CATS, per layer and ordering)
+and reused across its nine windows, instead of being rebuilt for each window.
+
+\section{Alternatives considered}
+
+Three possible reductions were considered. First, counting only the motif roles
+suggested by the scam examples would appear to save work. Raphtory~0.17.0,
+however, exposes the 40-role counter as one operation and cannot be instructed to
+compute only selected roles. The pipeline consequently verifies the full output.
+HuggingFace retains all roles and evaluates the 32-role subset as an ablation.
+Real-CATS discards triangle columns after counting because its graph scope does
+not support complete target triangles. Avoiding those calculations would require
+a separate verified Rust implementation and was not introduced during this study.
+
+Second, replacing pandas with Spark would not accelerate the actual counter,
+because the Raphtory graph still lives in one process. Pandas is used only after
+aggregation, for address-level targets, fingerprints, model matrices,
+predictions, and metrics. PyArrow performs bounded source scans and DuckDB
+performs the baseline query and external event sorting. A distributed dataframe
+rewrite would add another execution system without removing the single-process
+motif bottleneck.
+
+Third, reducing the transaction types was considered. The HF graph already
+contains ordinary transaction edges only. For RQ3 and RQ4, in contrast, the separation
+of normal, internal, ERC-20, ERC-721, and ERC-1155 histories is part of the
+question: an exploit or rug pull may differ precisely in which layer carries its
+activity. Dropping layers would change the fingerprint definition. The five
+layers are therefore kept, but loaded sequentially so that only one layer graph
+sets the Real-CATS peak memory demand.
+
+\section{Long-run execution}
+
+The workflow runs on a single machine, because the Raphtory graph has to live in
+one process. A read-only preflight estimates graph expansion, DuckDB memory,
+model matrices, checkpoint staging, sort spill, and a per-filesystem reserve.
+This is an admission budget rather than an enforceable Raphtory memory limit. If
+the budget does not fit, execution stops before creating an attempt instead of
+quietly shrinking the locked cohort.
+
+Each expensive motif call is committed independently, at ordering--window level
+for HF and layer--ordering--window level for Real-CATS. A resumed execution
+rechecks a canonical content hash and reuses valid commits. An invalid committed
+checkpoint stops the run and is never replaced. HF and Real-CATS can also run in
+parallel on one server through a coordinator that gives them disjoint thread
+allocations and admits their combined RAM and disk demand. If one worker fails,
+the other is allowed to finish. These changes do not reduce the number of motif
+calculations in the scientific protocol, but they prevent an interruption late
+in a week-long run from discarding earlier verified work.
+% END PROFESSOR FEEDBACK PF32
+

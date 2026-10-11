@@ -1,0 +1,110 @@
+% BEGIN PROFESSOR FEEDBACK PF08: Method - System overview
+\section{System overview}
+\label{sec:system_overview}
+
+This chapter describes how the detection approach is put into practice. The
+method is implemented as a single program that turns raw Ethereum transaction
+records into malicious-address scores and category-level comparisons. The
+program is not used interactively. It runs a fixed sequence of steps, always in
+the same order, so that the same data and the same settings always lead to the
+same result.
+
+The program runs in two phases. A \emph{preparation} phase reads the raw data
+once, decides which addresses take part in the study, and fixes how they are
+divided into a development set and a test set. An \emph{execution} phase then carries
+out the actual detection on top of these prepared data. Keeping the two apart
+means that the data and the evaluation setup are settled before any model is
+trained, so the reported results cannot be shaped, even by accident, by later
+changes to the data or the settings. The execution phase is checkpointed as
+well. After an expensive subgraph count has been committed successfully, an
+interrupted run verifies and reuses it instead of starting that count again.
+
+Overall the program moves from raw transactions to results in eight steps, shown
+in Figure~\ref{fig:method_steps}. The first two belong to the preparation phase,
+the remaining six to the execution phase.
+
+\begin{enumerate}
+  \item \textbf{Loading the data.} The program reads the transaction records and
+        the address labels of the chosen dataset. For the main dataset the
+        transaction table is very large, with several hundred million transfers,
+        so it is read in small batches instead of being held in memory all at
+        once. The datasets are described in Section~\ref{sec:data_acquisition}.
+
+  \item \textbf{Preparing the data.} Not every labelled address can be used. The
+        program measures how active each address is and keeps only those with
+        enough transactions to form a three-edge candidate pattern. It also sets aside a small
+        number of extremely active hub addresses, so that a few exchange-sized
+        accounts cannot dominate the analysis. The remaining addresses are split
+        into a development set, used for tuning, and a separate test set, used
+        only for the final measurement. For each address, the program stores just
+        the transactions that involve it and writes these tables to
+        disk, so that every later step works on the same data.
+
+  \item \textbf{Building the temporal graph.} The prepared transactions are
+        loaded into a temporal graph, in which every address is a node and every
+        transfer is a directed edge that carries the time at which it happened.
+        Repeated transfers between the same two addresses are kept separately,
+        because their number and their order define the candidate patterns.
+        This step is described in Section~\ref{sec:graph_construction}.
+
+  \item \textbf{Counting the candidate subgraphs.} The program first checks the
+        counter against synthetic validation templates. It then counts how
+        often each address participates in each retained local role.
+        Because an occurrence only counts when its transfers fall within the
+        selected time span, the counting is repeated for a range of time windows,
+        from five minutes up to 30 days. This step is described in
+        Section~\ref{sec:motif_extraction}. Each completed count is stored as an
+        immutable checkpoint before the next one begins.
+
+  \item \textbf{Building the fingerprints.} The local motif-role counts of an address form
+        its fingerprint, a short list of numbers that records how often the
+        address occupied each retained role. From the same transactions the program
+        also computes a set of simpler behavioural features, such as how much
+        value the address sent and received, how many partners it had, and how
+        its activity was spread over time. This produces three views of every
+        address: the simpler features on their own, the motif fingerprint on its
+        own, and the two together.
+
+  \item \textbf{Running the detection.} For each of the three views, the program
+        trains a classifier to tell malicious and benign addresses apart. It
+        uses the development set to choose the time window that works best and
+        then measures how well the classifier performs on the untouched test
+        set. For RQ3 and RQ4 the same idea is used, except that the classifier
+        sorts criminal addresses into their behaviour category rather than making
+        a malicious-or-benign decision. The features and models are described in
+        Section~\ref{sec:detection_methods}.
+
+  \item \textbf{Analysing the results.} The program then answers the research
+        questions. It compares the three views to see whether the motif
+        fingerprint improves detection over the simpler features (RQ1) and how
+        the time window affects its usefulness for detection (RQ2). It then checks
+        whether different categories of malicious behaviour have distinct
+        fingerprints (RQ3), and whether selecting a separate window for each
+        category improves classification over one shared window (RQ4). Each comparison is
+        supported by statistical tests, so that a difference is not mistaken for
+        chance, and the whole run is repeated under several orderings of
+        transactions that share the same timestamp, to confirm that the outcome
+        is stable. The evaluation is described in
+        Section~\ref{sec:evaluation_protocol}.
+
+  \item \textbf{Visualising the results.} Finally, the program writes the tables
+        and figures used in the Results chapter, including the comparison of the
+        three views, the performance curve across the different time windows, and
+        for RQ3 and RQ4, the category fingerprints and the comparison between
+        category-specific and shared windows.
+\end{enumerate}
+
+\begin{figure}[p]
+  \centering
+  \ResGraphic{1.00}{05-method-steps}
+  \caption{The eight steps of the pipeline. The first two make up the preparation
+  phase. The remaining six cover graph construction, fingerprint extraction,
+  detection, analysis, and reporting in the execution phase.}
+  \label{fig:method_steps}
+\end{figure}
+
+The first two research questions run on the main binary dataset and the last two
+on the category-labelled dataset. The following sections describe the most
+important of these steps in more detail, starting with the data.
+% END PROFESSOR FEEDBACK PF08
+

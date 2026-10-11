@@ -1,22 +1,19 @@
+% BEGIN PROFESSOR FEEDBACK: research-question summary
 \begin{table}[ht]
 \centering
-\caption{Summary of the hypothesis decisions across all seven orderings.}
+\caption{Summary of the answers to the four research questions. The ordering
+checks for RQ1 and RQ2 refer to the 40-role Hugging Face analysis.}
 \label{tab:res_hypothesis}
-\small
-\begin{tabular}{@{}l l l l@{}}
+\footnotesize
+\begin{tabular}{@{}l p{3.6cm} p{4.0cm} p{4.0cm}@{}}
 \toprule
-\textbf{Question} & \textbf{Tested claim} & \textbf{Conclusion} & \textbf{Ordering} \\
+\textbf{Question} & \textbf{Finding} & \textbf{Answer} & \textbf{Other orderings} \\
 \midrule
-RQ1 (rep. 1, controlled) & motifs add signal & supported & robust: yes \\
-RQ2 (rep. 1, controlled) & a single best window & not supported & -- \\
-RQ1 (rep. 1, prevalence) & motifs add signal & supported & robust: yes \\
-RQ2 (rep. 1, prevalence) & a single best window & not supported & -- \\
-RQ1 (rep. 2, controlled) & motifs add signal & supported & robust: yes \\
-RQ2 (rep. 2, controlled) & a single best window & not supported & -- \\
-RQ1 (rep. 2, prevalence) & motifs add signal & not supported & robust: yes \\
-RQ2 (rep. 2, prevalence) & a single best window & not supported & -- \\
-RQ3 & categories are separable & supported & robust: yes \\
-RQ4 & category-specific windows outperform one global window & not supported & robust: no \\
+RQ1 & small, inconsistent AP increase & no reliable improvement over the baseline & positive direction in all seven orderings: yes \\
+RQ2 & AP generally increases across the tested window range & 30 days selected in the 40-role analysis, without a unique optimum & same selected window in all seven orderings: yes \\
+RQ3 & weak but detectable fingerprint differences & category information found, with no conventional-feature comparison & category signal in all seven orderings: yes \\
+RQ4 & category-specific versus shared windows & improvement on held-out addresses: no & no significant improvement in any ordering. Selected windows vary \\
 \bottomrule
 \end{tabular}
 \end{table}
+% END PROFESSOR FEEDBACK: research-question summary

@@ -1,0 +1,48 @@
+% BEGIN FINAL TEXT FIX FT03: Time-respecting paths and temporal windows
+\paragraph{Time-respecting paths and edge ordering.}
+A directed time-respecting path follows edges in both their transfer direction
+and their temporal order \citep{kovanen2011temporal}. With distinct timestamps,
+a path from $v_0$ to $v_k$ is a sequence of the form
+\[
+    (v_0,v_1,t_1),\ldots,(v_{k-1},v_k,t_k),
+    \qquad t_1 < \cdots < t_k.
+\]
+For example, a transfer
+$A \to B$ at 10:00 followed by $B \to C$ at 10:05 forms a time-respecting path
+from $A$ to $C$. Reversing the times leaves the same static edges, but removes
+this path. The first ordering permits a relay interpretation, although it does
+not prove that the same funds were forwarded.
+
+Transfers sharing a block timestamp need an additional ordering rule, since the
+timestamp alone does not determine which came first. The treatment of these ties
+is described in Section~\ref{sec:motif_extraction}. Candidate temporal patterns
+are not restricted to paths. Their edges must form a connected graph when edge
+directions are ignored, but a star with only incoming transfers is also a valid
+candidate structure \citep{paranjape2017motifs}.
+
+\paragraph{The time window $\delta$.}
+Temporal order alone does not limit how far apart the transfers may occur.
+This thesis follows the total-span condition of \citet{paranjape2017motifs}.
+For a candidate sequence of $l$ edges, the first and last timestamps must satisfy
+\[
+    t_l - t_1 \leq \delta.
+\]
+The bound applies to the whole sequence, not separately to each gap between
+successive edges.
+
+A sliding window enforces this bound as the ordered transfers are processed.
+For a new transfer at time $t$, earlier transfers before $t-\delta$ can no
+longer form a valid candidate ending at that transfer. The interval
+$[t-\delta,t]$ therefore moves with the event sequence. These windows overlap
+rather than dividing the history into separate fixed bins. A candidate may
+cross an hour or day boundary as long as its total span remains within
+$\delta$ \citep{paranjape2017motifs}.
+
+Small windows restrict candidates to short bursts, while larger windows admit
+interactions spread across days or weeks. No single interval is assumed to
+suit every behaviour. This thesis compares nine windows from five minutes to
+30 days, with the grid given in Section~\ref{sec:temporal_window_sweep}.
+The window is selected on development data without using the held-out test
+results, as described in Section~\ref{sec:evaluation_protocol}. Its value limits
+the span of a three-transfer candidate, not the duration of a malicious campaign.
+% END FINAL TEXT FIX FT03

@@ -1,0 +1,82 @@
+% BEGIN PROFESSOR FEEDBACK PF14: Implementation - Introduction and libraries
+\section{Implementation details}
+\label{sec:implementation}
+
+This section records the tools the pipeline is built on, how the code is
+organised, and the measures that make a run reproducible. The engineering
+challenges are documented in Appendix~\ref{app:engineering_challenges}.
+
+\subsection{Language and libraries}
+
+The pipeline is written in Python, with the temporal motif counting carried out by
+Raphtory's Rust extension. Everything runs on the CPU, so no graphics card is
+needed, and Raphtory, DuckDB, the random forest, and XGBoost are all set up to use
+the thread allocation recorded for the run. Native thread limits are set before
+the numerical libraries are imported, so two coordinated workers cannot each
+claim every core. Development and validation used
+Python~3.13 in an isolated virtual environment. The exact interpreter and package
+versions of each run are recorded in its protocol, and that record, rather than the
+environment described here, is what counts for the final numbers.
+Table~\ref{tab:libraries} lists the main libraries and their role.
+
+\begin{table}[h]
+\centering
+\caption{The main libraries used by the pipeline.}
+\label{tab:libraries}
+\renewcommand{\arraystretch}{1.3}
+\small
+\begin{tabular}{p{2.7cm} p{1.5cm} p{8.5cm}}
+\toprule
+\textbf{Library} & \textbf{Version} & \textbf{Role in the pipeline} \\
+\midrule
+
+\textbf{Raphtory} &
+  0.17.0 &
+  Stores the temporal multigraph and runs the parallel Rust routine
+  \texttt{local\_temporal\_three\_node\_motifs}, using the local counting
+  approach of \citet{arnold2024motifs}. Its full 40-role output is retained for HuggingFace.
+  The 32 star and two-node roles are retained for each Real-CATS layer. \\
+
+\textbf{DuckDB} &
+  1.5.4 &
+  Queries the prepared Parquet directly, computes the baseline, and sorts events
+  for each ordering variant with bounded memory. \\
+
+\textbf{PyArrow} &
+  23.0.1 &
+  Streams the full HuggingFace edge source, writes the prepared Parquet files,
+  and carries the ordered batches from DuckDB to Raphtory. \\
+
+\textbf{pandas} &
+  3.0.2 &
+  Holds the address-level targets, fingerprints, model matrices, predictions, and
+  metrics. The primary HF and Real-CATS event tables are not materialised
+  together in pandas. The much smaller BLTE table is. \\
+
+\textbf{NumPy} &
+  2.4.4 &
+  Provides numerical arrays and the deterministic random numbers used by the
+  models, the resampling, and the metrics. \\
+
+\textbf{scikit-learn} &
+  1.8.0 &
+  Supplies the group-aware and stratified splitting, the random forest, the
+  standardisation and logistic regression, and the metrics. \\
+
+\textbf{XGBoost} &
+  3.2.0 &
+  Provides the gradient-boosted robustness model for the combined RQ1 view. \\
+
+\textbf{matplotlib} &
+  3.10.8 &
+  Produces the figures written for the Results chapter. \\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+NetworkX and the HuggingFace \texttt{datasets} client are used only by the
+exploratory application and by the data download, not by the locked pipeline.
+SQLite, which comes with Python, provides the index used to de-duplicate the
+Real-CATS histories.
+% END PROFESSOR FEEDBACK PF14

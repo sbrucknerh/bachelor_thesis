@@ -1,36 +1,37 @@
 %% Locked Results pipeline for the thesis experiments.
+%% Print figures use scripts/render_thesis_feedback_figures.py for fixed-size type.
 %% Entry point: scripts/run_results.py (prepare / execute subcommands).
 %% Phases are stacked top-to-bottom; components within a phase run left-to-right.
 flowchart TD
 
     subgraph SRC["Data sources"]
         direction LR
-        HF["HuggingFace ETH Fraud<br/>binary labels &middot; RQ1, RQ2"]
-        RC["Real-CATS<br/>criminal categories &middot; RQ3"]
-        BL["BLTE<br/>appendix replication"]
-        SY["Synthetic fixtures<br/>counter validation"]
+        HF["HuggingFace Ethereum Fraud<br/>binary labels &middot; RQ1, RQ2"]
+        RC["Real-CATS<br/>categories &middot; RQ3, RQ4<br/>and a binary check"]
+        BL["BLTE<br/>optional secondary check"]
+        SY["Synthetic templates<br/>subgraph counter validation"]
         HF ~~~ RC ~~~ BL ~~~ SY
     end
 
-    subgraph P1["Phase 1 &middot; Preparation &mdash; run_results.py prepare"]
+    subgraph P1["Phase 1 &middot; Preparation: run_results.py prepare"]
         direction LR
         L["Load &amp; stream<br/>raw sources<br/><i>datasets.py &middot; realcats.py</i>"]
         A["Measure activity +<br/>eligibility rules<br/><i>datasets.py</i>"]
         C["Select cohorts /<br/>category targets<br/><i>datasets.py &middot; realcats.py</i>"]
         S["Dev/test split +<br/>CV folds<br/><i>splits.py</i>"]
-        E["Incident edges /<br/>dedup + layer export<br/><i>datasets.py &middot; realcats.py</i>"]
+        E["Incident and closure edges /<br/>deduplication + layer export<br/><i>datasets.py &middot; realcats.py</i>"]
         L --> A --> C --> S --> E
     end
 
-    LOCK[["Locked artifacts &middot; data boundary<br/>protocol.json + SHA-256 &middot; Parquet cohorts, folds, edges<br/><i>prepare.py &middot; artifacts.py</i>"]]
+    LOCK[["Locked artifacts &middot; data boundary<br/>protocol and checksums &middot; cohorts, folds, edges<br/><i>prepare.py &middot; artifacts.py</i>"]]
 
-    subgraph P2["Phase 2 &middot; Execution &mdash; run_results.py execute"]
+    subgraph P2["Phase 2 &middot; Execution: run_results.py execute"]
         direction LR
         V["Verify protocol,<br/>code &amp; data hashes<br/><i>execute.py</i>"]
         G["Build temporal graph<br/>7 event orderings<br/><i>ordering.py &middot; motifs.py</i>"]
-        M["Count motifs, 7 windows<br/>then fingerprints<br/><i>motifs.py &middot; features.py</i>"]
+        M["Count local roles, 9 windows<br/>then fingerprints<br/><i>motifs.py &middot; features.py</i>"]
         F["Baseline + 3 feature views<br/>baseline / motifs / combined<br/><i>features.py</i>"]
-        T["Train classifiers<br/>RF &middot; XGBoost &middot; logistic<br/><i>modeling.py &middot; rq_binary.py &middot; rq_multiclass.py</i>"]
+        T["Train classifiers<br/>random forest &middot; XGBoost &middot; logistic<br/><i>modeling.py &middot; rq_binary.py &middot; rq_multiclass.py</i>"]
         ST["Statistical tests +<br/>ordering robustness<br/><i>statistics.py</i>"]
         V --> G --> M --> F --> T --> ST
     end

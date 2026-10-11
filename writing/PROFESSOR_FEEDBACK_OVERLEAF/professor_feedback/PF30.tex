@@ -1,0 +1,85 @@
+% BEGIN PROFESSOR FEEDBACK PF30: Conclusion
+\section{Conclusion}
+
+Malicious activity on Ethereum is difficult to detect from individual
+transactions. An address can look ordinary on its own even when it is part of a
+larger sequence involving several addresses. This thesis examined whether
+temporal motifs make such patterns useful for detection. Each address was
+represented by the roles it occupies in ordered three-edge patterns that occur
+within a temporal window $\delta$. This representation was then compared with
+conventional transaction aggregates and static graph features.
+
+The main contribution is an evaluation of temporal motif fingerprints
+on labelled Ethereum addresses. The evaluation covers binary detection on the
+HuggingFace Ethereum Fraud Dataset and a separate Real-CATS sample, as well as
+category classification across nine Real-CATS behaviour labels. The pipeline
+counts the retained motif roles for several temporal windows, keeps the five
+Real-CATS transaction layers separate, and accounts for transfers that share a
+timestamp. All main comparisons use held-out addresses. This makes it possible
+to test whether a visible motif signal also improves prediction on addresses
+that were not used to select the model or temporal window.
+The available labels identify malicious addresses and reported behaviour
+categories rather than independently verified coordinated campaigns. The
+evaluation therefore measures address-level behavioural signal, not direct
+campaign detection.
+
+The answer to RQ1 is that temporal motifs contain information, but do not
+reliably improve malicious-address detection beyond the conventional baseline.
+Adding the fingerprint increases average precision in all six HuggingFace
+cohort comparisons, although only three of these increases are statistically
+significant. In the 40-role HuggingFace analysis, the increases are 0.0237 in
+the controlled cohort and 0.0161 in the prevalence cohort, with both confidence
+intervals including zero. The binary Real-CATS comparison produces an increase
+of only 0.0011 and a lower F1 score. At the same time, the role-by-role
+fingerprint performs better than motif volume alone. Its advantage in the
+40-role analysis is 0.1173 average precision in the controlled cohort and
+0.1528 in the prevalence cohort. The way an address participates in motifs is
+therefore more informative than the total number of motifs, but much of this
+information overlaps with simpler address features.
+
+For RQ2, increasing the temporal window generally gives higher average precision
+and provides a non-zero
+fingerprint for more addresses. In the 40-role analysis, motif
+coverage rises from 12.2\% to 77.7\% in the controlled cohort and from
+11.1\% to 75.9\% in the prevalence cohort between five minutes and 30 days.
+The 30-day window gives
+the highest development score in both cohorts, but two weeks remains within one
+standard error of the maximum. For no HuggingFace sample is the selected maximum
+significantly better than every other tested window under all timestamp
+orderings. Since 30
+days is also the largest tested value, it cannot be treated as a universal
+optimum, and no unique optimum within the tested grid is established either.
+The selected window describes the maximum span of a counted candidate pattern,
+not the duration of a malicious
+campaign.
+
+RQ3 shows that the nine Real-CATS behaviour categories have detectable
+differences in their motif fingerprints. At the shared two-week window, the
+classifier reaches a macro average precision of 0.1953, compared with an
+average class share of 0.1111. The permutation result remains significant under
+all seven timestamp orderings. However, the macro F1 score is only 0.1914 and
+the categories overlap strongly in the confusion matrix. The fingerprints
+therefore contain category information, but they are not sufficient for
+accurate category classification on their own. RQ3 establishes separability
+within this representation, not superiority over conventional behavioural
+features for category classification.
+
+The answer to RQ4 is no. Replacing the shared two-week window with separately
+selected category windows changes held-out macro average precision by only
+0.0009. The confidence interval includes zero, and none of the category-level
+changes is significant after correction for multiple comparisons. Most of the
+selected windows also change when equal-timestamp transfers are ordered
+differently. These development selections should not be interpreted as stable
+time scales of the corresponding behaviour categories.
+
+The central result of the thesis is therefore a distinction between behavioural
+information and additional predictive value. Temporal motif fingerprints reveal
+how an address participates in local, ordered transaction patterns. This signal
+is visible in motif-only detection and in the comparison between Real-CATS
+categories. It does not consistently improve a detector that already has access
+to strong transaction aggregates and static graph features. Temporal motifs are
+therefore useful as a description of address behaviour, but the results do not
+support using them as a replacement for conventional features or as a generally
+reliable improvement to them.
+% END PROFESSOR FEEDBACK PF30
+

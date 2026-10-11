@@ -1,0 +1,30 @@
+% Replacement for titlepage.tex in the complete Overleaf project.
+% Uses the existing thesis metadata and the template's WU logo.
+% Flexible vertical space keeps the date on the title page.
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{textblock}{9}[0,0](11,1.03)
+  \includegraphics[width=.7\textwidth]{logos/WULogo.pdf}
+\end{textblock}
+\changefont{ppl}{m}{n}
+\vspace*{3.5cm}
+\begin{center}
+  {\Huge\mytitle\par}
+  \vspace{1.4cm}
+  {\Large\mytype\par}
+  \vspace{0.9cm}
+  {\huge\myname\par}
+  {\Large\matricle\par}
+  \vspace{1cm}
+  {\Large
+    \iflanguage{english}
+      {Department of Information Systems and Operations Management}
+      {Department für Wirtschaftsinformatik und Operations Management}\par
+    \myinstitute\par
+  }
+  \vfill
+  {\Large\iflanguage{english}{Advisor}{Betreuung}:\quad\advisor\par}
+  \vspace{1.2cm}
+  {\large\timeend\par}
+\end{center}
+\end{titlepage}

@@ -1,0 +1,174 @@
+% BEGIN PROFESSOR FEEDBACK PF11: Method - Temporal motif extraction
+\section{Temporal motif extraction}
+\label{sec:motif_extraction}
+
+The baseline describes an address by totals, averages, and timing summaries.
+It does not retain the full order of transfers between particular partners.
+Two addresses can have the same number of
+transfers, the same partners, and the same active span, yet behave very
+differently: one might receive money from many senders within minutes and pass
+it straight on, while the other collects the same money slowly over months.
+Candidate temporal patterns capture these differences. Recall from
+Section~\ref{sec:motifs} that a candidate is a short, time-ordered sequence of
+transfers that all fall within a window of length $\delta$. Choosing a focal
+address determines its local role in an occurrence. Stacking the address's
+local role counts into a vector gives its motif fingerprint
+(Equation~\ref{eq:motif_fingerprint}). This section describes how those
+fingerprints are counted and turned into features.
+
+\subsection{Subgraph counting and retained local roles}
+\label{sec:motifcountingandretainedroles}
+
+The counting itself is done by Raphtory, whose
+\texttt{local\_temporal\_three\_node\_motifs} routine is written in Rust and
+processes addresses in parallel. For every address it returns a \emph{local}
+count for each motif role, that is, the number of candidate occurrences in
+which the address plays that particular part. A star pattern is counted only for
+the address at its centre, and a two-node pattern for both of the addresses
+involved.
+
+Raphtory reports 40 such roles per address: 24 star roles, 8 two-node roles, and
+8 triangle roles. The star roles comprise three classes of eight in-and-out
+direction patterns each. The four global two-node patterns each have two
+endpoint roles, giving eight local two-node counts. This accounts for the
+difference between 36 global patterns and 40 local role features. The output
+is not a catalogue of 36 global motifs with four additional patterns.
+The global patterns are shown in
+Figure~\ref{fig:motifs_paranjape}. The final HuggingFace experiment retains all
+40 roles because its released-neighbourhood closure supports triangle counting.
+It also evaluates the 32 star and two-node roles separately to measure whether
+triangles add signal. Real-CATS retains those 32 roles per layer because its
+collected histories cannot guarantee the edge between two partners. An address
+that takes part in no retained candidate pattern keeps a fingerprint of all zeros rather
+than being dropped from the study.
+
+The retained roles fall into a few structural classes, each with a
+straightforward reading in a transaction network.
+Table~\ref{tab:motif_classes} lists them together with the kind of coordinated
+behaviour they could represent. These interpretations do not label an occurrence
+as fraudulent. In every example, the timing condition is
+$t_3-t_1 \leq \delta$, with $\delta$ drawn from the five-minute to 30-day grid
+in Section~\ref{sec:temporal_window_sweep}. There is no separate threshold for
+\emph{rapid} activity, and an occurrence admitted at 30 days need not be rapid in
+an everyday sense.
+
+\begin{table}[h]
+\centering
+\caption{Retained structural motif classes (after \citet{paranjape2017motifs})
+and their behavioural interpretation in Ethereum transaction networks. Each
+class covers several $\delta$-temporal roles that differ in the direction and
+order of the three transfers.}
+\label{tab:motif_classes}
+\begin{tabular}{p{3.5cm} p{4.5cm} p{5cm}}
+\toprule
+\textbf{Class} & \textbf{Ordered transfers} & \textbf{Possible interpretation} \\
+\midrule
+Two-node, same direction &
+    $A \to B,\; A \to B,\; A \to B$ &
+    Repeated transfers, which may indicate instalment-based extraction \\[4pt]
+Two-node, mixed direction &
+    $A \to B,\; B \to A,\; A \to B$ &
+    Back-and-forth transfers within $\delta$, as in wash-trading or fee manipulation \\[4pt]
+Star, all incoming &
+    $B \to A,\; C \to A,\; C \to A$ &
+    Funds consolidating at a single hub, as in money-mule collection \\[4pt]
+Star, all outgoing &
+    $A \to B,\; A \to C,\; A \to C$ &
+    Mass distribution from one source, as in airdrop farming or Ponzi payouts \\[4pt]
+Star, mixed &
+    $A \to B,\; C \to A,\; A \to C$ &
+    A relay node forwarding funds, as in a layering intermediary \\[4pt]
+Triangle &
+    $A \to B,\; B \to C,\; C \to A$ &
+    A closed transfer sequence, shown here as a cycle. Other triangle roles
+    have different directions. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The terminology in Table~\ref{tab:motif_terminology} applies throughout this
+chapter. Each feature column describes a local role, each class groups related
+roles, and the fingerprint contains the complete set of retained counts for
+one address.
+
+\subsection{Ordering transfers with equal timestamps}
+
+Because motifs are ordered sequences, the transfers have to be put in a definite
+order before they can be counted. Time supplies most of that order, but many
+transfers carry the same timestamp because they sit in the same block, and time
+alone cannot separate them. When the data records where a transfer sits within its
+block, that finer order is used. The HuggingFace data does not record this, so its
+transfers that share a timestamp have no fixed order. To make sure the results do
+not rest on an arbitrary choice, the whole analysis is run under seven versions of
+the order. All orderings preserve the order of transfers with distinct
+timestamps. They differ only in the order assigned to transfers sharing the
+same timestamp: one fixed order, its reversal within each timestamp group, and
+five random shuffles within those groups. These differences can change which
+candidate temporal pattern a sequence matches and which local roles are counted.
+Section~\ref{sec:evaluation_protocol} reports whether the conclusions hold under
+all seven. The order is computed without loading the whole table into memory, and
+the sorted transfers are passed to Raphtory in large batches.
+
+\subsection{Fingerprint representations}
+
+The retained counts are stored under stable names such as \texttt{star\_pre\_iii},
+\texttt{two\_node\_ioi}, and \texttt{triangle\_1}. For RQ1 and RQ2 each count
+$c$ is replaced by $\log(1+c)$. Some highly active addresses have much larger
+counts than most targets. On the raw scale these values would dominate the model.
+Taking the logarithm compresses this range, and adding one first means that a
+count of zero stays zero. The final HuggingFace detection step uses all 40
+transformed values, either on their own or joined to the baseline of
+Section~\ref{sec:graph_construction}. A parallel 32-role representation and a
+triangles-only representation support the ablation analysis. How the fingerprint
+and baseline are combined into the RQ1 feature sets is described in
+Section~\ref{sec:detection_methods}.
+
+The representation comparisons also use \emph{motif volume}, defined here as
+the sum of an address's retained local role counts. This is a local summary,
+not the number of distinct global pattern types.
+
+RQ3 and RQ4 keep the five Real-CATS layers separate. Because the layers differ greatly
+in how many transfers they contain, comparing raw counts would let the busiest
+layer dominate. Instead, within each layer the counts are turned into proportions by dividing each
+count by the layer total, and the square root of each proportion is taken. This is
+known as a Hellinger transform \citep{legendre2001transformations}:
+\[
+    h_{v,j,l}^{\delta}
+      = \sqrt{\frac{c_{v,j,l}^{\delta}}{\sum_{k=1}^{32}c_{v,k,l}^{\delta}}},
+\]
+where $c_{v,j,l}^{\delta}$ is the count of local role $j$ for address $v$ in
+layer $l$ at window $\delta$. The expression applies when the layer's total
+role count is positive. Using proportions removes the total count, so only
+the mix of local roles remains, and
+the square root keeps a few large proportions from dominating, much as the
+logarithm does for the counts. A layer with no retained candidate occurrences is
+kept as all zeros, including a layer that has transfers but no complete
+three-edge pattern. The
+same counts in log form, as used for RQ1 and RQ2, are also kept as a check.
+Concatenating the five layers gives 160 local role features for each Real-CATS
+address, with 32 components per layer.
+
+For every window the pipeline additionally records whether each address has any
+nonzero count at all. This coverage measure shows how the availability of
+fingerprints changes with the window. Reporting coverage alongside performance
+helps assess their relationship, but does not isolate whether a score increase
+comes from lower sparsity or a more informative time scale.
+
+\subsection{Temporal-window sweep}
+\label{sec:temporal_window_sweep}
+
+The counting is repeated over a fixed grid of nine windows,
+\[
+    \delta \in \{300,\,1800,\,3600,\,21600,\,86400,\,259200,\,604800,\,
+                  1209600,\,2592000\}
+    \text{ seconds},
+\]
+which correspond to five minutes, 30 minutes, one hour, six hours, one day, three
+days, one week, two weeks, and 30 days. All windows use the same addresses and
+the same train and test split, and the window is chosen only on the development
+data, as described in Section~\ref{sec:evaluation_protocol}. RQ2 studies how
+detection changes across this grid, and RQ4 asks whether separate windows for
+each category improve classification over one shared window. A selected window
+is the maximum span allowed for a three-edge candidate motif. It is not an estimate of the
+total duration of a fraud campaign.
+% END PROFESSOR FEEDBACK PF11

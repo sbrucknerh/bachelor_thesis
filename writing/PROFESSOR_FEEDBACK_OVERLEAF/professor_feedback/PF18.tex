@@ -1,0 +1,27 @@
+% BEGIN PROFESSOR FEEDBACK PF18: Results - Chapter introduction
+\chapter{Results}
+\label{ch:results}
+
+\IfFileExists{generated/results_macros.tex}{%
+  \input{generated/results_macros}%
+  \input{generated/results_validation}%
+}{%
+  \PackageError{thesis}{Final Results artifacts are missing}{Copy the
+  contents of writing/generated into the Overleaf project}%
+}
+
+This chapter presents the results for the four research questions. RQ1 and RQ2
+are examined in three non-overlapping HuggingFace samples. Each contains a
+randomly drawn prevalence cohort and a controlled cohort in which benign and
+malicious addresses are matched by activity. The
+two 32-role samples contain only star and two-node motif roles. The 40-role
+sample also includes triangles. RQ3 and RQ4 use the nine
+Real-CATS categories with enough active addresses for the analysis. Real-CATS
+also provides a second binary comparison for RQ1 and RQ2. BLTE was prepared as
+an optional dataset, but it is not part of the results reported here.
+
+The chapter reports the measured scores, window selections, and statistical
+comparisons. Their interpretation and possible explanations are discussed in
+Chapter~\ref{ch:discussion}.
+% END PROFESSOR FEEDBACK PF18
+

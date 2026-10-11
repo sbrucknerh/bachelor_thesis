@@ -1,0 +1,140 @@
+% BEGIN PROFESSOR FEEDBACK PF12: Method - Detection methods
+\section{Detection methods}
+\label{sec:detection_methods}
+
+The previous two sections produced two descriptions of every address: the
+non-motif baseline of Section~\ref{sec:graph_construction} and the motif
+fingerprint of Section~\ref{sec:motif_extraction}. This section describes how
+those descriptions are turned into a detector and which models are used. The
+binary detection for RQ1 and RQ2 is kept apart from the category detection for
+RQ3 and RQ4, because the two groups ask different questions and use different
+datasets.
+
+\subsection{The three feature views}
+
+RQ1 asks whether the motif fingerprint adds anything beyond ordinary address
+behaviour. The cleanest way to answer this is a controlled comparison, in which
+only the features change and everything else stays fixed. Three views of each
+address are therefore built from the two descriptions above:
+\begin{itemize}
+  \item the \emph{baseline} view, the 17 non-motif features of
+        Table~\ref{tab:results_baseline_features},
+  \item the \emph{motifs} view, the log-transformed local motif-role counts, with 32 roles
+        in two HuggingFace samples and all 40 roles in the sample that includes
+        triangles, and
+  \item the \emph{combined} view, the two simply placed side by side.
+\end{itemize}
+As described in Section~\ref{sec:evaluation_protocol}, RQ1 and RQ2 use three
+non-overlapping HuggingFace samples. Two samples use the 32 star and two-node
+roles. The remaining sample has the released-neighbourhood closure needed for all
+40 roles and evaluates the 32-role view and the eight triangle roles as separate
+ablations.
+All three views use exactly the same addresses and the same train and test split,
+and no address is dropped just because its fingerprint is all zeros. Because the data is
+held constant, this comparison evaluates the predictive value added by the
+fingerprint representation. The main contrast is 17 baseline features against
+those same 17 features plus 32 or 40 local motif-role features. Each role
+combines structure, direction, focal-node position, and temporal order.
+The experiment therefore does not isolate the contribution of temporal order
+alone. That would require a matching representation with the ordering removed.
+
+RQ2 then asks how the time window affects the usefulness of the fingerprints.
+For this the
+combined view is evaluated at each of the nine windows from
+Section~\ref{sec:motif_extraction}. The baseline does not depend on the window, so
+it stays the same throughout and serves as a fixed reference line.
+
+\subsection{Classifiers for RQ1 and RQ2}
+
+The detector for the binary questions is a random forest, an ensemble of decision
+trees that each vote on whether an address is malicious. A random forest suits
+this task because it can pick up interactions between different motif roles
+without any manual feature scaling, and because it is a strong, well-understood
+default rather than a model tuned hard for the highest possible score. Its
+settings are fixed in advance, with 100 trees, a limited depth, balanced class
+weights, and a fixed random seed, and they are not adjusted on the test data. The
+forest is trained on the development addresses and then scores each address in the
+test set with a probability of being malicious. The time window is chosen on the
+development data by cross-validation (CV), using the rule described in
+Section~\ref{sec:evaluation_protocol}.
+
+As a robustness check, an Extreme Gradient Boosting (XGBoost) model is also fitted, on
+the combined view at the chosen window. If it agrees with the random forest, that
+strengthens confidence in the result, but the RQ1 decision always rests on the
+random forest, which is fixed beforehand. The models use the allocated central
+processing unit (CPU) threads. Table~\ref{tab:results_models}
+summarises all three models.
+
+\begin{table}[ht]
+\centering
+\caption{The three models used in the detection experiments.}
+\label{tab:results_models}
+\small
+\begin{tabular}{@{}p{2.8cm} p{3.7cm} p{6.6cm}@{}}
+\toprule
+\textbf{Task} & \textbf{Model} & \textbf{Fixed settings} \\
+\midrule
+RQ1 and RQ2 (main) &
+Random forest &
+100 trees, depth 10, balanced class weights, a fixed seed, allocated CPU threads \\[2pt]
+RQ1 (robustness) &
+Gradient-boosted trees (XGBoost) &
+100 rounds, depth 6, learning rate 0.1, positive-class weight from the training
+split, a fixed seed \\[2pt]
+RQ3 and RQ4 &
+Multinomial logistic regression &
+Standardised features, balanced class weights, up to 2{,}000 iterations, a fixed
+seed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Classifier for RQ3 and RQ4}
+
+RQ3 and RQ4 do not separate malicious from benign addresses. They sort criminal
+addresses into their behaviour category, so the model has one class per category
+rather than two. Both questions are answered from the same model on the same
+data, and they are therefore always prepared and run together as one analysis.
+Only categories with at least 100 addresses take part, because the categories are
+very unevenly filled, as explained in Section~\ref{sec:data_acquisition}, and
+categories are never merged into larger groups.
+
+The input here is the per-layer fingerprint of
+Section~\ref{sec:motif_extraction}, expressed as local role proportions, which captures
+the mix of roles an address occupies in each transaction layer. The model is a
+logistic regression in its multi-class form. Its inputs are first put on a common
+scale, and this scaling is learned only from the training data so that the test
+data cannot influence it. A logistic regression is chosen deliberately, because it
+is a simple model with few parameters. This tests whether the motif proportions
+alone can separate the categories, without a more complex model that might overfit
+the smaller categories.
+
+RQ3 evaluates category separability using motif fingerprints alone. Class
+shares and a permutation reference provide context for this separation.
+There is no comparison with the conventional behavioural features for category
+classification, so RQ3 does not test whether fingerprints outperform those
+features.
+
+Two kinds of window are selected on the development data, one for each question. A
+single global window is chosen to separate all categories as well as possible at
+once, and this is the window RQ3 uses to ask whether the categories have distinct
+fingerprints at all. In addition, a separate window is chosen for each category,
+the one at which that category is recognised best. Whether these category-specific
+windows actually beat the single global window is what RQ4 tests. Both kinds of
+window are chosen on the development data only. The final model is refitted on all
+development addresses and gives each address in the test set one probability per
+category.
+
+\subsection{Handling class imbalance}
+
+The classes are uneven to different degrees across the experiments, only
+slightly for the main dataset and strongly for the Real-CATS categories. The
+same applies if the optional BLTE run is performed. This is handled in a single
+way, by weighting each class in inverse proportion to how often it appears, so
+that a rare class counts for as much as a common one during training. The random
+forest and the logistic regression use balanced class weights, and the
+gradient-boosted model uses the matching positive-class weight from its training
+split. No artificial examples are added, and the number of addresses in each
+class is left unchanged.
+% END PROFESSOR FEEDBACK PF12
+

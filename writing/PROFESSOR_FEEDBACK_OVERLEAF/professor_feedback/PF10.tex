@@ -1,0 +1,101 @@
+% BEGIN PROFESSOR FEEDBACK PF10: Method - Temporal graph construction
+\section{Temporal graph construction}
+\label{sec:graph_construction}
+
+The prepared transactions are turned into a temporal graph on which candidate
+subgraphs are later counted. This section describes the graph model, how the
+graph is actually built from each dataset, and the simple features that are read
+straight from it and later serve as a comparison point for the fingerprints.
+
+\subsection{Graph model}
+
+Each address is represented as a node and each transfer as a directed edge that
+carries the time at which it happened. The result is a temporal directed
+multigraph
+\[
+  \mathcal{G}=(V,E,\tau,w),
+\]
+where $V$ is the set of addresses, $E$ the set of transfers, $\tau(e)$ the
+timestamp of transfer $e$, and $w(e)$ its transferred value. Two properties are
+kept on purpose. Parallel transfers between the same pair of addresses are not
+merged, because how many there are and in which order they occur is exactly what
+the candidate patterns are built from. Edge direction is kept for the same reason, since an
+address that only receives, one that only sends, and one that does both leave
+different local role counts behind.
+
+\subsection{Building the graph from the data}
+
+HuggingFace and Real-CATS are stored in very different shapes, so the graph is
+assembled differently for each, but always without holding more data in memory
+than needed.
+
+For HuggingFace the transaction table is far too large to load as a whole, with
+more than 380 million transfers. It is therefore read in small batches. The
+first pass measures how active each labelled address is and keeps every transfer
+that touches a selected target. These incident transfers define the baseline and
+the set containing each target and all of its direct partners. A second full
+scan keeps every published transfer whose two endpoints both belong to that set.
+The resulting released-neighbourhood closure is used for subgraph counting.
+
+Every triangle involving a selected target consists of two target-to-partner
+edges and one edge between those partners. The first two edges place both
+partners in the retained node set, and the second scan then keeps their connecting
+edge. Triangle counts are therefore complete relative to the published release.
+They are not claimed to be complete for Ethereum activity absent from the
+release. Baseline features remain restricted to target-incident transfers so
+that adding the closure does not give the comparison model extra network scope.
+
+Real-CATS is stored as one transaction history per address, and the same
+transfer can appear in the histories of several addresses. These repeated copies
+are removed once, using a disk-backed index so that the de-duplication does not
+depend on everything fitting in memory. Each history is also split into five
+layers, namely ordinary transfers, internal transfers, and ERC-20, ERC-721 and
+ERC-1155 token transfers. Every layer becomes its own set of edges, and candidate subgraphs
+are counted within each layer. This preserves the distinction between transaction
+types, but excludes candidate sequences whose edges cross between layers.
+
+\subsection{The non-motif baseline}
+
+RQ1 asks whether motif fingerprints add anything beyond ordinary address behaviour, so it
+needs a description of each address that does not use motifs at all. This
+baseline is computed from the same transfers and the same addresses as the motif
+fingerprints. Table~\ref{tab:results_baseline_features} lists the resulting 17
+features, grouped into how active an address is, how much value it moves, the
+structure of its immediate neighbourhood, and how its activity is spread over
+time.
+
+\begin{table}[ht]
+\centering
+\caption{The non-motif baseline features used for RQ1.}
+\label{tab:results_baseline_features}
+\small
+\begin{tabular}{@{}p{3.4cm} p{9.5cm}@{}}
+\toprule
+\textbf{Feature group} & \textbf{Features} \\
+\midrule
+Activity &
+Number of transfers sent, received, and in total \\[2pt]
+Transferred value &
+Outgoing and incoming sum, mean, and sample standard deviation, plus the total
+value moved \\[2pt]
+Neighbourhood structure &
+Number of distinct outgoing neighbours, number of distinct incoming neighbours,
+and reciprocity, the share of an address's neighbours that it both sends to and
+receives from \\[2pt]
+Relative timing &
+Active span and the mean, median, and sample standard deviation of the gaps
+between successive transfers that touch the address \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A few choices keep this baseline honest. Absolute first and last transaction
+times are deliberately left out, because they mostly reveal when the data was
+collected or how old a campaign is rather than how an address behaves, and a
+model could otherwise separate the classes by collection window instead of by
+behaviour. Measures that describe an address's position in the wider network are also left
+out, because computing them reliably would need more of the surrounding graph
+than is kept here. Where a value cannot be computed, for instance a measure of
+variation for an address with too few transactions, it is set to zero.
+% END PROFESSOR FEEDBACK PF10
+

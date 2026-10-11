@@ -1,0 +1,63 @@
+% BEGIN PROFESSOR FEEDBACK PF21: Results - RQ3
+\section{RQ3: Distinct Motif Fingerprints per Category}
+
+RQ3 evaluates category separability using motif fingerprints alone. It does
+not compare fingerprints with conventional behavioural features for category
+classification. The analysis contains 10{,}871 addresses across the categories listed in
+Table~\ref{tab:scam_types}. Their distribution is very uneven: phishing accounts
+for most addresses, while the seven smallest categories have only 25 to 47
+addresses each in the test set.
+
+Table~\ref{tab:res_rq3_global} reports the overall classification result, and
+Table~\ref{tab:res_rq3_labels} gives the result for each category separately.
+Figure~\ref{fig:res_rq3} compares the average fingerprints, and
+Figure~\ref{fig:res_rq3_confusion} reports the confusion matrix.
+
+The heatmap labels use layer prefixes for ordinary transfers (N), internal
+transfers (I), ERC-20 (E20), ERC-721 (E721), and ERC-1155 (E1155).
+The labels pre, mid, and post identify the three star classes, and two denotes
+a two-node role. Direction codes use i for incoming and o for outgoing.
+Category labels in the figures omit the shared suffix Scam.
+
+\begin{figure}[p]
+  \centering
+  \ResGraphic{1.0}{rq3_fingerprint_heatmap}
+  \caption{RQ3 category fingerprints using the globally selected two-week
+  window and the default timestamp ordering. The two panels show the 40 local
+  role components that vary most between categories in the development data,
+  divided into two groups of 20 for readability. These components are selected
+  from the five layers of 32 roles each, not from the 40-role HuggingFace
+  catalogue.}
+  \label{fig:res_rq3}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \ResGraphic{1.0}{rq3_confusion_matrix}
+  \caption{RQ3 confusion matrix for the held-out Real-CATS addresses at the
+  shared two-week window under the default timestamp ordering. Cells report
+  numbers of addresses.}
+  \label{fig:res_rq3_confusion}
+\end{figure}
+
+\IfFileExists{generated/results_rq3_global.tex}{\input{generated/results_rq3_global}}{\ResPendingTable{RQ3 overall category separability.}{tab:res_rq3_global}}
+\IfFileExists{generated/results_rq3_labels.tex}{\input{generated/results_rq3_labels}}{\ResPendingTable{RQ3 per-category detection.}{tab:res_rq3_labels}}
+
+Using the default timestamp ordering, the development data selects a shared
+window of two weeks. On the test set, macro AP is 0.1953 and macro F1 is 0.1914.
+For comparison, the average class share across the nine one-vs-rest tasks is
+$1/9=0.1111$. The permutation test gives $p<0.001$. It rejects the
+label-permutation null
+under all seven timestamp orderings, although their selected windows range from
+one week to 30 days.
+
+The one-vs-rest AP values range from 0.0244 for NFT Airdrop Scam to 0.7710 for
+Phishing Scam. Every value is above the share of its category. Pigbutchering Scam reaches
+0.2594 AP with a class share of only 0.0121. Phishing has the highest AP, but it
+also represents 69.22\% of the sample. Table~\ref{tab:res_rq3_labels} reports
+the class shares alongside AP.
+
+A model based on log-transformed local role counts reaches macro AP 0.2058 and macro F1 0.1868,
+compared with 0.1953 and 0.1914 for the composition-based fingerprint.
+% END PROFESSOR FEEDBACK PF21
+

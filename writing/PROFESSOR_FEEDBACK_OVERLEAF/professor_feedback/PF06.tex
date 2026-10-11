@@ -1,0 +1,194 @@
+% BEGIN PROFESSOR FEEDBACK PF06: Foundations - Temporal motifs and fingerprint
+\section{Temporal motifs}
+\label{sec:motifs}
+
+\paragraph{Static network motifs.}
+The concept of network motifs was introduced by \citet{milo2002network} to describe small, recurring subgraph patterns that appear significantly more often in a real network than in a randomised reference. These patterns are considered the building blocks of network structure, so that different classes of networks (biological, social, technological) tend to be characterised by different sets of over-represented motifs \citep{milo2002network}. In static graphs, a motif is formally defined as a connected induced subgraph on $k$ nodes whose frequency in the observed network exceeds what would be expected by chance under a suitable null model \citep{milo2002network, newman2010networks}.
+
+
+\paragraph{$\delta$-temporal motifs.}
+\citet{paranjape2017motifs} extend the static motif concept to temporal networks by introducing $\delta$-temporal motifs.
+A $k$-node, $l$-edge $\delta$-temporal motif is an ordered sequence of
+$l$ timestamped edges involving $k$ nodes. The graph formed by these edges must
+be connected, and the time between the first and last edge must be at most
+$\delta$. Two occurrences represent the same motif when their nodes can be
+relabelled without changing the direction or temporal order of the edges
+\citep{paranjape2017motifs}.
+
+\paragraph{Candidate patterns and statistical motifs.}
+The temporal counting framework defines patterns by their structure, edge order,
+and time span. Counting an occurrence does not itself establish that the pattern
+is more common than expected by chance. In this thesis, an untested pattern is
+therefore a \emph{candidate motif}, or a temporal subgraph. The terms
+\emph{motif role} and \emph{motif fingerprint} refer to the features derived from
+these candidates. Statistical overrepresentation would require a separate
+comparison with randomised networks under a specified null model
+\citep{milo2002network}. The supervised tests used here assess prediction and
+category separability, not network overrepresentation.
+
+\paragraph{The catalogue of $\delta$-temporal motifs.}
+
+For motifs with three edges on two or three nodes,
+\citet{paranjape2017motifs} enumerate a complete catalogue of 36 patterns.
+It contains four \emph{2-node motifs}, in which all three edges occur between
+the same pair of nodes, 24 \emph{star motifs}, in which one centre node
+interacts with two distinct neighbours, and eight \emph{triangle motifs}, in
+which every pair of the three nodes is connected. Only two of the eight
+triangle motifs form a directed cycle. The individual patterns also differ in
+the direction and temporal ordering of their edges. The full catalogue is
+illustrated in Figure~\ref{fig:motifs_paranjape}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{motifs_paranjape}
+    \caption{All 36 two- and three-node, three-edge $\delta$-temporal motifs, 
+    indexed as $M_{i,j}$ by row $i$ and column $j$. The first edge in each 
+    motif originates from the green node and edge labels denote temporal ordering. 
+    Figure from \citet{paranjape2017motifs}.}
+    \label{fig:motifs_paranjape}
+\end{figure}
+
+\subsection{Counting algorithm}
+
+Motif counting algorithms form the computational foundation of any motif-based analysis. This section first outlines the established methods for static graphs and then explains why a fundamentally different approach is required for temporal data.
+
+\subsubsection{Static motif counting}
+
+Static graph motif counting is a well-studied problem. Given a graph $G$, the goal is to count how many times a given subgraph pattern, such as a triangle or a directed cycle, appears in $G$. Algorithms for this task range from exact neighborhood-intersection methods to matrix-based approaches and sampling-based approximations, covering a broad spectrum of accuracy and efficiency trade-offs \citep{Yin2025}. These methods are computationally mature and underpin many downstream tasks such as clustering coefficient computation and community detection.
+
+However, static methods operate on a time-aggregate representation: all edges that ever existed between two nodes collapse into a single connection, regardless of when they occurred \citep{kovanen2011temporal}. This means that the temporal ordering is lost entirely. \citet{paranjape2017motifs} show that even when a triangle is topologically present in a network, only a subset of its instances are temporally valid. The others either occur in a different order or fall outside a given time window $\delta$. A static counter treats all of them as identical. For blockchain transaction networks, this distinction is critical because coordinated malicious behaviour happens through transaction sequences that have a specific temporal order, something that static aggregation cannot recover.
+
+\subsubsection{Temporal motif counting}
+Temporal motif counting extends the static counting problem by requiring that all edges of a motif occur in a specific order within a bounded time window $\delta$. 
+
+The general counting algorithm proceeds in three steps: (1) identify all
+static instances of the subgraph $H$ in the static graph $G$,
+(2) for each instance, gather all corresponding temporal edges into a
+time-sorted sequence $S$, and (3) process $S$ within a sliding window of
+size $\delta$, tracking how often each ordered edge pattern appears
+within that window \citep{paranjape2017motifs}. Algorithm~\ref{alg:paranjape}
+formalizes this procedure.
+
+\begin{figure}[t]
+\begin{minipage}{\linewidth}
+
+\begin{algorithm}[H]
+\caption{$\delta$-Temporal Motif Counting adapted from \citet{paranjape2017motifs}}
+\label{alg:paranjape}
+\begin{algorithmic}[1]
+\Require Time-sorted sequence $S = (e_1, \ldots, e_L)$,
+         window $\delta$, motif length $l$
+\Ensure Count of each $l$-edge $\delta$-temporal motif in $S$
+\State $\textit{left} \gets 1$
+\State $\textit{patternCounts} \gets \emptyset$
+\For{$\textit{right} = 1, \ldots, L$}
+    \While{$t_{\textit{right}} - t_{\textit{left}} > \delta$}
+        \State \Call{RemoveFromWindow}{$e_{\textit{left}}$}
+        \State $\textit{left} \gets \textit{left} + 1$
+    \EndWhile
+    \State \Call{AddToWindow}{$e_{\textit{right}}$}
+\EndFor
+\State \Return $\textit{patternCounts}$
+\end{algorithmic}
+
+\noindent\rule{\linewidth}{0.4pt}
+\noindent\textbf{Procedure} \textsc{RemoveFromWindow}$(e)$
+\hfill\textit{// expire $e$ and withdraw prefix contributions}
+\begin{algorithmic}[1]
+\State $\textit{patternCounts}[e] \gets \textit{patternCounts}[e] - 1$
+\ForAll{suffix $\sigma$ of length $< l-1$ in $\textit{patternCounts}$}
+    \State $\textit{patternCounts}[(e,\,\sigma)]
+           \mathrel{-}= \textit{patternCounts}[\sigma]$
+\EndFor
+\end{algorithmic}
+
+\noindent\rule{\linewidth}{0.4pt}
+\noindent\textbf{Procedure} \textsc{AddToWindow}$(e)$
+\hfill\textit{// admit $e$ and extend all existing prefixes}
+\begin{algorithmic}[1]
+\ForAll{prefix $\pi$ of length $< l$ in $\textit{patternCounts}$,
+        longest first}
+    \State $\textit{patternCounts}[(\pi,\,e)]
+           \mathrel{+}= \textit{patternCounts}[\pi]$
+\EndFor
+\State $\textit{patternCounts}[e] \gets \textit{patternCounts}[e] + 1$
+\end{algorithmic}
+
+\end{algorithm}
+\end{minipage}
+\end{figure}
+ 
+For 2-node motifs this runs in 
+$O(m)$ time, which is optimal. For 3-node, 3-edge star and triangle motifs, specialized algorithms reduce the worst-case complexity significantly, with the fast triangle algorithm achieving up to a 56.5$\times$ speedup over the general method on the Bitcoin transaction network \citep{paranjape2017motifs}. This scalability is relevant to the present work, as blockchain transaction graphs are large and the motifs we are interested in correspond directly to 3-node star and triangle patterns within a short time window.
+
+\subsection{Motif fingerprint}
+The identification of recurring subgraph patterns in a network provides insight
+into the local structural properties of individual nodes. A global count records
+how often a pattern occurs anywhere in the graph. It does not say which position
+an individual node occupies. The \emph{motif-role fingerprint} of
+\citet{McDonnell2014} retains this distinction by collecting counts for the local
+roles of a focal node, such as an initiator, intermediary, or receiver.
+
+\citet{McDonnell2014} further show that functional motif-role fingerprints, obtained from counts of partial subgraphs, can be transformed into structural fingerprints by multiplying them with an invertible transformation matrix, establishing a mathematically well-defined correspondence between the two representations. The authors identify anomaly detection and the identification of structurally similar nodes as primary use cases, which makes it well applicable for this thesis.
+
+The concept is extended here to temporal graphs following the
+$\delta$-temporal counting framework. A global candidate pattern first defines
+the ordered transfers. Choosing a focal address then determines its local role
+in that occurrence. Counts of these roles form the address fingerprint.
+Table~\ref{tab:motif_terminology} distinguishes these levels.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{The terms used to describe temporal patterns and address features.
+The counted patterns are candidates, without a claim of statistical
+overrepresentation.}
+\label{tab:motif_terminology}
+\begin{tabular}{@{}p{2.9cm} p{3.6cm} p{6.1cm}@{}}
+\toprule
+\textbf{Term} & \textbf{Example} & \textbf{Meaning} \\
+\midrule
+Global candidate motif &
+$A \to B$, then $A \to C$, then $A \to B$ &
+The complete ordered pattern, considered without selecting a focal address.
+A statistical motif additionally requires evidence of overrepresentation
+against a network null model. \\[5pt]
+Focal node &
+Address $A$ &
+The address whose participation is being described. \\[5pt]
+Local motif role &
+$A$ as the outgoing star centre &
+The position of the focal address, including the directions and ordering of
+the transfers relative to it. \\[5pt]
+Motif class &
+Star, all outgoing &
+A structural grouping of related patterns or roles. A class is not one
+feature column. \\[5pt]
+Address fingerprint &
+$\mathbf{f}_v^\delta$ &
+The complete vector of local role counts for address $v$, with one component
+for each retained role. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For the full local catalogue used in this thesis, the raw fingerprint is
+defined as
+
+\begin{equation}
+    \mathbf{f}_v^{\delta}
+      = \bigl(c_{v,1}^{\delta},\,c_{v,2}^{\delta},\,\ldots,\,c_{v,40}^{\delta}\bigr)
+    \label{eq:motif_fingerprint}
+\end{equation}
+
+where $c_{v,j}^{\delta}$ counts the number of candidate occurrences in which
+address $v$ participates in local role $j$ within a span of at most $\delta$.
+The 40 components are local motif-role counts, not 40 global patterns or 40
+motif classes. Raphtory reports 24 star-centre roles, eight two-node roles, and
+eight triangle roles. Section~\ref{sec:motifcountingandretainedroles} explains
+their relationship to the 36 global patterns and the 32-role subsets used when
+triangle coverage is incomplete. A feature matrix has one row per address and
+one column per retained local role.
+
+This serves two purposes. First, it reduces the high-dimensional transaction graph to a compact, interpretable, and fixed-size representation per address. Second, it encodes behavioral structure rather than raw transaction statistics because an address involved in coordinated activity is expected to exhibit a distinct fingerprint compared to ordinary users, as coordinated behavior by definition produces recurring, time-constrained interaction patterns among a group of addresses. The fingerprint therefore creates a behavioral signature of each address showing small recurring temporal subgraph patterns.
+% END PROFESSOR FEEDBACK PF06

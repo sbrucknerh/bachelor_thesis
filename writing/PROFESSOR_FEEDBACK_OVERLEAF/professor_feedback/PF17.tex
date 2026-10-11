@@ -1,0 +1,67 @@
+% BEGIN PROFESSOR FEEDBACK PF17: Implementation - Result artifacts
+\subsection{Result artifacts}
+
+Each run has its own directory that is never overwritten, so results from
+different runs cannot be mixed, and a run may only create a file that does not yet
+exist. Prepared edges, fingerprints, and test-set predictions are stored as
+Parquet, the protocol and the test summaries as JavaScript Object Notation
+(JSON), the chapter tables as comma-separated values (CSV),
+and the figures as PDF. Output files are first fully written and synchronised in
+a private attempt directory. Files are committed without replacement, and a
+multi-file stage is published by an atomic directory rename after its manifest is
+written last. The public \texttt{features}, \texttt{metrics}, and related
+directories contain hard links to verified stage payloads, preserving the
+filenames consumed by the Results chapter.
+
+Preparation and execution have separate resume rules. During Real-CATS
+preparation, the SQLite index records each completed address and can be resumed
+only before the experiment settings are fixed. During execution, every attempt
+has its own identifier and scratch directory. HF commits one subgraph-count
+checkpoint for every ordering and window. Real-CATS commits one for every layer, ordering, and
+window. A new attempt may reuse earlier valid commits. A completed run rejects
+both a fresh execution and a resume.
+
+The integrity chain is acyclic. The locked protocol and prepared data identify
+the execution definition. These identify every checkpoint and stage. The
+result inventory hashes the committed stage manifests and public files, and the
+execution manifest records the inventory hash. Each inventory and manifest has
+a separate checksum file and does not include itself. The final
+\texttt{verify} command checks this chain and the scientific schemas without
+writing to the run. Ordinary verification distinguishes a valid non-citable
+development or smoke run from corruption. Final thesis acceptance additionally
+requires \texttt{--require-citable}.
+
+The only appended file is \texttt{run\_log.jsonl}, which stores one JSON record
+per line in JSON Lines (JSONL) format. Its writes are thread-safe
+and synchronised to disk. A native operation that runs for several minutes
+emits a heartbeat every five minutes with its elapsed time, allocated threads,
+free disk, and latest committed checkpoint. The output layout is shown below.
+
+\begin{lstlisting}[caption={Locked Results artifact layout.},
+  label={lst:filenames}]
+results/experiments/<run-id>/
+  preparation_state.json
+  protocol.json / protocol.sha256
+  execution_definition.json / execution_definition.sha256
+  attempts/<attempt-id>/
+    started.json, completed.json or failed.json
+    scratch/duckdb/
+    staging/
+  checkpoints/<checkpoint-id>/
+    counts.parquet
+    metadata.json
+  stages/<stage-id>/
+    payload/
+    stage_manifest.json
+  run_log.jsonl
+  data/
+  features/
+  predictions/
+  metrics/
+  figures/
+  tables/
+  result_artifacts.json / result_artifacts.sha256
+  execution_manifest.json / execution_manifest.sha256
+\end{lstlisting}
+% END PROFESSOR FEEDBACK PF17
+

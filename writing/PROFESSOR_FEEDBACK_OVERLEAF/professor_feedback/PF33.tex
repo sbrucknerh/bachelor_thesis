@@ -1,0 +1,237 @@
+% BEGIN PROFESSOR FEEDBACK PF33: Expanded Related Work
+\chapter{Related Work}
+\label{chap:relatedwork}
+
+Research on malicious blockchain activity differs in what is represented and
+what is predicted. Some methods classify addresses from transaction summaries,
+while others learn from their neighbourhoods or from ordered sequences of
+transfers. The datasets also differ in whether labels describe transactions,
+addresses, trust relations, or particular types of abuse. This chapter reviews
+these approaches and explains how the present evaluation relates to them.
+
+\section{Graph-Based Detection of Malicious Behaviour}
+\label{sec:related_graph_detection}
+
+A transaction graph provides more context than a list of independent payments.
+However, the choice of graph determines which interactions are visible.
+\citet{lee2020ethereum} study several Ethereum interaction networks, covering
+ordinary transactions, contract interactions, and token transfers. Their
+comparison shows why the graph representation must be specified before its
+properties can be interpreted. This is relevant here because an ordinary
+transaction graph and a graph that also includes token transfers do not describe
+the same set of activities.
+
+Early supervised detection methods use address-level summaries of such
+networks. \citet{ostapowicz2019detecting} compare random forests, support vector
+machines (SVMs), and Extreme Gradient Boosting (XGBoost) on more than 300,000
+Ethereum accounts. They also examine how individual features affect the
+classification. Their work establishes a practical starting point for the
+present thesis: conventional address features already contain useful detection
+information, so any additional representation needs to be tested against them.
+
+\citet{chen2022phishing} construct 149 features from an address's direct
+transactions, drawing on patterns associated with fraudulent bank accounts.
+Their method filters the features and uses a random forest for phishing
+detection, reporting 98.89\% precision on their dataset. The features have a
+clear connection to transaction behaviour, but they summarise the target's
+activity rather than count ordered interactions among several addresses.
+
+\citet{sanjalawe2023atd} also derive features from a weighted directed
+multigraph. Their approach combines feature selection with a semi-supervised
+generative adversarial network and reports 95.06\% detection accuracy.
+The selected features include structural measures and summaries of transaction
+timing. This is different from representing the exact order of transfers in a
+small connected subgraph. The reported scores from these studies cannot be
+compared directly with each other or with the present results, because the
+datasets, class proportions, and evaluation procedures differ.
+
+Together, these studies motivate the conventional feature baseline in this
+thesis. Transaction counts, values, activity durations, and static graph
+properties can identify differences between malicious and benign addresses.
+The purpose of adding local motif-role counts is to test whether short
+transaction sequences contribute information beyond these summaries.
+
+\section{Network Embeddings and Time-Aware Learning}
+\label{sec:related_temporal_learning}
+
+Network embeddings replace a manually designed feature vector with a learned
+representation of an address and its neighbourhood.
+\citet{wu2020phishers} introduce trans2vec for Ethereum phishing detection.
+The method incorporates transaction amounts and timestamps into biased random
+walks and then applies a one-class support vector machine. It therefore already
+uses temporal information. Its representation is learned from walks, however,
+rather than expressed as separate counts of predefined local roles.
+
+Time-aware graph modelling is also studied outside fraud classification.
+\citet{wu2020temporal} represent Ethereum records as a temporal weighted
+multidigraph and compare walk strategies that account for transaction times and
+amounts. Their evaluation concerns temporal link prediction. This supports the
+importance of retaining repeated and timestamped interactions, but link
+prediction is a different task from deciding whether an address is malicious.
+
+Graph neural networks provide another way to combine an object's features with
+information from its neighbours. In the Bitcoin setting,
+\citet{weber2019bitcoin} compare graph convolutional networks with conventional
+classifiers on the Elliptic dataset. Random forests perform strongly in their
+experiments. The result is a useful reminder that a graph-based model does not
+automatically improve on a feature-based classifier, even when the underlying
+data is relational.
+
+More recent Ethereum work models changing neighbourhoods explicitly.
+\citet{ghoshcatalog2025} combine local and global temporal dependencies for
+phishing detection. Their model processes sequences of transaction
+neighbourhoods and learns how behaviour changes over time. This differs from a
+fixed catalogue of short event patterns, but it rules out a general claim that
+earlier blockchain detection methods ignore time.
+
+The distinction relevant to this thesis is therefore between representations,
+not simply between methods that use time and methods that do not. Temporal
+motif fingerprints provide explicit counts for particular ordered patterns.
+Embeddings and neural models learn their representations from the data. The
+present experiments compare fingerprints with conventional features. They do
+not benchmark all of these learned alternatives or isolate the causal
+contribution of temporal ordering.
+
+\section{Datasets for Blockchain Transaction Analysis}
+\label{sec:relwork_datasets}
+
+A useful detection dataset needs both behavioural observations and labels for
+the objects being classified. It also needs sufficient transaction detail for
+the proposed representation. An address-level table of summary features cannot
+by itself reconstruct the order of interactions between several addresses.
+
+\citet{alemari2021labeled} introduce the Benchmark Labelled Transactions of
+Ethereum (BLTE) dataset as a public resource for evaluating detection methods.
+The later study by \citet{sanjalawe2023atd} describes its source as Ethereum
+Classic and uses abnormal-address information from EtherScamDB. BLTE is relevant
+as an established transaction-based benchmark. Its source coverage and binary
+labels must nevertheless be distinguished from those of a mainnet Ethereum
+address-classification task.
+
+The Elliptic dataset released by \citet{weber2019bitcoin} contains more than
+200,000 Bitcoin transactions connected by directed payment flows. Its nodes
+represent transactions, not persistent Ethereum addresses. It supports the
+study of illicit transaction detection over time, but its graph construction
+and prediction unit differ from those used here.
+
+The Real-world dataset of Cryptocurrency Addresses with Transaction Profiles
+(Real-CATS), introduced by \citet{shi2025realcats}, combines 103,203 criminal
+addresses and 106,196 benign addresses across Bitcoin and Ethereum. Criminal
+labels are drawn from abuse reports, while benign addresses are collected from
+exchange customers. Alongside address profiles, the release contains
+transaction histories that support alternative feature extraction. Its
+Ethereum categories make it useful for the category comparisons in this
+thesis. These labels describe reported abuse, however, and do not establish
+that every address in a category belongs to one coordinated campaign.
+A supplementary dataset of cryptocurrency addresses and transaction profiles,
+named Sup-CATS, provides a separate deployment-oriented evaluation sample.
+
+The Ethereum Fraud Dataset by Activity provides another source of transaction
+histories and address labels \citep{fesevu2025ethfraud}. The release includes raw
+transfers with sender, receiver, timestamp, and transaction metadata, together
+with labels assembled from Etherscan and curated sources. This makes it
+possible to compute conventional features and temporal fingerprints from the
+same underlying observations. Its role in the present study is as a data
+resource, not as evidence for the performance of a particular detection method.
+
+These resources are complementary rather than interchangeable. Their labels
+refer to different objects, and their transaction histories cover different
+parts of the underlying networks. Chapter~\ref{ch:method} therefore separates
+the role of each source from the selection and graph-construction rules used
+in the experiments. Comparisons between feature sets use the same addresses
+and data splits, so that differences in their scores are not caused by changing
+the evaluation sample.
+
+\section{Temporal Motifs and Local Role Representations}
+\label{sec:related_temporal_motifs}
+
+Motif analysis begins with the idea that small patterns can reveal structure
+that is not captured by single-node statistics.
+\citet{milo2002network} identify network motifs through overrepresentation
+relative to randomised networks. Counting a candidate pattern and establishing
+that it is statistically overrepresented are therefore separate steps.
+\citet{McDonnell2014} make a further distinction between a global subgraph
+count and a node's participation in its local roles. Their motif-role
+fingerprints describe the positions occupied by individual nodes in directed
+patterns. This provides the basis for an address-level representation rather
+than a single summary of the entire transaction graph.
+
+\citet{kovanen2011temporal} extend pattern analysis to event sequences whose
+similarity depends on both topology and temporal order.
+\citet{paranjape2017motifs} develop an efficient counting framework for
+$\delta$-temporal motifs and show that pattern counts and relevant time scales
+differ across networks. In this framework, an ordered sequence must fit within
+a bounded time span. The present thesis uses this counting definition while
+referring to untested patterns as candidate motifs. Their predictive value is
+evaluated without claiming network overrepresentation.
+
+Several studies connect these ideas to financial behaviour.
+\citet{lal2021money} examine temporal cycles in Ethereum money trails and find
+different cyclic patterns associated with suspicious activities. Their
+heuristic analysis concerns paths through which funds move. It supports
+examining connected transfer sequences, but it is not the same evaluation as
+testing a fixed local-role fingerprint against a conventional feature baseline.
+
+\citet{wu2022mixing} combine temporal and attributed heterogeneous patterns
+with other transaction features to detect Bitcoin mixing services. They use
+positive and unlabelled learning because reliable negative labels are limited.
+This is direct evidence that motif-based features have already been used in
+supervised blockchain analysis. The target is membership in a mixing service,
+which is different from the binary and category labels considered here.
+
+There is also a direct Ethereum precedent.
+\citet{wang2023temporal} study phishing detection using temporal motif
+features extracted from transaction subgraphs. The combination of blockchain
+data, labelled phishing addresses, and temporal motif features is therefore
+not new. The present work builds on this line of research through its
+evaluation of local-role fingerprints, temporal-window sensitivity, and
+differences between recorded behaviour categories.
+
+\citet{arnold2024motifs} analyse three-transfer patterns on two Bitcoin
+datasets and one non-fungible token (NFT) transaction dataset. Their results
+show that global counts can be dominated by a small number of participants or
+short periods of activity. Local signatures and pattern completion times
+reveal information that these global totals hide. They also examine randomised
+timestamp references and the ambiguity of ordering transactions within a block.
+These observations motivate both the address-level fingerprints and the
+equal-timestamp sensitivity checks in this thesis. Their analysis is primarily
+descriptive, rather than a held-out comparison of malicious-address classifiers.
+
+Outside blockchain networks, \citet{liu2023temporal} evaluate temporal motif
+features for fraud detection on Mercari transactions and a synthetic
+J.P.\ Morgan Chase network. They report improvements over simple graph
+features and the embedding methods Large-scale Information Network Embedding
+(LINE) and node2vec. Their Venmo analysis addresses different prediction and
+description tasks. These findings support the usefulness of temporal patterns
+in financial networks, but do not establish that the same improvement will
+hold for Ethereum addresses.
+
+A different use of motifs appears in \citet{mo2022motifgcn}.
+The authors combine motif matrices and temporal graph convolutional learning
+on the Bitcoin-Alpha and Bitcoin over-the-counter (Bitcoin-OTC) signed trust
+networks. Their revised model predicts the signs of trust links. The motifs
+describe structure within snapshots, while temporal information is combined
+across snapshots. These are neither Ethereum payment histories nor direct
+counts of ordered three-transfer occurrences, so the task and representation
+need to be kept separate from the present approach.
+
+\section{Position of This Thesis}
+\label{sec:related_position}
+
+The reviewed literature already contains time-aware embeddings, temporal graph
+models, and motif-based blockchain detection. The contribution of this thesis
+is an evaluation of a particular local motif-role representation under a common
+protocol. It compares conventional features, fingerprints alone, and their
+combination on the same held-out addresses. It also examines how the permitted
+time span affects the representation, whether recorded abuse categories are
+separable through fingerprints, and whether category-specific windows improve
+on a shared window.
+
+These comparisons address the four research questions introduced in
+Chapter~\ref{ch:introduction}. The evaluation also records how the results
+change when transfers with equal timestamps are ordered differently. Its scope
+is the predictive usefulness and stability of the fingerprints under the
+available labels and graph coverage. It does not establish that temporal order
+alone causes an improvement or that the counted candidates are statistically
+overrepresented network motifs.
+% END PROFESSOR FEEDBACK PF33

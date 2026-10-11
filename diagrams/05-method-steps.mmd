@@ -1,4 +1,6 @@
-%% The eight steps of the Method system overview (Section 4.1). The two phases of
+%% Semantic source for the eight steps of the Method system overview.
+%% Print figures use scripts/render_thesis_feedback_figures.py for fixed-size type.
+%% The two phases of
 %% the text (preparation, execution) run top to bottom, with the execution phase
 %% split into its representation, detection, and analysis stages.
 flowchart TD
@@ -16,8 +18,8 @@ flowchart TD
         subgraph REP["Building the representation"]
             direction LR
             S3["<b>3 &middot; Building the temporal graph</b><br/>addresses as nodes, transfers as<br/>directed, timestamped edges"]
-            S4["<b>4 &middot; Counting the motifs</b><br/>count each motif per address, across<br/>seven windows (5 min to 1 week)"]
-            S5["<b>5 &middot; Building the fingerprints</b><br/>the motif fingerprint plus simpler<br/>features, as three views"]
+            S4["<b>4 &middot; Counting local roles</b><br/>check synthetic validation templates,<br/>count at nine windows (5 min to 30 days)"]
+            S5["<b>5 &middot; Building the fingerprints</b><br/>local role counts and baseline<br/>features, as three views"]
             S3 --> S4 --> S5
         end
 
@@ -27,7 +29,7 @@ flowchart TD
 
         subgraph ANA["Analysis and reporting"]
             direction LR
-            S7["<b>7 &middot; Analysing the results</b><br/>compare views (RQ1), windows (RQ2),<br/>categories (RQ3), with statistical<br/>tests and orderings"]
+            S7["<b>7 &middot; Analysing the results</b><br/>compare views (RQ1), windows (RQ2),<br/>category fingerprints (RQ3), and<br/>category windows (RQ4)"]
             S8["<b>8 &middot; Visualising the results</b><br/>write the tables and figures<br/>for the Results chapter"]
             S7 --> S8
         end

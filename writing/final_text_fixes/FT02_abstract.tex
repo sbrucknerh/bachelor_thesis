@@ -1,0 +1,27 @@
+% BEGIN FINAL TEXT FIX FT02: Abstract
+\chapter*{Abstract}
+Malicious activity on Ethereum can involve transaction sequences that are
+difficult to recognise from individual address summaries. This thesis examines
+whether temporal motif fingerprints improve malicious-address detection, how
+their usefulness depends on the temporal window, and whether they distinguish
+reported behaviour categories. The fingerprints count each address's local
+roles in ordered three-transfer candidate patterns. They are evaluated on two
+labelled Ethereum datasets using held-out addresses, nine windows from five
+minutes to 30 days, and seven orderings of transfers with equal timestamps.
+
+Adding fingerprints to 17 conventional transaction and graph features increases
+average precision in all six cohort comparisons on the main dataset, but only
+three increases are statistically significant. The independent binary comparison
+also shows no significant improvement. Larger windows generally increase both
+average precision and fingerprint coverage, without establishing a unique
+optimum. Across nine malicious-behaviour categories, fingerprints contain
+statistically detectable category information, but classification remains
+limited, with macro average precision of 0.1953. Selecting separate windows for
+the categories gives no significant improvement over a shared window.
+
+The results show that temporal motif fingerprints describe behavioural
+differences, but do not consistently add predictive value beyond conventional
+features. The evaluation concerns retrospective address classification, not
+direct detection of independently verified coordinated campaigns.
+% END FINAL TEXT FIX FT02
+

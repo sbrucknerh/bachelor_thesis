@@ -1,0 +1,24 @@
+% BEGIN PROFESSOR FEEDBACK PF05: Foundations - Temporal networks
+\section{Temporal networks}
+\label{sec:temporal_networks}
+The graph model introduced in Section~\ref{sec:graph} treats the Ethereum transaction graph as a static object once timestamps are discarded. This section explains why that is insufficient for detecting coordinated malicious behavior.
+
+\paragraph{From static to temporal.}
+Static networks aggregate all interactions into a single, time-independent structure. While such aggregation is computationally efficient, it completely ignores the ordering of events, which is exactly the information that distinguishes coordinated sequential behavior from coincidental events. Temporal networks take this information into account by retaining the full sequence of timestamped edges \citep{kovanen2011temporal, paranjape2017motifs}.
+
+\paragraph{Time-respecting paths and edge ordering.}
+blabla
+
+
+\paragraph{The time window $\delta$.}
+*sliding window
+*why delta was chosen
+
+Not all time-respecting paths are meaningful for detecting coordinated behaviour. For example, transactions that happened years apart are unlikely to be part of the same coordinated action. A time window $\delta$ limits how far such a pattern may extend: the time between its first and last edge must not exceed $\delta$ \citep{kovanen2011temporal, paranjape2017motifs}. The edges do not all need to share an endpoint. Instead, the graph formed by the complete candidate motif must be connected. Choosing an appropriate $\delta$ is important for the analysis. A small $\delta$ captures rapid bursts of activity, while a larger $\delta$ can capture coordination spread across several days. In this thesis, $\delta$ is treated as a configurable parameter whose effect on local role counts and detection performance is evaluated in Chapter~\ref{ch:results}.
+
+\paragraph{What static projection loses.}
+The aggregated static graph loses two things: the \emph{ordering} of edges and the \emph{temporal density} of interactions. This means that two structurally identical subgraphs in the static graph could correspond to entirely different behaviours depending on whether the underlying transactions occurred rapidly or were spread across a bigger time span. \citet{kovanen2011temporal} observe that static networks are often time-aggregates of systems where connections are not continuously active, and that temporal inhomogeneities, which static representations do not capture, have an important effect on dynamic processes. In the Ethereum context, a fan-out pattern in the static graph (one address sending to many others) looks the same regardless of whether all transfers happened within ten seconds or over ten months. Only the temporal graph reveals whether the fan-out was a coordinated event.
+
+\paragraph{Motivation for temporal motifs.}
+The observation that edge ordering matters and that meaningful patterns must occur within a bounded time window motivates the concept of temporal motifs introduced in Section~\ref{sec:motifs}. Rather than asking which subgraph topologies are over-represented in the static graph, temporal motifs ask which \emph{ordered sequences} of interactions recur within a window $\delta$. This is the appropriate question for detecting coordinated behavior in blockchain networks, where the timing of transactions is as informative as their structure.
+% END PROFESSOR FEEDBACK PF05

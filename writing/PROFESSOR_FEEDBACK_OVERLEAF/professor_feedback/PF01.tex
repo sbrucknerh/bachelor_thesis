@@ -1,0 +1,26 @@
+% BEGIN PROFESSOR FEEDBACK PF01: Introduction
+\chapter{Introduction}
+\label{ch:introduction}
+Blockchain networks have become a critical part of the global financial infrastructure. As they have grown, they have also become an attractive target for criminal actors. According to the Chainalysis 2025 Crypto Crime Report, more than \$40.9 billion flowed to illicit cryptocurrency addresses in 2024 alone \citep{chainalysis2025, shi2025realcats}. This number is likely a lower bound. Chainalysis notes that annual illicit-volume estimates have grown by an average of 25\% between reporting periods since 2020, so the 2024 total could exceed \$51 billion \citep{chainalysis2025}. The abuse ranges from ransomware and phishing scams to large-scale money laundering, and it affects both the Bitcoin and the Ethereum ecosystem \citep{shi2025realcats, sanjalawe2023atd}.
+
+The harder problem is not the size of these losses, but the way they are produced. Sophisticated attackers do not rely on a single, continuously active address. Instead, they spread their activity over many short-lived wallets, where each wallet makes only a few transactions that look unremarkable on their own. In fact, 90.70\% of criminal Bitcoin addresses carry a zero balance and 60\% of them stop being active within 31 days \citep{shi2025realcats}. This behaviour deliberately imitates ordinary wallets, so a single transaction rarely looks suspicious. The signal of coordinated activity therefore does not appear in individual transactions, but in how those transactions are connected across several addresses and over time. A ransomware payment chain, a phishing fan-out or a layering operation only becomes visible once its transactions are considered together, in order, and across all the addresses involved.
+
+Detecting these patterns requires a representation of how transactions connect addresses over time. Feature-engineering methods summarise transaction histories through statistics such as transaction count, address lifetime and balance variance \citep{chen2022phishing, alemari2021labeled}. These summaries do not explicitly count ordered interactions involving several addresses. Other approaches do incorporate time, through timestamp-aware network embeddings or models of changing transaction neighbourhoods \citep{wu2020phishers, ghoshcatalog2025}. Temporal motif features have also been applied to Ethereum phishing detection \citep{wang2023temporal}. The question is therefore not whether time or motifs have been used before, but whether a local motif-role fingerprint adds predictive information beyond conventional address features under the evaluation settings considered here.
+
+Temporal motif fingerprints are a natural way to address this gap. They describe how an address participates in short, ordered transaction patterns within a bounded time window \citep{kovanen2011temporal, paranjape2017motifs}. Before comparison with a random-network reference, these patterns are candidate motifs. A motif in the statistical sense is a pattern that occurs significantly more often than expected under such a reference. This thesis counts candidate patterns and evaluates their usefulness for supervised detection. The term \emph{motif fingerprint} names this representation and does not imply that its components have passed a test of overrepresentation. Earlier work on Bitcoin found cyclic triangle patterns to be more frequent than in the communication networks examined \citep{paranjape2017motifs}. Whether per-address fingerprints improve the supervised detection of malicious behaviour remains the question addressed here.
+
+This thesis investigates the following research questions (RQs):
+
+\begin{description}
+    \item[RQ1.] Do temporal motif fingerprints improve the detection of
+          malicious Ethereum addresses beyond transaction-based aggregates
+          and static graph features?
+    \item[RQ2.] How does the temporal window size ($\delta$) affect the usefulness of temporal motif fingerprints for detecting coordinated malicious behaviour?
+    \item[RQ3.] Do different categories of coordinated malicious behaviour exhibit distinct temporal motif fingerprints?
+    \item[RQ4.] Does selecting a separate temporal window for each behaviour
+          category improve category classification compared with using one
+          shared window?
+\end{description}
+
+The remainder of this thesis is organised as follows. Chapter~\ref{chap:relatedwork} reviews graph-based detection methods, the available transaction datasets, and previous work on temporal motifs. Chapter~\ref{ch:foundations} introduces the blockchain and graph-theoretic concepts needed to define temporal patterns, local roles, and address fingerprints. Chapter~\ref{ch:method} describes the data preparation, graph construction, feature extraction, and evaluation protocol. Chapter~\ref{ch:results} reports the findings for the four research questions. Chapter~\ref{ch:discussion} interprets these findings, relates them to earlier work, and discusses the limitations of the study. Chapter~\ref{ch:conclusion} summarises the conclusions and outlines directions for further research. Appendix~\ref{app:engineering_challenges} records the engineering challenges and implementation decisions behind the pipeline.
+% END PROFESSOR FEEDBACK PF01

@@ -1,0 +1,149 @@
+% BEGIN PROFESSOR FEEDBACK PF13: Method - Evaluation
+\section{Evaluation}
+\label{sec:evaluation_protocol}
+
+\subsection{Scope}
+
+The evaluation measures how well an address can be classified after the fact, from
+its full recorded history. It does not estimate how early an address could have
+been caught, and it makes no causal claim about how a fraud was carried out. As
+described in Section~\ref{sec:system_overview}, the data and every setting are
+fixed in a preparation step before any model is trained, so nothing in the
+evaluation can be tuned on the test data. The parts that enforce this, such as the
+recorded settings and the checks that the code and data have not changed, are
+described in Section~\ref{sec:implementation}.
+
+\subsection{Cohorts and splits}
+
+RQ1 and RQ2 are evaluated on three non-overlapping samples from the HuggingFace
+dataset. Each sample contains two separate groups of addresses. An address is
+eligible only if it takes part in at least three transactions, since
+fewer cannot form one of the three-edge motifs. Before the groups are drawn, the
+most extreme addresses are removed: within each combination of label, contract
+type, and activity level, the top 0.5\,\% most active addresses are dropped.
+Without this, a few exchange-scale hubs would dominate the graph on their own. The
+cut is made within each combination rather than across the whole dataset, because
+the busiest addresses are almost all benign exchange wallets, so a single global
+cut would remove far more benign than fraudulent addresses and quietly shift the
+balance between the classes. The rule is fixed before any model is trained, and
+every removed address is recorded.
+
+The two groups serve different purposes. The \emph{prevalence} cohort is a plain
+random sample of up to 5{,}000 eligible addresses, which keeps the natural mix of
+fraudulent and benign addresses and checks that the findings hold on a realistic
+distribution. The \emph{controlled} cohort is drawn from the remaining addresses,
+up to 250 per combination of label, contract type, and activity level, which
+balances the classes and holds activity and contract type roughly constant so that
+a difference cannot be explained by those alone. The two cohorts within a
+sample share no addresses and are reported separately. After both cohorts are
+drawn, their addresses and known campaign groups are removed from the eligible
+pool before the next sample is created. Repeating this procedure produces three
+samples without reusing addresses or known campaigns.
+
+Splitting the addresses needs one precaution. Some fraud arrives in campaigns of
+many near-identical addresses, and if some of them landed in the training set
+while their near-twins landed in the test set, the detector would look better than
+it really is. Campaign groups are therefore kept together, and every split keeps
+a whole group on a single side. In the implementation, these groups are defined
+from the published address descriptions. After trimming whitespace and converting
+the text to lower case, descriptions beginning with
+\emph{multichain hack alert}, \emph{upbit hacker}, or
+\emph{sorbet finance hack alert} are assigned to their respective shared
+family. Every other address receives its own group. These are description-based
+grouping rules, not a complete reconstruction of coordinated campaigns.
+Each cohort is divided about
+80 to 20 into a development set and a test set with a group-aware, stratified
+split, and the development set is divided again into repeated five-fold splits,
+under different random seeds, for choosing the time window. Cohort membership is
+included in the stratification, while campaign assignments are made across both
+cohorts together. A campaign represented in both cohorts therefore remains on
+the same side and in the same validation fold. RQ3 and RQ4 share their own 80 to
+20 split, stratified by category, again keeping only categories with at least 100
+addresses and never merging them.
+
+\subsection{Metrics and window selection}
+
+The main measure is average precision (AP), which summarises how well the detector
+ranks malicious addresses above benign ones across all decision thresholds. It
+suits imbalanced data because it focuses on the rarer positive class. The F1
+score is the harmonic mean of precision and recall. These three measures are
+reported as secondary measures at a fixed threshold of
+0.5, which is never tuned on the test set. The area under the receiver operating
+characteristic curve (ROC-AUC) is reported alongside them.
+For RQ3 and RQ4 the matching measures are the macro-averaged and per-category
+average precision, the macro F1, and a confusion matrix.
+
+The time window is chosen on the development data alone. Each window is scored by
+cross-validation, and the window with the highest average score is taken. If
+several windows share that score, the shortest of them is used, so that the choice
+is decided in advance rather than by chance. As a check on how firm that choice is,
+the shortest window whose score is still within one standard error of the best is
+recorded alongside it as the one-standard-error (1-SE) choice, which shows whether a shorter window would have done
+essentially as well. The test set plays no part in either.
+
+\subsection{Statistical tests}
+
+For RQ1 the effect is the difference in test-set average precision between the
+combined view and the baseline. Two procedures support it. The first is a
+paired permutation test. For each campaign group, a random choice determines
+whether the baseline and combined prediction scores are exchanged for every
+address in that group. Address labels, campaign membership, and the train and
+test assignments stay fixed. The models are not retrained. The difference in
+AP is recomputed for 10{,}000 such exchanges, giving a one-sided $p$-value under
+the null that the two sets of prediction scores are exchangeable within groups.
+
+The second procedure is a bootstrap with 10{,}000 repetitions. Groups are
+sampled with replacement separately within the benign and malicious classes.
+Each class retains its original number of sampled groups. Every sampled group
+contributes all of its addresses, including repeated copies if the group is
+drawn more than once. The paired predictions are kept together and the AP
+difference is recomputed, giving a 95\,\% confidence interval (CI).
+The groups are the description-based families and singleton addresses defined
+above.
+
+Groups can contain different numbers of addresses. Each group has the same
+chance of being sampled within its class, but a larger sampled group contributes
+more addresses to AP. The total number of addresses and the class proportions
+can therefore vary between bootstrap repetitions. The score-swap test, in
+contrast, always uses the original test addresses. Both procedures preserve
+dependence within the known groups, while the reported metric remains an
+address-level measure. In the binary Real-CATS check, groups are individual
+addresses because campaign identifiers are unavailable.
+
+For RQ2 the chosen window is compared with each of the other windows using the
+same kind of bootstrap. Because many windows are compared at once, the resulting
+$p$-values are adjusted for multiple testing with the Benjamini--Hochberg
+procedure (BH). The development curve and fingerprint coverage describe how
+usefulness changes with $\delta$. The pairwise tests additionally check whether
+the selected window is distinguishable from the alternatives. A unique best
+window within the tested grid is supported only if it beats every alternative
+after correction.
+
+RQ3 asks whether the fingerprints contain category information. The held-out
+category labels are shuffled 10{,}000 times while the fitted model and its
+prediction probabilities stay fixed. Each shuffle preserves the class sizes.
+The resulting macro AP values form a reference for no association between the
+predictions and the category labels. Failure to reject this null would mean
+insufficient evidence of category separation in this test. It would not prove
+that the fingerprints contain no category information.
+
+RQ4 asks whether the categories are better served by their own windows than by one
+shared window. The two settings are compared on the test set in two ways. The first
+is an overall comparison: the model using each category's own window is set against
+the model using the single global window, and the difference in macro-averaged
+average precision is measured with a paired bootstrap. The second looks at each
+category on its own, comparing its own window with the global one, and because this
+is repeated for every category the results are adjusted for multiple testing. The
+number of distinct windows the categories select is reported alongside, since
+category-specific windows can only help if the categories do not all choose the
+same one.
+
+\subsection{Robustness to event ordering}
+
+Every result is produced under each of the seven orderings of
+Section~\ref{sec:motif_extraction}. An ordering-dependent conclusion, such as an
+RQ1 improvement or an RQ2 best window, is accepted only when its direction and its
+decision agree across all seven orderings. This shows that a conclusion does not
+depend on how transfers sharing a timestamp are ordered. It does not recover the
+real order of those transfers, which the data does not record in the first place.
+% END PROFESSOR FEEDBACK PF13

@@ -16,6 +16,14 @@ def _run(tmp_path, name, protocol, *, completed):
     return root
 
 
+def test_latex_command_names_reject_digits():
+    assert exporter.latex_command("ResRQOneMacroAP", "0.195") == (
+        r"\newcommand{\ResRQOneMacroAP}{0.195}"
+    )
+    with pytest.raises(ValueError, match="letters only"):
+        exporter.latex_command("ResRQ1MacroAP", "0.195")
+
+
 def test_exporter_uses_only_verified_completed_dataset_owner(tmp_path, monkeypatch):
     prepared = _run(
         tmp_path,

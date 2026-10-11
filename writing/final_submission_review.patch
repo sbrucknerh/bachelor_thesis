@@ -1,0 +1,1054 @@
+--- a/writing/thesis.tex
++++ b/writing/thesis.tex
+@@ -28,7 +28,10 @@
+ \usepackage{algorithm}
+ \usepackage{listings}
+ \usepackage{algpseudocode}
+-\usepackage{amssymb} 
++\usepackage{amsmath,amssymb}
++\usepackage{microtype}
++\usepackage{xurl}
++\usepackage{array,longtable}
+ 
+ \usepackage{graphicx}
+ %http://en.wikibooks.org/wiki/LaTeX/Importing_Graphics#Graphics_storage
+@@ -129,15 +132,17 @@
+ 
+ \newcommand{\advisor}{Mag.\ Ema Kahr, PhD}
+ 
+-\newcommand{\timestart}{\iflanguage{english}{03. April 2026}{03. April 2026}}
+-\newcommand{\timeend}{\iflanguage{english}{23rd of September 2026}{XX. Monat 20XX}}
+-\newcommand{\submissiontime}{DD. MM. 20XX}
++\newcommand{\timestart}{\iflanguage{english}{3 April 2026}{3. April 2026}}
++\newcommand{\timeend}{\iflanguage{english}{23 September 2026}{23. September 2026}}
++% Enter the actual submission date here if your title-page template uses it.
++\newcommand{\submissiontime}{}
+ 
+ %% -------------------------------
+ %% |  Information for PDF file   |
+ %% -------------------------------
+ %% IM: Auto-Fill this information
+ \hypersetup{
++ hidelinks,
+  pdfauthor={\myname},
+  pdftitle={\mytitle},
+  pdfsubject={\mytype},
+@@ -232,20 +237,23 @@
+ {
+ \clearpage
+ \phantomsection % Properly links List of Figures in Table of Contents and starts it on new page
+-\listoffigures \addcontentsline{toc}{chapter}{List of Figures} 
++\addcontentsline{toc}{chapter}{List of Figures}
++\listoffigures
+ \clearpage
+ \phantomsection % Properly links List of Tables in Table of Contents and starts it on new page
+-\listoftables  \addcontentsline{toc}{chapter}{List of Tables} 
+-\printnomenclature   \addcontentsline{toc}{chapter}{List of Abbreviations} 
++\addcontentsline{toc}{chapter}{List of Tables}
++\listoftables
++% No abbreviation entries are defined; do not create an empty directory entry.
+ }
+ {
+ \clearpage
+ \phantomsection % Properly links List of Figures in Table of Contents and starts it on new page
+-\listoffigures \addcontentsline{toc}{chapter}{Abbildungsverzeichnis} 
++\addcontentsline{toc}{chapter}{Abbildungsverzeichnis}
++\listoffigures
+ \clearpage
+ \phantomsection % Properly links List of Tables in Table of Contents and starts it on new page
+-\listoftables \addcontentsline{toc}{chapter}{Tabellenverzeichnis} 
+-\printnomenclature \addcontentsline{toc}{chapter}{Abkürzungsverzeichnis}
++\addcontentsline{toc}{chapter}{Tabellenverzeichnis}
++\listoftables
+ }
+ 
+ 
+@@ -266,7 +274,9 @@
+ 
+ 
+ %% ==============
+-\chapter*{Abstract} 
++\chapter*{Abstract}
++\phantomsection
++\addcontentsline{toc}{chapter}{Abstract}
+ Malicious activity on Ethereum can involve transaction sequences that are
+ difficult to recognise from individual address summaries. This thesis examines
+ whether temporal motif fingerprints improve malicious-address detection, how
+@@ -294,7 +304,7 @@
+ 
+ \chapter{Introduction}
+ \label{ch:introduction}
+-Blockchain networks have become a critical part of the global financial infrastructure. As they have grown, they have also become an attractive target for criminal actors. According to the Chainalysis 2025 Crypto Crime Report, more than \$40.9 billion flowed to illicit cryptocurrency addresses in 2024 alone \citep{chainalysis2025, shi2025realcats}. This number is likely a lower bound. Chainalysis notes that annual illicit-volume estimates have grown by an average of 25\% between reporting periods since 2020, so the 2024 total could exceed \$51 billion \citep{chainalysis2025}. The abuse ranges from ransomware and phishing scams to large-scale money laundering, and it affects both the Bitcoin and the Ethereum ecosystem \citep{shi2025realcats, sanjalawe2023atd}.
++Blockchain networks have become a critical part of the global financial infrastructure. As they have grown, they have also become an attractive target for criminal actors. According to the Chainalysis 2025 Crypto Crime Report, more than \$40.9 billion flowed to illicit cryptocurrency addresses in 2024 alone \citep{chainalysis2025, shi2025realcats}. This number is likely a lower bound. Chainalysis notes that annual illicit-volume estimates have grown by an average of 25\% between reporting periods since 2020, so the 2024 total could exceed \$51 billion \citep{chainalysis2025}. The abuse ranges from ransomware and phishing scams to large-scale money laundering, and it affects both the Bitcoin and Ethereum ecosystems \citep{shi2025realcats, sanjalawe2023atd}.
+ 
+ The harder problem is not the size of these losses, but the way they are produced. Sophisticated attackers do not rely on a single, continuously active address. Instead, they spread their activity over many short-lived wallets, where each wallet makes only a few transactions that look unremarkable on their own. In fact, 90.70\% of criminal Bitcoin addresses carry a zero balance and 60\% of them stop being active within 31 days \citep{shi2025realcats}. This behaviour deliberately imitates ordinary wallets, so a single transaction rarely looks suspicious. The signal of coordinated activity therefore does not appear in individual transactions, but in how those transactions are connected across several addresses and over time. A ransomware payment chain, a phishing fan-out or a layering operation only becomes visible once its transactions are considered together, in order, and across all the addresses involved.
+ 
+@@ -555,19 +565,19 @@
+ 
+ \chapter{Theoretical Foundations}
+ \label{ch:foundations}
+-This chapter will cover the theoretical foundations that this thesis builds upon.
+-
+-\section{Blockchain and Ethereum fundamentals}
+-First, we will cover what a Blockchain is and how Ethereum works and handles transactions. 
++This chapter introduces the theoretical foundations of the thesis.
++
++\section{Blockchain and Ethereum Fundamentals}
++The first section explains what a blockchain is and how Ethereum handles transactions.
+ A blockchain is a distributed ledger in which transactions are grouped into blocks and linked chronologically so that later blocks reference earlier ones through cryptographic hashes \citep{nakamoto2008bitcoin, buterin2014ethereum}. This makes the ledger append-only, because changing a past record would require rewriting the block and all of the blocks that follow under the network’s consensus rules \citep{nakamoto2008bitcoin}. For this thesis, the important part is not the consensus mechanism itself, but that blockchain data is ordered, time-stamped, and persistent.
+ 
+-Ethereum extends this basic blockchain idea with account-based state and smart-contract execution \citep{buterin2014ethereum}. The relevant transaction record can be represented as a tuple $(s,r,v,t,g)$, where $s$ is the sender, $r$ the receiver, $v$ the transferred value, $t$ the timestamp, and $g$ the gas usage (transaction fee) \citep{alemari2021labeled, sanjalawe2023atd}. Ethereum distinguishes between externally owned accounts (EOAs), which are controlled by private keys and initiate transactions directly, and contract accounts, which execute code when invoked \citep{buterin2014ethereum, alemari2021labeled}.
+-
+-Because multiple transactions can occur between the same pair of addresses at different times, with different values and gas costs, Ethereum is naturally modeled as a weighted temporal directed multigraph \citep{kovanen2011temporal, paranjape2017motifs}. This is the abstraction used in the remainder of the chapter. In contrast, Bitcoin follows an unspent transaction output (UTXO) model, where transactions consume and create unspent outputs rather than directly transferring value between persistent accounts \citep{nakamoto2008bitcoin}.
++Ethereum extends this basic blockchain idea with account-based state and smart-contract execution \citep{buterin2014ethereum}. The relevant transaction record can be represented as a tuple $(s,r,v,t,g)$, where $s$ is the sender, $r$ the receiver, $v$ the transferred value, $t$ the timestamp, and $g$ the gas usage \citep{alemari2021labeled, sanjalawe2023atd}. Ethereum distinguishes between externally owned accounts (EOAs), which are controlled by private keys and initiate transactions directly, and contract accounts, which execute code when invoked \citep{buterin2014ethereum, alemari2021labeled}.
++
++Because multiple transactions can occur between the same pair of addresses at different times, with different values and gas costs, Ethereum is naturally modelled as a weighted temporal directed multigraph \citep{kovanen2011temporal, paranjape2017motifs}. This is the abstraction used in the remainder of the chapter. In contrast, Bitcoin follows an unspent transaction output (UTXO) model, where transactions consume and create unspent outputs rather than directly transferring value between persistent accounts \citep{nakamoto2008bitcoin}.
+ 
+ With this data model established, the next section introduces the formal graph representation.
+ 
+-\section{Graph-theory foundations}
++\section{Graph-Theory Foundations}
+ \label{sec:graph}
+ 
+ A graph is a mathematical structure consisting of a set of nodes $V$ and a set 
+@@ -597,12 +607,12 @@
+ necessary to capture the temporal ordering of interactions.
+ 
+ 
+-\section{Temporal networks}
++\section{Temporal Networks}
+ \label{sec:temporal_networks}
+-The graph model introduced in Section~\ref{sec:graph} treats the Ethereum transaction graph as a static object once timestamps are discarded. This section explains why that is insufficient for detecting coordinated malicious behavior.
++The graph model introduced in Section~\ref{sec:graph} treats the Ethereum transaction graph as a static object once timestamps are discarded. This section explains why that is insufficient for detecting coordinated malicious behaviour.
+ 
+ \paragraph{From static to temporal.}
+-Static networks aggregate all interactions into a single, time-independent structure. While such aggregation is computationally efficient, it completely ignores the ordering of events, which is exactly the information that distinguishes coordinated sequential behavior from coincidental events. Temporal networks take this information into account by retaining the full sequence of timestamped edges \citep{kovanen2011temporal, paranjape2017motifs}.
++Static networks aggregate all interactions into a single, time-independent structure. While such aggregation is computationally efficient, it completely ignores the ordering of events, which is exactly the information that distinguishes coordinated sequential behaviour from coincidental events. Temporal networks take this information into account by retaining the full sequence of timestamped edges \citep{kovanen2011temporal, paranjape2017motifs}.
+ 
+ \paragraph{Time-respecting paths and edge ordering.}
+ A directed time-respecting path follows edges in both their transfer direction
+@@ -652,12 +662,12 @@
+ the span of a three-transfer candidate, not the duration of a malicious campaign.
+ 
+ \paragraph{What static projection loses.}
+-The aggregated static graph loses two things: the \emph{ordering} of edges and the \emph{temporal density} of interactions. This means that two structurally identical subgraphs in the static graph could correspond to entirely different behaviours depending on whether the underlying transactions occurred rapidly or were spread across a bigger time span. \citet{kovanen2011temporal} observe that static networks are often time-aggregates of systems where connections are not continuously active, and that temporal inhomogeneities, which static representations do not capture, have an important effect on dynamic processes. In the Ethereum context, a fan-out pattern in the static graph (one address sending to many others) looks the same regardless of whether all transfers happened within ten seconds or over ten months. Only the temporal graph reveals whether the fan-out was a coordinated event.
++The aggregated static graph loses two things: the \emph{ordering} of edges and the \emph{temporal density} of interactions. This means that two structurally identical subgraphs in the static graph could correspond to entirely different behaviours depending on whether the underlying transactions occurred rapidly or were spread across a longer time span. \citet{kovanen2011temporal} observe that static networks are often time-aggregates of systems where connections are not continuously active, and that temporal inhomogeneities, which static representations do not capture, have an important effect on dynamic processes. In the Ethereum context, a fan-out pattern in the static graph (one address sending to many others) looks the same regardless of whether all transfers happened within ten seconds or over ten months. The temporal graph preserves the timing needed to assess whether the fan-out could reflect coordinated activity.
+ 
+ \paragraph{Motivation for temporal motifs.}
+-The observation that edge ordering matters and that meaningful patterns must occur within a bounded time window motivates the concept of temporal motifs introduced in Section~\ref{sec:motifs}. Rather than asking which subgraph topologies are over-represented in the static graph, temporal motifs ask which \emph{ordered sequences} of interactions recur within a window $\delta$. This is the appropriate question for detecting coordinated behavior in blockchain networks, where the timing of transactions is as informative as their structure.
+-
+-\section{Temporal motifs}
++The observation that edge ordering matters and that meaningful patterns must occur within a bounded time window motivates the concept of temporal motifs introduced in Section~\ref{sec:motifs}. Rather than asking which subgraph topologies are over-represented in the static graph, temporal motifs ask which \emph{ordered sequences} of interactions recur within a window $\delta$. This is the appropriate question for detecting coordinated behaviour in blockchain networks, where the timing of transactions is as informative as their structure.
++
++\section{Temporal Motifs}
+ \label{sec:motifs}
+ 
+ \paragraph{Static network motifs.}
+@@ -706,17 +716,17 @@
+     \label{fig:motifs_paranjape}
+ \end{figure}
+ 
+-\subsection{Counting algorithm}
++\subsection{Counting Algorithm}
+ 
+ Motif counting algorithms form the computational foundation of any motif-based analysis. This section first outlines the established methods for static graphs and then explains why a fundamentally different approach is required for temporal data.
+ 
+-\subsubsection{Static motif counting}
+-
+-Static graph motif counting is a well-studied problem. Given a graph $G$, the goal is to count how many times a given subgraph pattern, such as a triangle or a directed cycle, appears in $G$. Algorithms for this task range from exact neighborhood-intersection methods to matrix-based approaches and sampling-based approximations, covering a broad spectrum of accuracy and efficiency trade-offs \citep{Yin2025}. These methods are computationally mature and underpin many downstream tasks such as clustering coefficient computation and community detection.
++\subsubsection{Static Motif Counting}
++
++Static graph motif counting is a well-studied problem. Given a graph $G$, the goal is to count how many times a given subgraph pattern, such as a triangle or a directed cycle, appears in $G$. Algorithms for this task range from exact neighbourhood-intersection methods to matrix-based approaches and sampling-based approximations, covering a broad spectrum of accuracy and efficiency trade-offs \citep{Yin2025}. These methods are computationally mature and underpin many downstream tasks such as clustering coefficient computation and community detection.
+ 
+ However, static methods operate on a time-aggregate representation: all edges that ever existed between two nodes collapse into a single connection, regardless of when they occurred \citep{kovanen2011temporal}. This means that the temporal ordering is lost entirely. \citet{paranjape2017motifs} show that even when a triangle is topologically present in a network, only a subset of its instances are temporally valid. The others either occur in a different order or fall outside a given time window $\delta$. A static counter treats all of them as identical. For blockchain transaction networks, this distinction is critical because coordinated malicious behaviour happens through transaction sequences that have a specific temporal order, something that static aggregation cannot recover.
+ 
+-\subsubsection{Temporal motif counting}
++\subsubsection{Temporal Motif Counting}
+ Temporal motif counting extends the static counting problem by requiring that all edges of a motif occur in a specific order within a bounded time window $\delta$. 
+ 
+ The general counting algorithm proceeds in three steps: (1) identify all
+@@ -725,7 +735,7 @@
+ time-sorted sequence $S$, and (3) process $S$ within a sliding window of
+ size $\delta$, tracking how often each ordered edge pattern appears
+ within that window \citep{paranjape2017motifs}. Algorithm~\ref{alg:paranjape}
+-formalizes this procedure.
++formalises this procedure.
+ 
+ \begin{figure}[t]
+ \begin{minipage}{\linewidth}
+@@ -777,9 +787,9 @@
+ \end{figure}
+  
+ For 2-node motifs this runs in 
+-$O(m)$ time, which is optimal. For 3-node, 3-edge star and triangle motifs, specialized algorithms reduce the worst-case complexity significantly, with the fast triangle algorithm achieving up to a 56.5$\times$ speedup over the general method on the Bitcoin transaction network \citep{paranjape2017motifs}. This scalability is relevant to the present work, as blockchain transaction graphs are large and the motifs we are interested in correspond directly to 3-node star and triangle patterns within a short time window.
+-
+-\subsection{Motif fingerprint}
++$O(m)$ time, which is optimal. For 3-node, 3-edge star and triangle motifs, specialised algorithms reduce the worst-case complexity significantly, with the fast triangle algorithm achieving up to a 56.5$\times$ speedup over the general method on the Bitcoin transaction network \citep{paranjape2017motifs}. This scalability is relevant to the present work, as blockchain transaction graphs are large and the motifs we are interested in correspond directly to 3-node star and triangle patterns within a short time window.
++
++\subsection{Motif Fingerprint}
+ The identification of recurring subgraph patterns in a network provides insight
+ into the local structural properties of individual nodes. A global count records
+ how often a pattern occurs anywhere in the graph. It does not say which position
+@@ -787,7 +797,7 @@
+ \citet{McDonnell2014} retains this distinction by collecting counts for the local
+ roles of a focal node, such as an initiator, intermediary, or receiver.
+ 
+-\citet{McDonnell2014} further show that functional motif-role fingerprints, obtained from counts of partial subgraphs, can be transformed into structural fingerprints by multiplying them with an invertible transformation matrix, establishing a mathematically well-defined correspondence between the two representations. The authors identify anomaly detection and the identification of structurally similar nodes as primary use cases, which makes it well applicable for this thesis.
++\citet{McDonnell2014} further show that functional motif-role fingerprints, obtained from counts of partial subgraphs, can be transformed into structural fingerprints by multiplying them with an invertible transformation matrix, establishing a mathematically well-defined correspondence between the two representations. The authors identify anomaly detection and the identification of structurally similar nodes as primary use cases, which makes it applicable to this thesis.
+ 
+ The concept is extended here to temporal graphs following the
+ $\delta$-temporal counting framework. A global candidate pattern first defines
+@@ -848,7 +858,7 @@
+ triangle coverage is incomplete. A feature matrix has one row per address and
+ one column per retained local role.
+ 
+-This serves two purposes. First, it reduces the high-dimensional transaction graph to a compact, interpretable, and fixed-size representation per address. Second, it encodes behavioral structure rather than raw transaction statistics because an address involved in coordinated activity is expected to exhibit a distinct fingerprint compared to ordinary users, as coordinated behavior by definition produces recurring, time-constrained interaction patterns among a group of addresses. The fingerprint therefore creates a behavioral signature of each address showing small recurring temporal subgraph patterns.
++This serves two purposes. First, it reduces the high-dimensional transaction graph to a compact, interpretable, and fixed-size representation per address. Second, it encodes behavioural structure rather than raw transaction statistics because an address involved in coordinated activity is expected to exhibit a distinct fingerprint compared with ordinary addresses, as coordinated behaviour by definition produces recurring, time-constrained interaction patterns among a group of addresses. The fingerprint therefore creates a behavioural signature of each address showing small recurring temporal subgraph patterns.
+ 
+ \section{Blockchain Relevance}
+ \label{sec:blockchain_relevance}
+@@ -919,7 +929,7 @@
+ \end{figure}
+ 
+ \paragraph{Pump-and-Dump Schemes.}
+-Pump-and-dump schemes involve a coordinated group of addresses accumulating a low-liquidity token, artificially inflating its price through simultaneous buy activity, and then selling their holdings once uninformed traders enter the market \citep{li2021cryptocurrency, hornuf2025cybercrime}. The coordination is explicit and time-critical: the buy phase and the sell phase each involve multiple addresses acting within bounded periods in order to maximize price impact and exit before the market corrects. Such activity could produce dense, time-local transaction patterns, but Real-CATS has no pump-and-dump label. Its temporal window is therefore not estimated in RQ4.
++Pump-and-dump schemes involve a coordinated group of addresses accumulating a low-liquidity token, artificially inflating its price through simultaneous buy activity, and then selling their holdings once uninformed traders enter the market \citep{li2021cryptocurrency, hornuf2025cybercrime}. The coordination is explicit and time-critical: the buy phase and the sell phase each involve multiple addresses acting within bounded periods in order to maximise price impact and exit before the market corrects. Such activity could produce dense, time-local transaction patterns, but Real-CATS has no pump-and-dump label. Its temporal window is therefore not estimated in RQ4.
+ 
+ \begin{figure}[ht]
+   \centering
+@@ -943,7 +953,7 @@
+ \end{figure}
+ 
+ \paragraph{Rug Pulls and Exit Scams.}
+-A rug pull occurs when the developers of a token project attract liquidity, typically by depositing token reserves into a decentralized exchange, and then abruptly withdraw all deposited funds, rendering the token worthless \citep{hornuf2025cybercrime, xia2021rugpull}. Exit scams follow a similar pattern at the level of initial coin offerings: funds raised from investors are transferred out of the project contract to attacker-controlled addresses immediately or within a short period after fundraising closes. Both patterns produce a concentrated outflow from a contract address to a small set of beneficiary addresses within a narrow time window, a temporal interaction structure that differs structurally from ordinary liquidity provision.
++A rug pull occurs when the developers of a token project attract liquidity, typically by depositing token reserves into a decentralised exchange, and then abruptly withdraw all deposited funds, rendering the token worthless \citep{hornuf2025cybercrime, xia2021rugpull}. Exit scams follow a similar pattern at the level of initial coin offerings: funds raised from investors are transferred out of the project contract to attacker-controlled addresses immediately or within a short period after fundraising closes. Both patterns produce a concentrated outflow from a contract address to a small set of beneficiary addresses within a narrow time window, a temporal interaction structure that differs structurally from ordinary liquidity provision.
+ 
+ \begin{figure}[ht]
+   \centering
+@@ -1048,7 +1058,7 @@
+ \vspace{0.5em}
+ The descriptions above motivate why temporal structure may be informative. They do
+ not define the fingerprints or their time windows. Table~\ref{tab:scam_types}
+-therefore summarizes only the nine exact labels used for inference and states the
++therefore summarises only the nine exact labels used for inference and states the
+ network pattern that each label could plausibly expose. These are hypotheses for
+ interpretation, not rules used to construct labels or features. The broader Ponzi,
+ pump-and-dump, money-laundering, and giveaway examples remain part of the domain
+@@ -1058,7 +1068,7 @@
+ \begin{table}[htbp]
+ \centering
+ \caption{The nine exact Real-CATS categories evaluated in RQ3 and RQ4 and their
+-hypothesized temporal-network interpretation.}
++hypothesised temporal-network interpretation.}
+ \label{tab:scam_types}
+ \footnotesize
+ \begin{tabular}{p{3.4cm} p{4.5cm} p{5.1cm}}
+@@ -1081,7 +1091,7 @@
+ \chapter{Method} 
+ \label{ch:method}
+ 
+-\section{System overview}
++\section{System Overview}
+ \label{sec:system_overview}
+ 
+ This chapter describes how the detection approach is put into practice. The
+@@ -1114,7 +1124,7 @@
+ 
+   \item \textbf{Preparing the data.} Not every labelled address can be used. The
+         program measures how active each address is and keeps only those with
+-        enough transactions to form a three-edge candidate pattern. It also sets aside a small
++        at least three incident transactions, as required by the activity rule. It also sets aside a small
+         number of extremely active hub addresses, so that a few exchange-sized
+         accounts cannot dominate the analysis. The remaining addresses are split
+         into a development set, used for tuning, and a separate test set, used
+@@ -1189,7 +1199,7 @@
+ on the category-labelled dataset. The following sections describe the most
+ important of these steps in more detail, starting with the data.
+ 
+-\section{Data acquisition}
++\section{Data Acquisition}
+ \label{sec:data_acquisition}
+ 
+ Studying coordinated malicious behaviour on-chain needs two things at once:
+@@ -1208,7 +1218,7 @@
+ suitability for this thesis. Validation templates and the distinction between
+ predictive tests and network null models are described separately below.
+ 
+-\subsection{Real-world datasets}
++\subsection{Real-World Datasets}
+ 
+ \paragraph{Hugging Face (HF) Ethereum Fraud Dataset.}
+ \label{sec:dataset_hf}
+@@ -1302,7 +1312,7 @@
+ category-level fingerprint differences rather than independently verified
+ coordination. The labels are also
+ independent of the main dataset, since they come from public abuse reports
+-instead of the process behind the HuggingFace release. The categories are very
++instead of the process behind the Hugging Face release. The categories are very
+ unevenly filled, with phishing and impersonation together accounting for most of
+ the criminal addresses, so RQ3 and RQ4 are limited to the categories that have
+ enough addresses to support a fair comparison and treat the smaller ones as
+@@ -1320,7 +1330,7 @@
+ \setlength{\tabcolsep}{4pt}
+ \begin{tabular}{@{}p{3.1cm} p{3.1cm} p{3.0cm} p{3.2cm}@{}}
+ \toprule
+-\textbf{Property} & \textbf{HuggingFace} & \textbf{BLTE} & \textbf{Real-CATS} \\
++\textbf{Property} & \textbf{Hugging Face} & \textbf{BLTE} & \textbf{Real-CATS} \\
+ \midrule
+ Chain              & Ethereum      & Ethereum Classic & Ethereum \\
+ Transactions       & 380.6 million & 71{,}250         & per-address histories \\
+@@ -1334,7 +1344,7 @@
+ \end{tabular}
+ \end{table}
+ 
+-\subsection{Validation templates and null models}
++\subsection{Validation Templates and Null Models}
+ \label{sec:validation_and_null_models}
+ 
+ \paragraph{Synthetic validation templates.}
+@@ -1375,7 +1385,7 @@
+ category separability. The alternative orderings of equal-timestamp transfers
+ are sensitivity checks, not random-network references.
+ 
+-\section{Temporal graph construction}
++\section{Temporal Graph Construction}
+ \label{sec:graph_construction}
+ 
+ The prepared transactions are turned into a temporal graph on which candidate
+@@ -1383,7 +1393,7 @@
+ graph is actually built from each dataset, and the simple features that are read
+ straight from it and later serve as a comparison point for the fingerprints.
+ 
+-\subsection{Graph model}
++\subsection{Graph Model}
+ 
+ Each address is represented as a node and each transfer as a directed edge that
+ carries the time at which it happened. The result is a temporal directed
+@@ -1399,13 +1409,13 @@
+ address that only receives, one that only sends, and one that does both leave
+ different local role counts behind.
+ 
+-\subsection{Building the graph from the data}
+-
+-HuggingFace and Real-CATS are stored in very different shapes, so the graph is
++\subsection{Building the Graph from the Data}
++
++Hugging Face and Real-CATS are stored in very different shapes, so the graph is
+ assembled differently for each, but always without holding more data in memory
+ than needed.
+ 
+-For HuggingFace the transaction table is far too large to load as a whole, with
++For Hugging Face the transaction table is far too large to load as a whole, with
+ more than 380 million transfers. It is therefore read in small batches. The
+ first pass measures how active each labelled address is and keeps every transfer
+ that touches a selected target. These incident transfers define the baseline and
+@@ -1430,7 +1440,7 @@
+ are counted within each layer. This preserves the distinction between transaction
+ types, but excludes candidate sequences whose edges cross between layers.
+ 
+-\subsection{The non-motif baseline}
++\subsection{The Non-Motif Baseline}
+ 
+ RQ1 asks whether motif fingerprints add anything beyond ordinary address behaviour, so it
+ needs a description of each address that does not use motifs at all. This
+@@ -1474,7 +1484,7 @@
+ than is kept here. Where a value cannot be computed, for instance a measure of
+ variation for an address with too few transactions, it is set to zero.
+ 
+-\section{Temporal motif extraction}
++\section{Temporal Motif Extraction}
+ \label{sec:motif_extraction}
+ 
+ The baseline describes an address by totals, averages, and timing summaries.
+@@ -1491,7 +1501,7 @@
+ (Equation~\ref{eq:motif_fingerprint}). This section describes how those
+ fingerprints are counted and turned into features.
+ 
+-\subsection{Subgraph counting and retained local roles}
++\subsection{Subgraph Counting and Retained Local Roles}
+ \label{sec:motifcountingandretainedroles}
+ 
+ The counting itself is done by Raphtory, whose
+@@ -1509,7 +1519,7 @@
+ difference between 36 global patterns and 40 local role features. The output
+ is not a catalogue of 36 global motifs with four additional patterns.
+ The global patterns are shown in
+-Figure~\ref{fig:motifs_paranjape}. The final HuggingFace experiment retains all
++Figure~\ref{fig:motifs_paranjape}. The final Hugging Face experiment retains all
+ 40 roles because its released-neighbourhood closure supports triangle counting.
+ It also evaluates the 32 star and two-node roles separately to measure whether
+ triangles add signal. Real-CATS retains those 32 roles per layer because its
+@@ -1566,13 +1576,13 @@
+ roles, and the fingerprint contains the complete set of retained counts for
+ one address.
+ 
+-\subsection{Ordering transfers with equal timestamps}
++\subsection{Ordering Transfers with Equal Timestamps}
+ 
+ Because motifs are ordered sequences, the transfers have to be put in a definite
+ order before they can be counted. Time supplies most of that order, but many
+ transfers carry the same timestamp because they sit in the same block, and time
+ alone cannot separate them. When the data records where a transfer sits within its
+-block, that finer order is used. The HuggingFace data does not record this, so its
++block, that finer order is used. The Hugging Face data does not record this, so its
+ transfers that share a timestamp have no fixed order. To make sure the results do
+ not rest on an arbitrary choice, the whole analysis is run under seven versions of
+ the order. All orderings preserve the order of transfers with distinct
+@@ -1584,14 +1594,14 @@
+ all seven. The order is computed without loading the whole table into memory, and
+ the sorted transfers are passed to Raphtory in large batches.
+ 
+-\subsection{Fingerprint representations}
++\subsection{Fingerprint Representations}
+ 
+ The retained counts are stored under stable names such as \texttt{star\_pre\_iii},
+ \texttt{two\_node\_ioi}, and \texttt{triangle\_1}. For RQ1 and RQ2 each count
+ $c$ is replaced by $\log(1+c)$. Some highly active addresses have much larger
+-counts than most targets. On the raw scale these values would dominate the model.
++counts than most targets.
+ Taking the logarithm compresses this range, and adding one first means that a
+-count of zero stays zero. The final HuggingFace detection step uses all 40
++count of zero stays zero. The final Hugging Face detection step uses all 40
+ transformed values, either on their own or joined to the baseline of
+ Section~\ref{sec:graph_construction}. A parallel 32-role representation and a
+ triangles-only representation support the ablation analysis. How the fingerprint
+@@ -1629,7 +1639,7 @@
+ helps assess their relationship, but does not isolate whether a score increase
+ comes from lower sparsity or a more informative time scale.
+ 
+-\subsection{Temporal-window sweep}
++\subsection{Temporal-Window Sweep}
+ \label{sec:temporal_window_sweep}
+ 
+ The counting is repeated over a fixed grid of nine windows,
+@@ -1647,7 +1657,7 @@
+ is the maximum span allowed for a three-edge candidate motif. It is not an estimate of the
+ total duration of a fraud campaign.
+ 
+-\section{Detection methods}
++\section{Detection Methods}
+ \label{sec:detection_methods}
+ 
+ The previous two sections produced two descriptions of every address: the
+@@ -1658,7 +1668,7 @@
+ RQ3 and RQ4, because the two groups ask different questions and use different
+ datasets.
+ 
+-\subsection{The three feature views}
++\subsection{The Three Feature Views}
+ 
+ RQ1 asks whether the motif fingerprint adds anything beyond ordinary address
+ behaviour. The cleanest way to answer this is a controlled comparison, in which
+@@ -1668,12 +1678,12 @@
+   \item the \emph{baseline} view, the 17 non-motif features of
+         Table~\ref{tab:results_baseline_features},
+   \item the \emph{motifs} view, the log-transformed local motif-role counts, with 32 roles
+-        in two HuggingFace samples and all 40 roles in the sample that includes
++        in two Hugging Face samples and all 40 roles in the sample that includes
+         triangles, and
+   \item the \emph{combined} view, the two simply placed side by side.
+ \end{itemize}
+ As described in Section~\ref{sec:evaluation_protocol}, RQ1 and RQ2 use three
+-non-overlapping HuggingFace samples. Two samples use the 32 star and two-node
++non-overlapping Hugging Face samples. Two samples use the 32 star and two-node
+ roles. The remaining sample has the released-neighbourhood closure needed for all
+ 40 roles and evaluates the 32-role view and the eight triangle roles as separate
+ ablations.
+@@ -1773,7 +1783,7 @@
+ development addresses and gives each address in the test set one probability per
+ category.
+ 
+-\subsection{Handling class imbalance}
++\subsection{Handling Class Imbalance}
+ 
+ The classes are uneven to different degrees across the experiments, only
+ slightly for the main dataset and strongly for the Real-CATS categories. The
+@@ -1799,12 +1809,14 @@
+ recorded settings and the checks that the code and data have not changed, are
+ described in Section~\ref{sec:implementation}.
+ 
+-\subsection{Cohorts and splits}
+-
+-RQ1 and RQ2 are evaluated on three non-overlapping samples from the HuggingFace
++\subsection{Cohorts and Splits}
++
++RQ1 and RQ2 are evaluated on three non-overlapping samples from the Hugging Face
+ dataset. Each sample contains two separate groups of addresses. An address is
+-eligible only if it takes part in at least three transactions, since
+-fewer cannot form one of the three-edge motifs. Before the groups are drawn, the
++eligible only if it takes part in at least three transactions. This is the
++study's activity threshold; it is not a mathematical minimum for every local
++role, since a node can participate in a triangle through two incident transfers.
++Before the groups are drawn, the
+ most extreme addresses are removed: within each combination of label, contract
+ type, and activity level, the top 0.5\,\% most active addresses are dropped.
+ Without this, a few exchange-scale hubs would dominate the graph on their own. The
+@@ -1847,7 +1859,7 @@
+ 20 split, stratified by category, again keeping only categories with at least 100
+ addresses and never merging them.
+ 
+-\subsection{Metrics and window selection}
++\subsection{Metrics and Window Selection}
+ 
+ The main measure is average precision (AP), which summarises how well the detector
+ ranks malicious addresses above benign ones across all decision thresholds. It
+@@ -1867,7 +1879,7 @@
+ recorded alongside it as the one-standard-error (1-SE) choice, which shows whether a shorter window would have done
+ essentially as well. The test set plays no part in either.
+ 
+-\subsection{Statistical tests}
++\subsection{Statistical Tests}
+ 
+ For RQ1 the effect is the difference in test-set average precision between the
+ combined view and the baseline. Two procedures support it. The first is a
+@@ -1924,7 +1936,7 @@
+ category-specific windows can only help if the categories do not all choose the
+ same one.
+ 
+-\subsection{Robustness to event ordering}
++\subsection{Robustness to Event Ordering}
+ 
+ Every result is produced under each of the seven orderings of
+ Section~\ref{sec:motif_extraction}. An ordering-dependent conclusion, such as an
+@@ -1933,14 +1945,14 @@
+ depend on how transfers sharing a timestamp are ordered. It does not recover the
+ real order of those transfers, which the data does not record in the first place.
+ 
+-\section{Implementation details}
++\section{Implementation Details}
+ \label{sec:implementation}
+ 
+ This section records the tools the pipeline is built on, how the code is
+ organised, and the measures that make a run reproducible. The engineering
+ challenges are documented in Appendix~\ref{app:engineering_challenges}.
+ 
+-\subsection{Language and libraries}
++\subsection{Language and Libraries}
+ 
+ The pipeline is written in Python, with the temporal motif counting carried out by
+ Raphtory's Rust extension. Everything runs on the CPU, so no graphics card is
+@@ -1968,7 +1980,7 @@
+   0.17.0 &
+   Stores the temporal multigraph and runs the parallel Rust routine
+   \texttt{local\_temporal\_three\_node\_motifs}, using the local counting
+-  approach of \citet{arnold2024motifs}. Its full 40-role output is retained for HuggingFace.
++  approach of \citet{arnold2024motifs}. Its full 40-role output is retained for Hugging Face.
+   The 32 star and two-node roles are retained for each Real-CATS layer. \\
+ 
+ \textbf{DuckDB} &
+@@ -1978,7 +1990,7 @@
+ 
+ \textbf{PyArrow} &
+   23.0.1 &
+-  Streams the full HuggingFace edge source, writes the prepared Parquet files,
++  Streams the full Hugging Face edge source, writes the prepared Parquet files,
+   and carries the ordered batches from DuckDB to Raphtory. \\
+ 
+ \textbf{pandas} &
+@@ -2009,12 +2021,12 @@
+ \end{tabular}
+ \end{table}
+ 
+-NetworkX and the HuggingFace \texttt{datasets} client are used only by the
++NetworkX and the Hugging Face \texttt{datasets} client are used only by the
+ exploratory application and by the data download, not by the locked pipeline.
+ SQLite, which comes with Python, provides the index used to de-duplicate the
+ Real-CATS histories.
+ 
+-\subsection{Project structure and entry points}
++\subsection{Project Structure and Entry Points}
+ 
+ The repository keeps the exploratory and the evidence-producing code apart. The
+ interactive command-line interface (CLI) in \texttt{main.py} is for development
+@@ -2042,7 +2054,7 @@
+  experiments/
+    constants.py     Locked constants and verified role catalogue
+    prepare.py       Source conversion, cohorts, folds, protocol lock
+-   datasets.py      HuggingFace streaming and BLTE loading
++   datasets.py      Hugging Face streaming and BLTE loading
+    realcats.py      SQLite deduplication and layer export
+    ordering.py      DuckDB external event ordering
+    features.py      Baseline and fingerprint transformations
+@@ -2152,7 +2164,7 @@
+ sorted by their 8-bit Unicode Transformation Format (UTF-8) bytes,
+ independently of its Parquet storage encoding.
+ 
+-\subsection{Result artifacts}
++\subsection{Result Artifacts}
+ 
+ Each run has its own directory that is never overwritten, so results from
+ different runs cannot be mixed, and a run may only create a file that does not yet
+@@ -2230,7 +2242,7 @@
+ }
+ 
+ This chapter presents the results for the four research questions. RQ1 and RQ2
+-are examined in three non-overlapping HuggingFace samples. Each contains a
++are examined in three non-overlapping Hugging Face samples. Each contains a
+ randomly drawn prevalence cohort and a controlled cohort in which benign and
+ malicious addresses are matched by activity. The
+ two 32-role samples contain only star and two-node motif roles. The 40-role
+@@ -2246,7 +2258,7 @@
+ \section{Evaluation Samples}
+ \label{sec:results_provenance}
+ 
+-The HuggingFace source contains \ResCohortLabelled\ labelled targets and
++The Hugging Face source contains \ResCohortLabelled\ labelled targets and
+ \ResHFSourceEdges\ transfers. Of the targets, \ResCohortInactive\ have no
+ incident transfer and 26{,}618 have fewer than the required three transfers. A
+ further 52 very highly active addresses are removed, leaving
+@@ -2255,7 +2267,7 @@
+ samples therefore do not overlap. Table~\ref{tab:res_cohorts} gives their sizes
+ and the number of transfers connected to them.
+ 
+-\IfFileExists{generated/results_cohorts.tex}{\input{generated/results_cohorts}}{\ResPendingTable{HuggingFace cohort attrition.}{tab:res_cohorts}}
++\IfFileExists{generated/results_cohorts.tex}{\input{generated/results_cohorts}}{\ResPendingTable{Hugging Face cohort attrition.}{tab:res_cohorts}}
+ 
+ The two 32-role samples contain 8{,}903 and 8{,}697 target addresses, with
+ 17{,}381{,}820 and 24{,}714{,}450 connected transfers. The 40-role sample
+@@ -2276,14 +2288,14 @@
+ five retained layers contain 12{,}142{,}326 unique events after 65{,}954 repeated
+ records are removed. The separate binary sample contains 3{,}067 criminal and
+ 3{,}067 benign addresses with similar activity levels. None of these addresses
+-appears in the HuggingFace label set. Real-CATS does not provide campaign
++appears in the Hugging Face label set. Real-CATS does not provide campaign
+ identifiers, so the train and test sets can be separated by address but not by
+ campaign.
+ 
+ \section{RQ1: Incremental Signal of Temporal Motif Fingerprints}
+ 
+ Adding local motif-role features increases average precision in all six
+-HuggingFace comparisons. Three of these increases are statistically significant.
++Hugging Face comparisons. Three of these increases are statistically significant.
+ Figure~\ref{fig:res_rq1_ablation} compares the baseline, motif-only, and combined
+ feature sets in the 40-role analysis. Table~\ref{tab:res_rq1} shows the same
+ comparison for all three samples. The addresses and data splits
+@@ -2293,7 +2305,7 @@
+   \centering
+   \ResGraphic{0.48}{rq1_ablation_controlled_rep3}
+   \ResGraphic{0.48}{rq1_ablation_prevalence_rep3}
+-  \caption{RQ1 feature comparison in the 40-role HuggingFace analysis using the
++  \caption{RQ1 feature comparison in the 40-role Hugging Face analysis using the
+   default timestamp ordering. The controlled cohort is shown on the left and
+   the prevalence cohort on the right.}
+   \label{fig:res_rq1_ablation}
+@@ -2348,7 +2360,7 @@
+ AP and fingerprint coverage generally increase over the tested window range.
+ Figure~\ref{fig:res_rq2_delta} shows how held-out
+ average precision and motif coverage change across the nine tested windows in
+-the 40-role HuggingFace analysis. The baseline is fixed because its features do
++the 40-role Hugging Face analysis. The baseline is fixed because its features do
+ not depend on $\delta$. Table~\ref{tab:res_rq2} shows the windows selected on the
+ development data in all three samples.
+ 
+@@ -2358,7 +2370,7 @@
+   \ResGraphic{0.48}{rq2_delta_performance_prevalence_rep3}\\[4pt]
+   \ResGraphic{0.48}{rq2_motif_coverage_controlled_rep3}
+   \ResGraphic{0.48}{rq2_motif_coverage_prevalence_rep3}
+-  \caption{RQ2 temporal-window sensitivity in the 40-role HuggingFace analysis
++  \caption{RQ2 temporal-window sensitivity in the 40-role Hugging Face analysis
+   using the default timestamp ordering. The controlled cohort is shown on the
+   left and the prevalence cohort on the right. The top row reports held-out
+   average precision with shaded 95\,\% bootstrap confidence intervals.
+@@ -2378,7 +2390,7 @@
+ cohort. The binary Real-CATS comparison also selects 30 days, although three
+ days is already within one standard error of its maximum.
+ 
+-After correction for multiple comparisons, none of the three HuggingFace
++After correction for multiple comparisons, none of the three Hugging Face
+ samples has a selected maximum that is better than every other tested window
+ under all orderings. In the 40-role controlled cohort, five of the eight
+ comparisons with 30 days are significant using the default ordering. In the
+@@ -2418,7 +2430,7 @@
+   window and the default timestamp ordering. The two panels show the 40 local
+   role components that vary most between categories in the development data,
+   divided into two groups of 20 for readability. These components are selected
+-  from the five layers of 32 roles each, not from the 40-role HuggingFace
++  from the five layers of 32 roles each, not from the 40-role Hugging Face
+   catalogue.}
+   \label{fig:res_rq3}
+ \end{figure}
+@@ -2496,7 +2508,7 @@
+ 
+ \paragraph{Timestamp ordering.} Repeating the analysis with all seven ways of
+ ordering transactions that share a timestamp does not change the overall
+-answers. In the 40-role HuggingFace analysis, both RQ1 differences remain
++answers. In the 40-role Hugging Face analysis, both RQ1 differences remain
+ positive but non-significant, and the selected RQ2 window remains 30 days. The
+ RQ3 result also remains significant. For RQ4, the comparison with the shared
+ window remains non-significant, although most of the selected category windows
+@@ -2540,7 +2552,7 @@
+ 
+ \section{Interpretation of the Main Findings}
+ 
+-\subsection{Detection value of temporal motifs}
++\subsection{Detection Value of Temporal Motifs}
+ 
+ RQ1 concerns the complete fingerprint representation. The comparison tests
+ whether adding local motif-role features to the 17 conventional features improves
+@@ -2550,7 +2562,7 @@
+ 
+ The first result is that temporal motifs contain a useful signal, but that their
+ additional value depends on which other features are already present. Adding the
+-motif fingerprint to the baseline increases AP in all six HuggingFace
++motif fingerprint to the baseline increases AP in all six Hugging Face
+ comparisons. Three of these increases are significant. The non-significant
+ comparisons include the prevalence cohort of one 32-role sample and both
+ cohorts of the 40-role analysis. In that analysis, the improvements are 0.0237 and
+@@ -2564,14 +2576,14 @@
+ motif-only models can still rank addresses to some degree, and the Real-CATS
+ motif-only model reaches an AP of 0.8708. More importantly, the
+ role-by-role fingerprint performs better than total motif volume alone. In the
+-40-role HuggingFace analysis, this difference is 0.1173 AP in the controlled
++40-role Hugging Face analysis, this difference is 0.1173 AP in the controlled
+ cohort and 0.1528 AP in the prevalence cohort. This shows that the distribution
+ of activity across motif roles is more informative than the number of motifs by
+ itself.
+ 
+ The result changes once conventional features are added. A baseline supplemented
+ with motif composition and motif volume performs similarly to the full combined
+-model across all three HuggingFace samples. The detailed role counts therefore
++model across all three Hugging Face samples. The detailed role counts therefore
+ contain a signal,
+ but much of that signal overlaps with information that can already be obtained
+ from simpler summaries. This overlap is plausible because many transaction
+@@ -2582,7 +2594,7 @@
+ the complete fingerprint adds little once these related properties are present.
+ 
+ The triangle analysis leads to the same interpretation. Extending the
+-HuggingFace graph makes it possible to retain all eight triangle roles, but
++Hugging Face graph makes it possible to retain all eight triangle roles, but
+ adding them changes AP by at most 0.0071 in the reported comparisons. None of
+ these differences is significant. Triangle motifs may still be useful in other
+ graphs or for other kinds of malicious behaviour. The present results only show
+@@ -2606,13 +2618,13 @@
+ representation under the labels and evaluation protocol used here. They do not
+ provide a direct comparison with that earlier detector.
+ 
+-\subsection{Choice of the temporal window}
++\subsection{Choice of the Temporal Window}
+ 
+ RQ2 asks how window size affects fingerprint usefulness. Over the tested range,
+ longer windows generally increase both detection AP and the number of addresses
+ with a nonzero fingerprint. This answers the question without requiring a unique
+ optimum. The
+-40-role HuggingFace analysis selects 30 days for both cohorts, while two weeks
++40-role Hugging Face analysis selects 30 days for both cohorts, while two weeks
+ remains within one standard error of the maximum. Both 32-role controlled
+ cohorts select two weeks, and all three prevalence cohorts select 30 days. The
+ Real-CATS binary
+@@ -2620,7 +2632,7 @@
+ standard error of its maximum. These results point towards a broader range of
+ longer windows rather than one clearly best setting.
+ 
+-Motif coverage helps explain this pattern. In the 40-role HuggingFace analysis,
++Motif coverage helps explain this pattern. In the 40-role Hugging Face analysis,
+ coverage increases from 12.2\% to 77.7\% in the controlled cohort and from
+ 11.1\% to 75.9\% in the prevalence cohort between five minutes and 30 days.
+ A short window leaves most
+@@ -2642,7 +2654,7 @@
+ whether performance would continue to increase at still larger windows. The
+ supported conclusion is limited to the tested range.
+ 
+-\subsection{Differences between behaviour categories}
++\subsection{Differences Between Behaviour Categories}
+ 
+ The category analysis uses motif fingerprints alone. Its class-share and
+ permutation references establish whether the fingerprints contain category
+@@ -2750,7 +2762,7 @@
+ The same cost consideration applies to triangles. Constructing the released
+ neighbourhood closure substantially increases the number of transfers that must
+ be processed. The resulting triangle roles do not provide a significant gain in
+-the final HuggingFace experiment. For a similar address-level detection task, it
++the final Hugging Face experiment. For a similar address-level detection task, it
+ may therefore be reasonable to begin with the 32 star and two-node roles and add
+ triangles only when the graph supports them and their contribution can be tested.
+ This is a conclusion about the current datasets rather than a recommendation to
+@@ -2793,7 +2805,7 @@
+ based on off-chain reports and investigations, which can be incomplete or
+ incorrect. An address label also describes the address rather than a complete
+ campaign. One campaign can use many addresses, and one address can perform only
+-one part of the wider behaviour. The HuggingFace splits keep known campaign
++one part of the wider behaviour. The Hugging Face splits keep known campaign
+ groups together where that information is available. Real-CATS does not provide
+ a campaign identifier, so its train and test sets can be separated by address
+ but not by campaign. Similar addresses from the same unknown campaign could
+@@ -2809,7 +2821,7 @@
+ within one category shares a common motif fingerprint.
+ 
+ \paragraph{Graph coverage.}
+-The HuggingFace triangle counts are complete relative to the published release
++The Hugging Face triangle counts are complete relative to the published release
+ and the released-neighbourhood closure, but not necessarily relative to the full
+ Ethereum chain. Transactions absent from the release cannot be recovered by the
+ pipeline. Real-CATS provides detailed per-address histories across five layers,
+@@ -2819,7 +2831,7 @@
+ transaction graph.
+ 
+ \paragraph{Cohort composition.}
+-The three HuggingFace samples use non-overlapping addresses and known campaign
++The three Hugging Face samples use non-overlapping addresses and known campaign
+ groups, which prevents their direct reuse between samples. Repeated exclusions
+ also change the population that remains. The 40-role controlled cohort
+ contains 503 malicious addresses and none of them is a contract account. Its
+@@ -2837,7 +2849,7 @@
+ events when the source data does not record it.
+ 
+ The window grid is another limitation. It covers values from five minutes to 30
+-days, and 30 days is selected in the 40-role HuggingFace and binary Real-CATS
++days, and 30 days is selected in the 40-role Hugging Face and binary Real-CATS
+ analyses. Since this value
+ lies at the boundary, the study cannot determine whether a still larger window
+ would perform better. The fixed grid also does not test every possible duration
+@@ -2860,7 +2872,7 @@
+ differently.
+ 
+ The binary Real-CATS sample provides an external comparison, but its labels and
+-data construction differ from HuggingFace. BLTE remains optional and no completed
++data construction differ from Hugging Face. BLTE remains optional and no completed
+ BLTE result is included. The evidence for generalisation is therefore limited to
+ one additional dataset. Results on other chains, time periods, and label sources
+ may differ.
+@@ -2886,7 +2898,7 @@
+ 
+ The main contribution is an evaluation of temporal motif fingerprints
+ on labelled Ethereum addresses. The evaluation covers binary detection on the
+-HuggingFace Ethereum Fraud Dataset and a separate Real-CATS sample, as well as
++Hugging Face Ethereum Fraud Dataset and a separate Real-CATS sample, as well as
+ category classification across nine Real-CATS behaviour labels. The pipeline
+ counts the retained motif roles for several temporal windows, keeps the five
+ Real-CATS transaction layers separate, and accounts for transfers that share a
+@@ -2900,9 +2912,9 @@
+ 
+ The answer to RQ1 is that temporal motifs contain information, but do not
+ reliably improve malicious-address detection beyond the conventional baseline.
+-Adding the fingerprint increases average precision in all six HuggingFace
++Adding the fingerprint increases average precision in all six Hugging Face
+ cohort comparisons, although only three of these increases are statistically
+-significant. In the 40-role HuggingFace analysis, the increases are 0.0237 in
++significant. In the 40-role Hugging Face analysis, the increases are 0.0237 in
+ the controlled cohort and 0.0161 in the prevalence cohort, with both confidence
+ intervals including zero. The binary Real-CATS comparison produces an increase
+ of only 0.0011 and a lower F1 score. At the same time, the role-by-role
+@@ -2919,7 +2931,7 @@
+ 11.1\% to 75.9\% in the prevalence cohort between five minutes and 30 days.
+ The 30-day window gives
+ the highest development score in both cohorts, but two weeks remains within one
+-standard error of the maximum. For no HuggingFace sample is the selected maximum
++standard error of the maximum. For no Hugging Face sample is the selected maximum
+ significantly better than every other tested window under all timestamp
+ orderings. Since 30
+ days is also the largest tested value, it cannot be treated as a universal
+@@ -2962,7 +2974,7 @@
+ The existing analysis keeps the five Real-CATS transaction layers separate, but
+ it counts motifs only within each layer. It therefore cannot represent one
+ ordered pattern whose edges cross from an ordinary transfer to an internal
+-transfer and then to a token transfer. The HuggingFace graph is limited to
++transfer and then to a token transfer. The Hugging Face graph is limited to
+ ordinary transaction edges as well. This matters for behaviour that is carried
+ out through smart contracts, including contract exploits, token-based scams,
+ and contract-mediated Ponzi schemes. A useful next step is a typed, multi-layer
+@@ -3002,7 +3014,7 @@
+ 
+ External validation should also be extended. Real-CATS provides an independent
+ binary comparison, but its labels and graph construction differ from the main
+-HuggingFace data. BLTE remains an optional check and its transaction-level
++Hugging Face data. BLTE remains an optional check and its transaction-level
+ labels do not provide a direct equivalent to the address-level task. Future
+ work would benefit from additional address-labelled datasets from other time
+ periods and chains. Campaign identifiers would be especially valuable because
+@@ -3043,6 +3055,7 @@
+ %% |   Bibliography   |
+ %% --------------------
+ %%\cleardoublepage
++\clearpage
+ \phantomsection
+ \addcontentsline{toc}{chapter}{\bibname}
+ 
+@@ -3063,4 +3076,3 @@
+ 
+ 
+ \end{document}
+-
+--- a/writing/thesis.bib
++++ b/writing/thesis.bib
+@@ -93,11 +93,11 @@
+ 
+ @misc{fesevu2025ethfraud,
+   author       = {fesevu},
+-  title        = {Ethereum Fraud Dataset by Activity},
++  title        = {{Ethereum} Fraud Dataset by Activity},
+   year         = {2025},
+   publisher    = {Hugging Face},
+   howpublished = {\url{https://huggingface.co/datasets/fesevu/ethereum_fraud_dataset_by_activity}},
+-  note         = {Accessed: 2025-08-01}
++  note         = {Accessed: 2026-10-08}
+ }
+ 
+ %% ----------------------------------------------------------
+@@ -166,7 +166,7 @@
+ 
+ @misc{nakamoto2008bitcoin,
+   author       = {Nakamoto, Satoshi},
+-  title        = {Bitcoin: A Peer-to-Peer Electronic Cash System},
++  title        = {{Bitcoin}: A Peer-to-Peer Electronic Cash System},
+   year         = {2008},
+   howpublished = {\url{https://bitcoin.org/bitcoin.pdf}},
+   note         = {Accessed: 2026}
+@@ -273,16 +273,20 @@
+ }
+ % END PROFESSOR FEEDBACK ROUND 2: Lee page range
+ 
+-%% VERIFY (protocol-v3 review): publication year is ambiguous -- the PDF below
+-%% was hosted in 2019, but indexes report a January 2021 publication with four
+-%% authors (Wittek, Wittek, Ionita, Pohlmann). Confirm which version you used;
+-%% the text key stays pohlmann2019anomaly until confirmed.
+-@article{pohlmann2019anomaly,
+-  author    = {Wittek, Kevin and Wittek, Neslihan and Pohlmann, Norbert},
++% Metadata checked against the publisher's repository and full text.
++% The 2020 conference paper was deposited on 27 January 2021.
++% The existing citation key is retained for compatibility.
++@inproceedings{pohlmann2019anomaly,
++  author    = {Wittek, Kevin and Wittek, Neslihan and Ioni{\c{t}}{\u{a}}, Andrei
++               and Pohlmann, Norbert},
+   title     = {Statistical Anomaly Detection in {Ethereum} Transaction Graphs},
+-  journal   = {Proceedings of the 17th Annual Conference on Privacy, Security and Trust (PST)},
+-  year      = {2019},
+-  url       = {https://norbert-pohlmann.com/wp-content/uploads/2019/08/416-Statistical-anomaly-detection-in-ETHEREUM-transaction-graphs-Prof.-N.-Pohlmann.pdf}
++  booktitle = {Konferenzband zum Scientific Track der Blockchain Autumn School 2020},
++  publisher = {Hochschule Mittweida},
++  address   = {Mittweida},
++  pages     = {106--110},
++  year      = {2020},
++  doi       = {10.48446/opus-11872},
++  url       = {https://monami.hs-mittweida.de/frontdoor/index/index/docId/11872}
+ }
+ 
+ @article{liu2023temporal,
+@@ -302,12 +306,14 @@
+ }
+ 
+ 
+-@inproceedings{temporal_sampling_ethereum,
+-  author    = {Alomari, Ahmad and Cheng, Xiuzhen},
+-  title     = {Probabilistic Temporal Sampling for Anomaly Detection in {Ethereum} Transaction Networks},
+-  booktitle = {OpenReview},
+-  year      = {2023},
+-  url       = {https://openreview.net/pdf?id=AhyjbXSmUN}
++% The public OpenReview version lists anonymous authors and NeurIPS 2025.
++% No named authors or acceptance status are inferred from the anonymous paper.
++@misc{temporal_sampling_ethereum,
++  author       = {{Anonymous}},
++  title        = {Probabilistic Temporal Sampling for Anomaly Detection in {Ethereum} Networks},
++  year         = {2025},
++  howpublished = {OpenReview. \url{https://openreview.net/pdf?id=AhyjbXSmUN}},
++  note         = {Anonymous manuscript submitted to NeurIPS 2025}
+ }
+ 
+ %% adjusted during protocol-v3 review: previous entry ("OpenReview / ICLR,
+@@ -327,9 +333,8 @@
+ %% adjusted during protocol-v3 review: previous entry cited the CESifo working
+ %% paper (No. 10598, which is from 2023, not 2024); the published version is in
+ %% the Journal of Banking & Finance (2025), cited below.
+-%% VERIFY: the figures quoted in the thesis ($1.65B on-chain, 19 categories,
+-%% ~16x FTC underreporting, $274M giveaways, ~60% Ponzi share) were taken from
+-%% the working paper -- re-check them against the journal version.
++%% The journal version also reports the $1.65B total, 19 categories,
++%% almost 16x FTC comparison, and approximately 60% Ponzi share.
+ @article{hornuf2025cybercrime,
+   author    = {Hornuf, Lars and Momtaz, Paul P. and Nam, Rachel J. and Yuan, Ye},
+   title     = {Cybercrime on the {Ethereum} Blockchain},
+@@ -352,18 +357,18 @@
+   doi       = {10.1016/j.future.2019.08.014}
+ }
+ 
+-@inproceedings{li2021cryptocurrency,
++@misc{li2021cryptocurrency,
+   author    = {Li, Tao and Shin, Donghwa and Wang, Baolian},
+   title     = {Cryptocurrency Pump-and-Dump Schemes},
+-  booktitle = {SSRN Working Paper},
++  howpublished = {SSRN Working Paper. \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3267041}},
+   year      = {2021},
+   url       = {https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3267041}
+ }
+ 
+-@inproceedings{xia2021rugpull,
++@article{xia2021rugpull,
+   author    = {Xia, Pengcheng and Wang, Haoyu and Zhang, Bingyu and Ji, Ren and Gao, Binhui and Wu, Lei and Luo, Xiapu and Guo, Yajin},
+-  title     = {Trade or Trick? {Detecting} and Characterizing Scam Tokens on Uniswap Decentralized Exchange},
+-  booktitle = {Proceedings of the ACM on Measurement and Analysis of Computing Systems},
++  title     = {Trade or Trick? {Detecting} and Characterizing Scam Tokens on {Uniswap} Decentralized Exchange},
++  journal   = {Proceedings of the ACM on Measurement and Analysis of Computing Systems},
+   volume    = {5},
+   number    = {3},
+   year      = {2021},
+@@ -389,7 +394,7 @@
+   author    = {Li, Song and Zhou, Jiandong and Mo, Chong and Li, Jin
+                and Tso, Geoffrey K. F. and Tian, Yuxing},
+   title     = {Motif-aware group signed temporal {GCN} for anomaly
+-               detection in bitcoin trust networks},
++               detection in {Bitcoin} trust networks},
+   journal   = {arXiv preprint arXiv:2211.13123v2},
+   year      = {2023},
+   url       = {https://arxiv.org/abs/2211.13123v2}
+@@ -457,8 +462,7 @@
+   number    = {1},
+   pages     = {1--16},
+   year      = {2020},
+-  doi       = {10.1145/3398071},
+-  note      = {VERIFY: confirm this is the intended reference}
++  doi       = {10.1145/3398071}
+ }
+ 
+ @article{chen2020survey,
+@@ -471,8 +475,7 @@
+   number    = {3},
+   pages     = {1--43},
+   year      = {2020},
+-  doi       = {10.1145/3391195},
+-  note      = {VERIFY: confirm this is the intended reference}
++  doi       = {10.1145/3391195}
+ }
+ 
+ % BEGIN PROFESSOR FEEDBACK ROUND 2: Additional related-work references
+--- a/writing/generated/results_rq1_representations.tex
++++ b/writing/generated/results_rq1_representations.tex
+@@ -3,6 +3,7 @@
+ \caption{Secondary RQ1 representation comparisons at the development-selected window using the default timestamp ordering. The first comparison tests fingerprint shape beyond total motif count. The second tests the combined model against a baseline augmented with motif composition and volume. P-values use Benjamini--Hochberg correction within the comparison family for each sample.}
+ \label{tab:res_rq1_representations}
+ \scriptsize
++\setlength{\tabcolsep}{5pt}
+ \begin{tabular}{@{}r l p{3.4cm} r r r c r l@{}}
+ \toprule
+ \textbf{Sample} & \textbf{Cohort} & \textbf{Comparison} & \textbf{Ref.} & \textbf{Alt.} & \textbf{$\Delta$AP} & \textbf{95\,\% CI} & \textbf{$p_{\mathrm{BH}}$} & \textbf{Significant?} \\
+--- a/writing/generated/results_hypothesis.tex
++++ b/writing/generated/results_hypothesis.tex
+@@ -1,7 +1,8 @@
+ % BEGIN PROFESSOR FEEDBACK: research-question summary
+ \begin{table}[ht]
+ \centering
+-\caption{Summary of the answers to the four research questions.}
++\caption{Summary of the answers to the four research questions. The ordering
++checks for RQ1 and RQ2 refer to the 40-role Hugging Face analysis.}
+ \label{tab:res_hypothesis}
+ \footnotesize
+ \begin{tabular}{@{}l p{3.6cm} p{4.0cm} p{4.0cm}@{}}
+--- a/writing/generated/results_cohorts.tex
++++ b/writing/generated/results_cohorts.tex
+@@ -1,6 +1,6 @@
+ \begin{table}[ht]
+ \centering
+-\caption{The three non-overlapping HuggingFace samples. The source contains 114,739 labelled targets. 39,332 pass the common activity and upper-tail rules before previously selected samples are excluded.}
++\caption{The three non-overlapping Hugging Face samples. The source contains 114,739 labelled targets. 39,332 pass the common activity and upper-tail rules before previously selected samples are excluded.}
+ \label{tab:res_cohorts}
+ \footnotesize
+ \begin{tabular}{@{}r r r r r r@{}}
+--- a/writing/generated/results_rq1_triangles.tex
++++ b/writing/generated/results_rq1_triangles.tex
+@@ -1,6 +1,6 @@
+ \begin{table}[ht]
+ \centering
+-\caption{RQ1 triangle-role comparison in the 40-role HuggingFace analysis at the selected 30-day window using the default timestamp ordering. Corrected $p$-values account for the representation comparisons.}
++\caption{RQ1 triangle-role comparison in the 40-role Hugging Face analysis at the selected 30-day window using the default timestamp ordering. Corrected $p$-values account for the representation comparisons.}
+ \label{tab:res_rq1_triangles}
+ \footnotesize
+ \begin{tabular}{@{}l l r r r c r l@{}}

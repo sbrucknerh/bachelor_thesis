@@ -1,0 +1,16 @@
+\begin{table}[ht]
+\centering
+\caption{RQ1 triangle-role comparison in the 40-role Hugging Face analysis at the selected 30-day window using the default timestamp ordering. Corrected $p$-values account for the representation comparisons.}
+\label{tab:res_rq1_triangles}
+\footnotesize
+\begin{tabular}{@{}l l r r r c r l@{}}
+\toprule
+\textbf{Cohort} & \textbf{Comparison} & \textbf{Ref.} & \textbf{Alt.} & \textbf{$\Delta$AP} & \textbf{95\,\% CI} & \textbf{$p_{\mathrm{BH}}$} & \textbf{Significant?} \\
+\midrule
+Controlled & triangles added to baseline & 0.735 & 0.736 & 0.001 & [-0.020, 0.024] & 0.540 & no \\
+Controlled & 40 roles versus 32 roles & 0.752 & 0.759 & 0.007 & [-0.011, 0.026] & 0.464 & no \\
+Prevalence & triangles added to baseline & 0.599 & 0.599 & 0.000 & [-0.025, 0.025] & 0.547 & no \\
+Prevalence & 40 roles versus 32 roles & 0.611 & 0.615 & 0.004 & [-0.016, 0.024] & 0.448 & no \\
+\bottomrule
+\end{tabular}
+\end{table}

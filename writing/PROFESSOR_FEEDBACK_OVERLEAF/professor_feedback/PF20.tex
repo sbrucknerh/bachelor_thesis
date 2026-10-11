@@ -1,0 +1,50 @@
+% BEGIN PROFESSOR FEEDBACK PF20: Results - RQ2
+\section{RQ2: Sensitivity to the Temporal Window}
+
+AP and fingerprint coverage generally increase over the tested window range.
+Figure~\ref{fig:res_rq2_delta} shows how held-out
+average precision and motif coverage change across the nine tested windows in
+the 40-role HuggingFace analysis. The baseline is fixed because its features do
+not depend on $\delta$. Table~\ref{tab:res_rq2} shows the windows selected on the
+development data in all three samples.
+
+\begin{figure}[p]
+  \centering
+  \ResGraphic{0.48}{rq2_delta_performance_controlled_rep3}
+  \ResGraphic{0.48}{rq2_delta_performance_prevalence_rep3}\\[4pt]
+  \ResGraphic{0.48}{rq2_motif_coverage_controlled_rep3}
+  \ResGraphic{0.48}{rq2_motif_coverage_prevalence_rep3}
+  \caption{RQ2 temporal-window sensitivity in the 40-role HuggingFace analysis
+  using the default timestamp ordering. The controlled cohort is shown on the
+  left and the prevalence cohort on the right. The top row reports held-out
+  average precision with shaded 95\,\% bootstrap confidence intervals.
+  The bottom row reports fingerprint coverage across all addresses
+  in each cohort.}
+  \label{fig:res_rq2_delta}
+\end{figure}
+
+\IfFileExists{generated/results_rq2.tex}{\input{generated/results_rq2}}{\ResPendingTable{RQ2 selected window against alternatives.}{tab:res_rq2}}
+
+Both 32-role controlled cohorts select two weeks, while the 40-role controlled
+cohort and all three prevalence cohorts select 30 days. In the 40-role analysis,
+30 days is selected in both cohorts under all seven timestamp
+orderings, while two weeks remains within one standard error of the maximum.
+Mean development-CV AP increases from 0.7431 at five minutes to 0.7760 at 30
+days in the controlled cohort, and from 0.5897 to 0.6253 in the prevalence
+cohort. The binary Real-CATS comparison also selects 30 days, although three
+days is already within one standard error of its maximum.
+
+After correction for multiple comparisons, none of the three HuggingFace
+samples has a selected maximum that is better than every other tested window
+under all orderings. In the 40-role controlled cohort, five of the eight
+comparisons with 30 days are significant using the default ordering. In the
+prevalence cohort, none is significant. The 30-day window is the largest tested
+value. It has the highest development score in the 40-role analysis, while
+two weeks is within one standard error of that maximum.
+
+Fingerprint coverage increases from 12.2\% at five minutes to 77.7\% at 30 days in
+the 40-role controlled cohort. In the prevalence cohort, it increases
+from 11.1\% to 75.9\%. This means that 22.3\% and 24.1\% of the respective addresses still
+have no retained three-edge candidate pattern even at 30 days.
+% END PROFESSOR FEEDBACK PF20
+

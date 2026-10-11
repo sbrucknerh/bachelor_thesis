@@ -1,0 +1,188 @@
+% BEGIN PROFESSOR FEEDBACK PF09: Method - Data acquisition
+\section{Data acquisition}
+\label{sec:data_acquisition}
+
+Studying coordinated malicious behaviour on-chain needs two things at once:
+transaction data, and reliable labels that say which addresses are malicious.
+This combination is scarce. Transactions are public, but the intent behind an
+address can only be established off-chain, through abuse reports, exchange
+records, or investigations, and such labels are rare and unevenly spread across
+the network \citep{shi2025realcats}. To work around this, the reported
+evaluation uses a main Ethereum dataset and the category-labelled Real-CATS
+dataset. Separate synthetic templates check the correctness of subgraph
+counting. The pipeline also supports BLTE as an optional secondary
+check, but no BLTE result is used to answer the research questions in this
+thesis. The origin and prior use of the two published datasets, BLTE and
+Real-CATS, were already covered in Section~\ref{sec:relwork_datasets}. Here each
+real-world dataset is described by its source, its contents, and its
+suitability for this thesis. Validation templates and the distinction between
+predictive tests and network null models are described separately below.
+
+\subsection{Real-world datasets}
+
+\paragraph{Hugging Face (HF) Ethereum Fraud Dataset.}
+\label{sec:dataset_hf}
+\textit{Source.} The dataset is published on the Hugging Face Hub
+\citep{fesevu2025ethfraud}. This thesis uses its full-history release, which
+pairs a complete transaction table with a set of labelled addresses, rather than
+one of the smaller monthly extracts.
+
+\textit{Contents.} The dataset has two parts. The first is a transaction table
+of 380{,}566{,}661 transfers recorded between August 2015 and August 2025. Each
+transfer carries:
+\begin{itemize}
+  \item the sending and receiving address, as hashed identifiers,
+  \item the timestamp of the transfer,
+  \item the transferred value,
+  \item the transaction hash and block number,
+  \item a flag marking contract-creation transactions, and
+  \item the transaction fee.
+\end{itemize}
+The second part is a label table of 114{,}739 addresses, of which 60{,}086 are
+benign and 54{,}653 fraudulent. Each labelled address also states whether it is
+a contract or an ordinary account, and carries a short text description of the
+reported activity.
+
+\textit{Suitability.} This is the main dataset of the thesis, and it carries the
+evaluation for RQ1 and RQ2. It is the only dataset used here that
+combines full timestamped transaction histories with a large and roughly
+balanced set of malicious and benign labels. The timestamps matter because
+temporal motifs depend on the exact timing and order of transfers, and the size
+of the label set is large enough to draw more than one cohort of addresses while
+still keeping an untouched test set aside.
+
+\paragraph{BLTE.}
+\label{sec:dataset_blte}
+\textit{Source.} BLTE was introduced by \citet{alemari2021labeled} and is built
+on the Ethereum Classic chain. Its origin and the results reported on it by
+earlier work were described in Section~\ref{sec:relwork_datasets}. Here it is
+used as obtained from the public release.
+
+\textit{Contents.} The dataset contains 71{,}250 transactions from October 2017
+to December 2019, labelled one transaction at a time as normal or abnormal.
+There are 57{,}000 normal and 14{,}250 abnormal transactions, so about one
+transaction in five is abnormal. Each record provides:
+\begin{itemize}
+  \item the transaction hash and nonce,
+  \item the sending and receiving address,
+  \item the transferred value, the gas, and the gas price,
+  \item the block timestamp, block number, and block hash, and
+  \item four labelling fields that mark whether the sender or the receiver is a
+        known scam, and of which category.
+\end{itemize}
+A set of pre-computed per-address features is distributed alongside the raw
+transactions, but this thesis does not use them, for the reason given below.
+
+\textit{Suitability.} BLTE can be used as an optional secondary check of whether
+the main finding also appears in another Ethereum-based dataset. It is less
+directly comparable with the main dataset because its labels apply to
+transactions rather than addresses and because only 169 of its 73{,}034 active
+addresses are marked as scams. A BLTE run is therefore kept separate from the
+main evaluation and uses class weighting to account for this imbalance. The
+pre-computed features are left aside so that the same behavioural features can
+be computed as for the other datasets. No completed BLTE result is included in
+the Results chapter, and BLTE is not needed to answer any of the four research
+questions.
+
+\paragraph{Real-CATS.}
+\label{sec:dataset_realcats}
+\textit{Source.} Real-CATS was introduced by \citet{shi2025realcats}. Its design
+and the sources of its labels were described in
+Section~\ref{sec:relwork_datasets}. This thesis uses its Ethereum portion
+together with the detailed transaction records released alongside it.
+
+\textit{Contents.} The Ethereum portion covers 12{,}572 criminal and 16{,}019
+benign addresses. For each address the dataset provides its transaction history,
+split into five separate layers: ordinary transfers, internal transfers, and
+ERC-20, ERC-721, and ERC-1155 token transfers. What sets Real-CATS apart from
+the other datasets is that its criminal addresses carry a specific category,
+rather than a single malicious flag. The categories are:
+\begin{itemize}
+  \item Phishing Scam and Impersonation Scam,
+  \item Contract Exploit Scam and Hack Scam,
+  \item Blackmail Scam and Fake Returns Scam,
+  \item Rug Pull Scam, NFT Airdrop Scam, and Pigbutchering Scam.
+\end{itemize}
+
+\textit{Suitability.} Real-CATS is the dataset used for RQ3 and RQ4. Its detailed
+categories are what make both questions possible, because they allow the motif
+fingerprints of different reported malicious behaviours to be compared directly,
+rather than only a single malicious-versus-benign split. The labels do not state
+whether an address belongs to a coordinated campaign, so the experiment tests
+category-level fingerprint differences rather than independently verified
+coordination. The labels are also
+independent of the main dataset, since they come from public abuse reports
+instead of the process behind the HuggingFace release. The categories are very
+unevenly filled, with phishing and impersonation together accounting for most of
+the criminal addresses, so RQ3 and RQ4 are limited to the categories that have
+enough addresses to support a fair comparison and treat the smaller ones as
+descriptive only. The catch-all category \emph{Other} is excluded as well, even
+though it is large enough to qualify, because it collects unrelated reports and
+therefore does not describe one kind of behaviour.
+
+\begin{table}[ht]
+\centering
+\caption{The real-world datasets and their roles. The malicious share is
+computed over addresses. Synthetic validation templates are described
+separately in Section~\ref{sec:dataset_synthetic}.}
+\label{tab:dataset_comparison}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{3.1cm} p{3.1cm} p{3.0cm} p{3.2cm}@{}}
+\toprule
+\textbf{Property} & \textbf{HuggingFace} & \textbf{BLTE} & \textbf{Real-CATS} \\
+\midrule
+Chain              & Ethereum      & Ethereum Classic & Ethereum \\
+Transactions       & 380.6 million & 71{,}250         & per-address histories \\
+Label level        & address       & transaction      & address \\
+Address coverage   & 114{,}739 labelled & 73{,}034 active & 28{,}591 labelled \\
+Malicious share    & 47.6\,\%      & 0.23\,\%         & 44.0\,\% \\
+Date range         & 2015--2025    & 2017--2019       & per release \\
+Category analysis  & no            & no               & 9 retained categories \\
+Role               & RQ1, RQ2      & optional check   & RQ3, RQ4 and binary check \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Validation templates and null models}
+\label{sec:validation_and_null_models}
+
+\paragraph{Synthetic validation templates.}
+\label{sec:dataset_synthetic}
+The validation data is generated in code. Each template contains exactly three
+directed transfers on two or three nodes, with known directions and timestamps
+and no additional background edges. The templates systematically cover the
+patterns accepted by the counter. They do not simulate complete fraud campaigns
+or provide malicious-address labels. A three-node structure may resemble one
+part of a plausible scam, such as collecting and forwarding funds, but it
+remains a candidate motif before any statistical comparison.
+
+Raphtory returns an ordered vector of 40 local motif-role counts for each
+address. A position means one component of that vector, not one of 40 global
+patterns. The templates check all 24 star-centre roles, eight two-node roles,
+and eight triangle roles. The difference from the 36 global patterns of
+\citet{paranjape2017motifs} is explained in
+Section~\ref{sec:motifcountingandretainedroles}. The templates also check
+transfers exactly at a window boundary and transfers with equal timestamps.
+Their purpose is to confirm that subgraph counting recognises a known two- or
+three-node structure and assigns the expected local role counts. They are
+never used to measure detection performance or compared with real-world
+datasets as examples of fraud.
+
+\paragraph{Network null models.}
+A validation template has a known answer for the counter. A network null model
+serves a different purpose: it generates random reference networks against which
+the observed frequency of a candidate pattern can be tested
+\citep{milo2002network}. For example, shuffling timestamps while retaining the
+observed directed transfers would test their temporal arrangement conditional
+on that fixed structure. The choice of preserved properties determines the
+claim that such a comparison can support.
+
+The completed experiments do not include a random-network null model, so no
+individual candidate is claimed to be statistically overrepresented. The
+permutation and bootstrap procedures in
+Section~\ref{sec:evaluation_protocol} instead assess predictive differences and
+category separability. The alternative orderings of equal-timestamp transfers
+are sensitivity checks, not random-network references.
+% END PROFESSOR FEEDBACK PF09
+

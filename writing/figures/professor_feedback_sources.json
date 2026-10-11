@@ -1,0 +1,1392 @@
+{
+  "sources": {
+    "hf": "server-results/results_22_08_2026/extracted/results/experiments/thesis_final_v8_hf",
+    "realcats": "server-results/results_22_08_2026/extracted/results/experiments/thesis_final_v8_realcats"
+  },
+  "realcats": {
+    "global_delta": 1209600,
+    "selected_components": [
+      "normal__two_node_ooo",
+      "normal__star_post_ooo",
+      "normal__star_pre_ooo",
+      "internal__two_node_iii",
+      "erc20__star_pre_iio",
+      "erc721__star_pre_iio",
+      "internal__star_pre_iii",
+      "normal__star_mid_ooo",
+      "internal__star_post_iii",
+      "erc20__star_mid_ioi",
+      "erc20__star_post_ioo",
+      "normal__star_post_ioo",
+      "normal__star_mid_oio",
+      "erc721__two_node_iii",
+      "erc20__star_post_iii",
+      "erc721__star_post_iii",
+      "erc20__star_post_oii",
+      "erc20__star_mid_oio",
+      "erc20__star_pre_iii",
+      "erc721__star_pre_iii",
+      "erc20__star_pre_ooi",
+      "erc721__star_post_ioo",
+      "erc20__star_post_ooo",
+      "erc20__star_pre_ooo",
+      "normal__star_pre_ooi",
+      "erc20__two_node_iii",
+      "normal__two_node_iii",
+      "normal__star_pre_iii",
+      "normal__star_post_iii",
+      "erc20__star_mid_iii",
+      "erc20__star_mid_ooo",
+      "internal__star_mid_iii",
+      "erc721__star_post_oii",
+      "internal__two_node_ooo",
+      "erc20__two_node_ooo",
+      "normal__star_mid_ioi",
+      "normal__star_mid_iii",
+      "erc20__star_post_iio",
+      "normal__star_pre_iio",
+      "erc721__star_post_ooo"
+    ],
+    "category_means": {
+      "Blackmail Scam": {
+        "normal__two_node_ooo": 0.1709695733844002,
+        "normal__star_post_ooo": 0.32812532267658373,
+        "normal__star_pre_ooo": 0.32489376713146484,
+        "internal__two_node_iii": 0.24396725064328417,
+        "erc20__star_pre_iio": 0.0808231136067528,
+        "erc721__star_pre_iio": 0.2298645056901835,
+        "internal__star_pre_iii": 0.17316562188166146,
+        "normal__star_mid_ooo": 0.21807865270456758,
+        "internal__star_post_iii": 0.1293447171108149,
+        "erc20__star_mid_ioi": 0.047688310821240795,
+        "erc20__star_post_ioo": 0.1461810745878098,
+        "normal__star_post_ioo": 0.20786331805372688,
+        "normal__star_mid_oio": 0.1089743584394414,
+        "erc721__two_node_iii": 0.14641476905091924,
+        "erc20__star_post_iii": 0.08182454716581819,
+        "erc721__star_post_iii": 0.1487901923298768,
+        "erc20__star_post_oii": 0.054040584880562806,
+        "erc20__star_mid_oio": 0.1392539834661977,
+        "erc20__star_pre_iii": 0.10044463306454768,
+        "erc721__star_pre_iii": 0.1511414868590848,
+        "erc20__star_pre_ooi": 0.1332398632050055,
+        "erc721__star_post_ioo": 0.15503504706576857,
+        "erc20__star_post_ooo": 0.09941553932202941,
+        "erc20__star_pre_ooo": 0.11381845494499875,
+        "normal__star_pre_ooi": 0.149616772891773,
+        "erc20__two_node_iii": 0.05465276382211867,
+        "normal__two_node_iii": 0.06711925277192832,
+        "normal__star_pre_iii": 0.14256076187074446,
+        "normal__star_post_iii": 0.15747976113168058,
+        "erc20__star_mid_iii": 0.04621502732186203,
+        "erc20__star_mid_ooo": 0.10319236927652102,
+        "internal__star_mid_iii": 0.11374007113721443,
+        "erc721__star_post_oii": 0.09796712608830109,
+        "internal__two_node_ooo": 0.015356466903126422,
+        "erc20__two_node_ooo": 0.08589298764557901,
+        "normal__star_mid_ioi": 0.04247126207438201,
+        "normal__star_mid_iii": 0.07494606825392619,
+        "erc20__star_post_iio": 0.014316925535686769,
+        "normal__star_pre_iio": 0.08574229107494978,
+        "erc721__star_post_ooo": 0.07920920749776252
+      },
+      "Contract Exploit Scam": {
+        "normal__two_node_ooo": 0.2853976870774542,
+        "normal__star_post_ooo": 0.2759893746720436,
+        "normal__star_pre_ooo": 0.23886218195247796,
+        "internal__two_node_iii": 0.2180315622167202,
+        "erc20__star_pre_iio": 0.19502916589870414,
+        "erc721__star_pre_iio": 0.027689579915979066,
+        "internal__star_pre_iii": 0.172909106983723,
+        "normal__star_mid_ooo": 0.1460992421490564,
+        "internal__star_post_iii": 0.17558246638033673,
+        "erc20__star_mid_ioi": 0.0722606815399727,
+        "erc20__star_post_ioo": 0.14142386924958694,
+        "normal__star_post_ioo": 0.138846270761191,
+        "normal__star_mid_oio": 0.06459148097177589,
+        "erc721__two_node_iii": 0.03173945727072718,
+        "erc20__star_post_iii": 0.13621107128422252,
+        "erc721__star_post_iii": 0.010657376657743698,
+        "erc20__star_post_oii": 0.08683307656772536,
+        "erc20__star_mid_oio": 0.0748196926260188,
+        "erc20__star_pre_iii": 0.13686819699309813,
+        "erc721__star_pre_iii": 0.011120322165515456,
+        "erc20__star_pre_ooi": 0.07063928968005324,
+        "erc721__star_post_ioo": 0.011657263512510618,
+        "erc20__star_post_ooo": 0.0927305956994297,
+        "erc20__star_pre_ooo": 0.08456341780312392,
+        "normal__star_pre_ooi": 0.10658308990602985,
+        "erc20__two_node_iii": 0.14562139537050278,
+        "normal__two_node_iii": 0.08445732119978169,
+        "normal__star_pre_iii": 0.06778386750639136,
+        "normal__star_post_iii": 0.062053124949162215,
+        "erc20__star_mid_iii": 0.06631637968749059,
+        "erc20__star_mid_ooo": 0.053868293569784155,
+        "internal__star_mid_iii": 0.07618935401138453,
+        "erc721__star_post_oii": 0.00831800188752632,
+        "internal__two_node_ooo": 0.006327901722106379,
+        "erc20__two_node_ooo": 0.06365094573118088,
+        "normal__star_mid_ioi": 0.03513141167803353,
+        "normal__star_mid_iii": 0.030626216858222692,
+        "erc20__star_post_iio": 0.08203926646985613,
+        "normal__star_pre_iio": 0.05098684223307043,
+        "erc721__star_post_ooo": 0.008094965936968342
+      },
+      "Fake Returns Scam": {
+        "normal__two_node_ooo": 0.3168578813848929,
+        "normal__star_post_ooo": 0.11779373583568652,
+        "normal__star_pre_ooo": 0.138743915675877,
+        "internal__two_node_iii": 0.1054942283480563,
+        "erc20__star_pre_iio": 0.10723709175559804,
+        "erc721__star_pre_iio": 0.01105540756483683,
+        "internal__star_pre_iii": 0.023568315679440906,
+        "normal__star_mid_ooo": 0.10471453795583346,
+        "internal__star_post_iii": 0.02992821657546524,
+        "erc20__star_mid_ioi": 0.083148581415503,
+        "erc20__star_post_ioo": 0.14603310704634548,
+        "normal__star_post_ioo": 0.17204900700528653,
+        "normal__star_mid_oio": 0.11905394494097676,
+        "erc721__two_node_iii": 0.004575310413602244,
+        "erc20__star_post_iii": 0.08279648953467375,
+        "erc721__star_post_iii": 0.006763835591589194,
+        "erc20__star_post_oii": 0.07548673821444458,
+        "erc20__star_mid_oio": 0.10537150967036733,
+        "erc20__star_pre_iii": 0.09457496176810103,
+        "erc721__star_pre_iii": 0.003644064878415337,
+        "erc20__star_pre_ooi": 0.10033896933783641,
+        "erc721__star_post_ioo": 0.004223835678370678,
+        "erc20__star_post_ooo": 0.13005784112488497,
+        "erc20__star_pre_ooo": 0.11590024650273587,
+        "normal__star_pre_ooi": 0.10274216757763911,
+        "erc20__two_node_iii": 0.07548956425972315,
+        "normal__two_node_iii": 0.06401027824856094,
+        "normal__star_pre_iii": 0.09412418697628505,
+        "normal__star_post_iii": 0.09547476101082408,
+        "erc20__star_mid_iii": 0.0679837946430669,
+        "erc20__star_mid_ooo": 0.09874837786703654,
+        "internal__star_mid_iii": 0.015309691050934824,
+        "erc721__star_post_oii": 0.0033824783700130276,
+        "internal__two_node_ooo": 0.0026968006522506828,
+        "erc20__two_node_ooo": 0.09373741950435772,
+        "normal__star_mid_ioi": 0.051979049840155306,
+        "normal__star_mid_iii": 0.07057495611724987,
+        "erc20__star_post_iio": 0.01776130355016018,
+        "normal__star_pre_iio": 0.09189706674056787,
+        "erc721__star_post_ooo": 0.0027188089379236733
+      },
+      "Hack Scam": {
+        "normal__two_node_ooo": 0.10565055171190779,
+        "normal__star_post_ooo": 0.14732480949842464,
+        "normal__star_pre_ooo": 0.16616300570469503,
+        "internal__two_node_iii": 0.2008934043223137,
+        "erc20__star_pre_iio": 0.18717468390724112,
+        "erc721__star_pre_iio": 0.037270963442137435,
+        "internal__star_pre_iii": 0.12123796296842353,
+        "normal__star_mid_ooo": 0.11158755418208784,
+        "internal__star_post_iii": 0.1169386296463398,
+        "erc20__star_mid_ioi": 0.05925158181932058,
+        "erc20__star_post_ioo": 0.17259185041871491,
+        "normal__star_post_ioo": 0.15647564265714667,
+        "normal__star_mid_oio": 0.062286058571599405,
+        "erc721__two_node_iii": 0.047584433427483835,
+        "erc20__star_post_iii": 0.14648352933409176,
+        "erc721__star_post_iii": 0.023383421423961655,
+        "erc20__star_post_oii": 0.10220970395965709,
+        "erc20__star_mid_oio": 0.08318049483516848,
+        "erc20__star_pre_iii": 0.16111846060251409,
+        "erc721__star_pre_iii": 0.02523483052911896,
+        "erc20__star_pre_ooi": 0.11747949101143358,
+        "erc721__star_post_ioo": 0.013541266997749662,
+        "erc20__star_post_ooo": 0.14079724189522572,
+        "erc20__star_pre_ooo": 0.12686120032156356,
+        "normal__star_pre_ooi": 0.0790227184014983,
+        "erc20__two_node_iii": 0.08563137869629289,
+        "normal__two_node_iii": 0.17798113847579003,
+        "normal__star_pre_iii": 0.17781202775927715,
+        "normal__star_post_iii": 0.173710943456093,
+        "erc20__star_mid_iii": 0.07064488439767078,
+        "erc20__star_mid_ooo": 0.0791078021415102,
+        "internal__star_mid_iii": 0.059670463720131454,
+        "erc721__star_post_oii": 0.008778279803311142,
+        "internal__two_node_ooo": 0.05288314949493179,
+        "erc20__two_node_ooo": 0.08395372293225288,
+        "normal__star_mid_ioi": 0.04346764478648591,
+        "normal__star_mid_iii": 0.11343290273927491,
+        "erc20__star_post_iio": 0.05867242077066995,
+        "normal__star_pre_iio": 0.11387902681016641,
+        "erc721__star_post_ooo": 0.015194168839480311
+      },
+      "Impersonation Scam": {
+        "normal__two_node_ooo": 0.039741453055099296,
+        "normal__star_post_ooo": 0.05365452173815173,
+        "normal__star_pre_ooo": 0.05638186256605122,
+        "internal__two_node_iii": 0.03702130440138097,
+        "erc20__star_pre_iio": 0.021224617521679166,
+        "erc721__star_pre_iio": 0.004840931016688208,
+        "internal__star_pre_iii": 0.01181393209941748,
+        "normal__star_mid_ooo": 0.03817683749565262,
+        "internal__star_post_iii": 0.012001676355916995,
+        "erc20__star_mid_ioi": 0.011438707065091565,
+        "erc20__star_post_ioo": 0.024047555583175024,
+        "normal__star_post_ioo": 0.097754486424961,
+        "normal__star_mid_oio": 0.04869161433698417,
+        "erc721__two_node_iii": 0.005297563183669323,
+        "erc20__star_post_iii": 0.017916742878157497,
+        "erc721__star_post_iii": 0.004153895087145282,
+        "erc20__star_post_oii": 0.01023943487814486,
+        "erc20__star_mid_oio": 0.014332507565637555,
+        "erc20__star_pre_iii": 0.043771782697573244,
+        "erc721__star_pre_iii": 0.003610342797986328,
+        "erc20__star_pre_ooi": 0.012651564104336429,
+        "erc721__star_post_ioo": 0.003919819972211982,
+        "erc20__star_post_ooo": 0.011700304565540682,
+        "erc20__star_pre_ooo": 0.013024560962580653,
+        "normal__star_pre_ooi": 0.03463827676252463,
+        "erc20__two_node_iii": 0.015793299284108112,
+        "normal__two_node_iii": 0.024935688622543167,
+        "normal__star_pre_iii": 0.1179710760130492,
+        "normal__star_post_iii": 0.11963396701143995,
+        "erc20__star_mid_iii": 0.009032086484346653,
+        "erc20__star_mid_ooo": 0.008539317618954401,
+        "internal__star_mid_iii": 0.008727342466266488,
+        "erc721__star_post_oii": 0.002726440295019749,
+        "internal__two_node_ooo": 0.00599642427911722,
+        "erc20__two_node_ooo": 0.008840119252170186,
+        "normal__star_mid_ioi": 0.019782873345511227,
+        "normal__star_mid_iii": 0.07299945421292092,
+        "erc20__star_post_iio": 0.0026522274700924555,
+        "normal__star_pre_iio": 0.0738294481869824,
+        "erc721__star_post_ooo": 0.0019604950123461987
+      },
+      "NFT Airdrop Scam": {
+        "normal__two_node_ooo": 0.15035995596038798,
+        "normal__star_post_ooo": 0.28971942257261535,
+        "normal__star_pre_ooo": 0.26032575538684144,
+        "internal__two_node_iii": 0.2756988137409227,
+        "erc20__star_pre_iio": 0.1293588822629494,
+        "erc721__star_pre_iio": 0.11328584510317395,
+        "internal__star_pre_iii": 0.1401748511875429,
+        "normal__star_mid_ooo": 0.20005974594175316,
+        "internal__star_post_iii": 0.17861925014758703,
+        "erc20__star_mid_ioi": 0.06125475691773993,
+        "erc20__star_post_ioo": 0.15892545626825588,
+        "normal__star_post_ioo": 0.14260120617988245,
+        "normal__star_mid_oio": 0.08598848324639455,
+        "erc721__two_node_iii": 0.11682436517629656,
+        "erc20__star_post_iii": 0.1714044573620753,
+        "erc721__star_post_iii": 0.11588404756448216,
+        "erc20__star_post_oii": 0.09204764928370064,
+        "erc20__star_mid_oio": 0.10420660559113287,
+        "erc20__star_pre_iii": 0.17080262351578404,
+        "erc721__star_pre_iii": 0.0887237988765197,
+        "erc20__star_pre_ooi": 0.10956264806807443,
+        "erc721__star_post_ioo": 0.05430820616394583,
+        "erc20__star_post_ooo": 0.09319156316533127,
+        "erc20__star_pre_ooo": 0.08959023708919983,
+        "normal__star_pre_ooi": 0.0839344238989382,
+        "erc20__two_node_iii": 0.06379228750665866,
+        "normal__two_node_iii": 0.13113061813691332,
+        "normal__star_pre_iii": 0.1823451349206402,
+        "normal__star_post_iii": 0.18011256825719413,
+        "erc20__star_mid_iii": 0.08048751229774867,
+        "erc20__star_mid_ooo": 0.06403901455971768,
+        "internal__star_mid_iii": 0.10954105763560555,
+        "erc721__star_post_oii": 0.04688600468874406,
+        "internal__two_node_ooo": 0.0938228141036064,
+        "erc20__two_node_ooo": 0.06354627508370096,
+        "normal__star_mid_ioi": 0.030398218924770445,
+        "normal__star_mid_iii": 0.11224638107038433,
+        "erc20__star_post_iio": 0.03554483669028516,
+        "normal__star_pre_iio": 0.06904177460563639,
+        "erc721__star_post_ooo": 0.031964822980533915
+      },
+      "Phishing Scam": {
+        "normal__two_node_ooo": 0.10580326740481519,
+        "normal__star_post_ooo": 0.1367771541937278,
+        "normal__star_pre_ooo": 0.14271683150458264,
+        "internal__two_node_iii": 0.11166249916637447,
+        "erc20__star_pre_iio": 0.0800529007404341,
+        "erc721__star_pre_iio": 0.04586493620499447,
+        "internal__star_pre_iii": 0.053788415366468695,
+        "normal__star_mid_ooo": 0.09247946126676973,
+        "internal__star_post_iii": 0.05088901100071236,
+        "erc20__star_mid_ioi": 0.03872001713260517,
+        "erc20__star_post_ioo": 0.08201812549455197,
+        "normal__star_post_ioo": 0.13950919122083622,
+        "normal__star_mid_oio": 0.06931562380300561,
+        "erc721__two_node_iii": 0.028123895028378955,
+        "erc20__star_post_iii": 0.062293521534167944,
+        "erc721__star_post_iii": 0.03466466410590206,
+        "erc20__star_post_oii": 0.0478244123853328,
+        "erc20__star_mid_oio": 0.051935836480848104,
+        "erc20__star_pre_iii": 0.07128909837317861,
+        "erc721__star_pre_iii": 0.03548085901639443,
+        "erc20__star_pre_ooi": 0.05396012727567537,
+        "erc721__star_post_ioo": 0.02796804199706054,
+        "erc20__star_post_ooo": 0.041593445303053846,
+        "erc20__star_pre_ooo": 0.04393881386868093,
+        "normal__star_pre_ooi": 0.07236598617704075,
+        "erc20__two_node_iii": 0.057725129346554264,
+        "normal__two_node_iii": 0.10417952132978478,
+        "normal__star_pre_iii": 0.19128040055294346,
+        "normal__star_post_iii": 0.179668705246611,
+        "erc20__star_mid_iii": 0.022958266469830946,
+        "erc20__star_mid_ooo": 0.027784642765292,
+        "internal__star_mid_iii": 0.03526528243269824,
+        "erc721__star_post_oii": 0.018530356806350748,
+        "internal__two_node_ooo": 0.02983249541650721,
+        "erc20__two_node_ooo": 0.04229109285597226,
+        "normal__star_mid_ioi": 0.029224358620239914,
+        "normal__star_mid_iii": 0.1022537983138695,
+        "erc20__star_post_iio": 0.013608671095751302,
+        "normal__star_pre_iio": 0.08551528337913544,
+        "erc721__star_post_ooo": 0.013214973148007134
+      },
+      "Pigbutchering Scam": {
+        "normal__two_node_ooo": 0.3945662571599554,
+        "normal__star_post_ooo": 0.23052511711365137,
+        "normal__star_pre_ooo": 0.26177680184493235,
+        "internal__two_node_iii": 0.10425012929635614,
+        "erc20__star_pre_iio": 0.2730542273543553,
+        "erc721__star_pre_iio": 0.0,
+        "internal__star_pre_iii": 0.03066833039351851,
+        "normal__star_mid_ooo": 0.2232884275390205,
+        "internal__star_post_iii": 0.04607138364483955,
+        "erc20__star_mid_ioi": 0.2251389680756101,
+        "erc20__star_post_ioo": 0.23164036053215492,
+        "normal__star_post_ioo": 0.29712969833722647,
+        "normal__star_mid_oio": 0.23789369953004474,
+        "erc721__two_node_iii": 0.0,
+        "erc20__star_post_iii": 0.19150464936571238,
+        "erc721__star_post_iii": 0.0,
+        "erc20__star_post_oii": 0.2029325104562976,
+        "erc20__star_mid_oio": 0.1926120808328441,
+        "erc20__star_pre_iii": 0.20342471107279014,
+        "erc721__star_pre_iii": 0.0,
+        "erc20__star_pre_ooi": 0.18388262163083208,
+        "erc721__star_post_ioo": 0.0,
+        "erc20__star_post_ooo": 0.16472310933586623,
+        "erc20__star_pre_ooo": 0.16989392968388017,
+        "normal__star_pre_ooi": 0.19902551318725298,
+        "erc20__two_node_iii": 0.16198480246511643,
+        "normal__two_node_iii": 0.06548594196201725,
+        "normal__star_pre_iii": 0.0778595108329843,
+        "normal__star_post_iii": 0.09428290481963207,
+        "erc20__star_mid_iii": 0.1581530108222056,
+        "erc20__star_mid_ooo": 0.1367932795231531,
+        "internal__star_mid_iii": 0.021128455082754263,
+        "erc721__star_post_oii": 0.0,
+        "internal__two_node_ooo": 0.0,
+        "erc20__two_node_ooo": 0.10010159309635412,
+        "normal__star_mid_ioi": 0.1195681056165848,
+        "normal__star_mid_iii": 0.06617508508263106,
+        "erc20__star_post_iio": 0.0293028196820355,
+        "normal__star_pre_iio": 0.13604073273548584,
+        "erc721__star_post_ooo": 0.0
+      },
+      "Rug Pull Scam": {
+        "normal__two_node_ooo": 0.23317467210816945,
+        "normal__star_post_ooo": 0.25377959393431954,
+        "normal__star_pre_ooo": 0.27837097111873527,
+        "internal__two_node_iii": 0.23466779793793352,
+        "erc20__star_pre_iio": 0.1567562006047378,
+        "erc721__star_pre_iio": 0.06373456429140435,
+        "internal__star_pre_iii": 0.08014953790668959,
+        "normal__star_mid_ooo": 0.16838768608711102,
+        "internal__star_post_iii": 0.08479699856762846,
+        "erc20__star_mid_ioi": 0.09011927306341005,
+        "erc20__star_post_ioo": 0.11266108908357557,
+        "normal__star_post_ioo": 0.19484353464281684,
+        "normal__star_mid_oio": 0.09483581724302746,
+        "erc721__two_node_iii": 0.1137093712443897,
+        "erc20__star_post_iii": 0.09408054904203889,
+        "erc721__star_post_iii": 0.05453200479332943,
+        "erc20__star_post_oii": 0.07536779471967166,
+        "erc20__star_mid_oio": 0.06680235143362999,
+        "erc20__star_pre_iii": 0.10101857206517911,
+        "erc721__star_pre_iii": 0.05926966724715958,
+        "erc20__star_pre_ooi": 0.06342615908668246,
+        "erc721__star_post_ioo": 0.027184344187401368,
+        "erc20__star_post_ooo": 0.06767360180004575,
+        "erc20__star_pre_ooo": 0.05164249262294598,
+        "normal__star_pre_ooi": 0.10909151541645118,
+        "erc20__two_node_iii": 0.04970546672340798,
+        "normal__two_node_iii": 0.05068732831283518,
+        "normal__star_pre_iii": 0.13323839538851123,
+        "normal__star_post_iii": 0.11808924147535582,
+        "erc20__star_mid_iii": 0.0464265350765988,
+        "erc20__star_mid_ooo": 0.044162081607224686,
+        "internal__star_mid_iii": 0.04339376893069901,
+        "erc721__star_post_oii": 0.033206228703092325,
+        "internal__two_node_ooo": 0.03408888901138848,
+        "erc20__two_node_ooo": 0.04602088927060883,
+        "normal__star_mid_ioi": 0.04988650773652144,
+        "normal__star_mid_iii": 0.10450504115494172,
+        "erc20__star_post_iio": 0.043163836332673976,
+        "normal__star_pre_iio": 0.07881158429062995,
+        "erc721__star_post_ooo": 0.013426506045446646
+      }
+    },
+    "classes": [
+      "Blackmail Scam",
+      "Contract Exploit Scam",
+      "Fake Returns Scam",
+      "Hack Scam",
+      "Impersonation Scam",
+      "NFT Airdrop Scam",
+      "Phishing Scam",
+      "Pigbutchering Scam",
+      "Rug Pull Scam"
+    ],
+    "confusion_matrix": [
+      [
+        13,
+        1,
+        1,
+        1,
+        4,
+        10,
+        4,
+        1,
+        5
+      ],
+      [
+        2,
+        14,
+        5,
+        5,
+        8,
+        3,
+        3,
+        2,
+        5
+      ],
+      [
+        1,
+        0,
+        7,
+        2,
+        4,
+        2,
+        1,
+        13,
+        1
+      ],
+      [
+        1,
+        4,
+        1,
+        14,
+        11,
+        7,
+        3,
+        1,
+        2
+      ],
+      [
+        15,
+        9,
+        7,
+        12,
+        283,
+        22,
+        36,
+        17,
+        19
+      ],
+      [
+        4,
+        3,
+        0,
+        3,
+        6,
+        5,
+        1,
+        2,
+        1
+      ],
+      [
+        149,
+        75,
+        68,
+        111,
+        501,
+        190,
+        260,
+        50,
+        102
+      ],
+      [
+        1,
+        1,
+        2,
+        1,
+        1,
+        1,
+        0,
+        19,
+        0
+      ],
+      [
+        2,
+        5,
+        1,
+        2,
+        3,
+        6,
+        5,
+        2,
+        10
+      ]
+    ],
+    "curves": [
+      {
+        "label": "Blackmail Scam",
+        "delta": 300,
+        "average_precision": 0.08326506391561984
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 1800,
+        "average_precision": 0.0801652435871193
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 3600,
+        "average_precision": 0.07151037155393045
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 21600,
+        "average_precision": 0.09291850372895413
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 86400,
+        "average_precision": 0.07754949478405457
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 259200,
+        "average_precision": 0.0884165450380785
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 604800,
+        "average_precision": 0.07524326172302026
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 1209600,
+        "average_precision": 0.0798424058340587
+      },
+      {
+        "label": "Blackmail Scam",
+        "delta": 2592000,
+        "average_precision": 0.08058544241737335
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 300,
+        "average_precision": 0.1048948543551604
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 1800,
+        "average_precision": 0.09076949984456724
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 3600,
+        "average_precision": 0.0908727338286277
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 21600,
+        "average_precision": 0.09950100070267878
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 86400,
+        "average_precision": 0.11710352054675525
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 259200,
+        "average_precision": 0.12486971033643321
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 604800,
+        "average_precision": 0.11621927563139409
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 1209600,
+        "average_precision": 0.12330912910444544
+      },
+      {
+        "label": "Contract Exploit Scam",
+        "delta": 2592000,
+        "average_precision": 0.11922655146799606
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 300,
+        "average_precision": 0.02076827981352024
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 1800,
+        "average_precision": 0.023582805198860322
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 3600,
+        "average_precision": 0.02887591475859456
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 21600,
+        "average_precision": 0.0246936464399162
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 86400,
+        "average_precision": 0.03165251579982878
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 259200,
+        "average_precision": 0.03419084383762498
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 604800,
+        "average_precision": 0.0496194792767401
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 1209600,
+        "average_precision": 0.04529161821331244
+      },
+      {
+        "label": "Fake Returns Scam",
+        "delta": 2592000,
+        "average_precision": 0.03955521671413248
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 300,
+        "average_precision": 0.11270022776281394
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 1800,
+        "average_precision": 0.0944521106527301
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 3600,
+        "average_precision": 0.09160517114265967
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 21600,
+        "average_precision": 0.07716998920446713
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 86400,
+        "average_precision": 0.08196213866616538
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 259200,
+        "average_precision": 0.08558481393167991
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 604800,
+        "average_precision": 0.10477016465643504
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 1209600,
+        "average_precision": 0.11790147813963645
+      },
+      {
+        "label": "Hack Scam",
+        "delta": 2592000,
+        "average_precision": 0.11137155651884108
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 300,
+        "average_precision": 0.29119419585663514
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 1800,
+        "average_precision": 0.3149221011381889
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 3600,
+        "average_precision": 0.32138096243769915
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 21600,
+        "average_precision": 0.3265842628019338
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 86400,
+        "average_precision": 0.33196638687865
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 259200,
+        "average_precision": 0.3315041522546288
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 604800,
+        "average_precision": 0.33390988846275543
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 1209600,
+        "average_precision": 0.33715647906734564
+      },
+      {
+        "label": "Impersonation Scam",
+        "delta": 2592000,
+        "average_precision": 0.33530569095798096
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 300,
+        "average_precision": 0.03745243067525636
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 1800,
+        "average_precision": 0.03029489183525168
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 3600,
+        "average_precision": 0.026546379821954104
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 21600,
+        "average_precision": 0.03617181476359424
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 86400,
+        "average_precision": 0.03855923576256956
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 259200,
+        "average_precision": 0.028089839536893542
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 604800,
+        "average_precision": 0.02234100512709786
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 1209600,
+        "average_precision": 0.0359227988058719
+      },
+      {
+        "label": "NFT Airdrop Scam",
+        "delta": 2592000,
+        "average_precision": 0.03150363005810538
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 300,
+        "average_precision": 0.7223124670461224
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 1800,
+        "average_precision": 0.7356187504384034
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 3600,
+        "average_precision": 0.7370005127605367
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 21600,
+        "average_precision": 0.7473077865915497
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 86400,
+        "average_precision": 0.7452258821488495
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 259200,
+        "average_precision": 0.7486552835070208
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 604800,
+        "average_precision": 0.7515416109049708
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 1209600,
+        "average_precision": 0.7521644801878647
+      },
+      {
+        "label": "Phishing Scam",
+        "delta": 2592000,
+        "average_precision": 0.7556952804616981
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 300,
+        "average_precision": 0.07902626299590891
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 1800,
+        "average_precision": 0.0952837605395272
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 3600,
+        "average_precision": 0.13064602640249084
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 21600,
+        "average_precision": 0.17510539322819205
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 86400,
+        "average_precision": 0.20864873873725914
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 259200,
+        "average_precision": 0.19432782754646688
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 604800,
+        "average_precision": 0.23858329146994967
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 1209600,
+        "average_precision": 0.21068865193056147
+      },
+      {
+        "label": "Pigbutchering Scam",
+        "delta": 2592000,
+        "average_precision": 0.22080463412375412
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 300,
+        "average_precision": 0.03043873632175096
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 1800,
+        "average_precision": 0.04070669572421794
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 3600,
+        "average_precision": 0.041307884339672016
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 21600,
+        "average_precision": 0.03817087637494408
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 86400,
+        "average_precision": 0.04832228713877384
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 259200,
+        "average_precision": 0.04858525233384718
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 604800,
+        "average_precision": 0.051673796965233686
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 1209600,
+        "average_precision": 0.0483045901656144
+      },
+      {
+        "label": "Rug Pull Scam",
+        "delta": 2592000,
+        "average_precision": 0.048983111230800916
+      }
+    ]
+  },
+  "controlled": {
+    "selected_delta": 2592000,
+    "ablation": {
+      "baseline": 0.7350635172644524,
+      "motifs": 0.3930253565700263,
+      "combined": 0.758733671673471
+    },
+    "curve": [
+      {
+        "delta": 300,
+        "average_precision": 0.7229120041589616
+      },
+      {
+        "delta": 1800,
+        "average_precision": 0.7257231649007417
+      },
+      {
+        "delta": 3600,
+        "average_precision": 0.7234811321523463
+      },
+      {
+        "delta": 21600,
+        "average_precision": 0.7171697596767979
+      },
+      {
+        "delta": 86400,
+        "average_precision": 0.7201996368506769
+      },
+      {
+        "delta": 259200,
+        "average_precision": 0.7374633363285272
+      },
+      {
+        "delta": 604800,
+        "average_precision": 0.7426739751974936
+      },
+      {
+        "delta": 1209600,
+        "average_precision": 0.7353608457346562
+      },
+      {
+        "delta": 2592000,
+        "average_precision": 0.758733671673471
+      }
+    ],
+    "intervals": {
+      "300": [
+        0.649482838217202,
+        0.7991006463865936
+      ],
+      "1800": [
+        0.6516749688241322,
+        0.8009754082082041
+      ],
+      "3600": [
+        0.6490250409398998,
+        0.7995130917984149
+      ],
+      "21600": [
+        0.6407412855716073,
+        0.795822140423629
+      ],
+      "86400": [
+        0.6471940851932999,
+        0.7938170669496699
+      ],
+      "259200": [
+        0.6679653950754025,
+        0.8080558405902892
+      ],
+      "604800": [
+        0.6754142763252471,
+        0.8106299699476801
+      ],
+      "1209600": [
+        0.6666769550823569,
+        0.8063175357636918
+      ],
+      "2592000": [
+        0.6931809883331239,
+        0.825131671857329
+      ]
+    },
+    "coverage": [
+      {
+        "delta": 300,
+        "label": "all",
+        "coverage": 0.1221107719145224
+      },
+      {
+        "delta": 300,
+        "label": "0",
+        "coverage": 0.1268156424581005
+      },
+      {
+        "delta": 300,
+        "label": "1",
+        "coverage": 0.1053677932405566
+      },
+      {
+        "delta": 1800,
+        "label": "all",
+        "coverage": 0.2956825119930222
+      },
+      {
+        "delta": 1800,
+        "label": "0",
+        "coverage": 0.2960893854748603
+      },
+      {
+        "delta": 1800,
+        "label": "1",
+        "coverage": 0.294234592445328
+      },
+      {
+        "delta": 3600,
+        "label": "all",
+        "coverage": 0.3549934583515046
+      },
+      {
+        "delta": 3600,
+        "label": "0",
+        "coverage": 0.3553072625698324
+      },
+      {
+        "delta": 3600,
+        "label": "1",
+        "coverage": 0.3538767395626243
+      },
+      {
+        "delta": 21600,
+        "label": "all",
+        "coverage": 0.4561709550806803
+      },
+      {
+        "delta": 21600,
+        "label": "0",
+        "coverage": 0.4474860335195531
+      },
+      {
+        "delta": 21600,
+        "label": "1",
+        "coverage": 0.4870775347912525
+      },
+      {
+        "delta": 86400,
+        "label": "all",
+        "coverage": 0.5377235063235936
+      },
+      {
+        "delta": 86400,
+        "label": "0",
+        "coverage": 0.5284916201117319
+      },
+      {
+        "delta": 86400,
+        "label": "1",
+        "coverage": 0.5705765407554672
+      },
+      {
+        "delta": 259200,
+        "label": "all",
+        "coverage": 0.6210204971652856
+      },
+      {
+        "delta": 259200,
+        "label": "0",
+        "coverage": 0.6167597765363129
+      },
+      {
+        "delta": 259200,
+        "label": "1",
+        "coverage": 0.6361829025844931
+      },
+      {
+        "delta": 604800,
+        "label": "all",
+        "coverage": 0.6768425643262101
+      },
+      {
+        "delta": 604800,
+        "label": "0",
+        "coverage": 0.6770949720670391
+      },
+      {
+        "delta": 604800,
+        "label": "1",
+        "coverage": 0.6759443339960238
+      },
+      {
+        "delta": 1209600,
+        "label": "all",
+        "coverage": 0.7274313126907981
+      },
+      {
+        "delta": 1209600,
+        "label": "0",
+        "coverage": 0.7363128491620111
+      },
+      {
+        "delta": 1209600,
+        "label": "1",
+        "coverage": 0.6958250497017893
+      },
+      {
+        "delta": 2592000,
+        "label": "all",
+        "coverage": 0.7771478412559966
+      },
+      {
+        "delta": 2592000,
+        "label": "0",
+        "coverage": 0.7938547486033519
+      },
+      {
+        "delta": 2592000,
+        "label": "1",
+        "coverage": 0.7176938369781312
+      }
+    ]
+  },
+  "prevalence": {
+    "selected_delta": 2592000,
+    "ablation": {
+      "baseline": 0.5985764255750935,
+      "motifs": 0.2782913237664589,
+      "combined": 0.614643777546115
+    },
+    "curve": [
+      {
+        "delta": 300,
+        "average_precision": 0.5763431487661749
+      },
+      {
+        "delta": 1800,
+        "average_precision": 0.5626090575848348
+      },
+      {
+        "delta": 3600,
+        "average_precision": 0.5774559646962334
+      },
+      {
+        "delta": 21600,
+        "average_precision": 0.5789789098854664
+      },
+      {
+        "delta": 86400,
+        "average_precision": 0.5808225361096937
+      },
+      {
+        "delta": 259200,
+        "average_precision": 0.6053246099740466
+      },
+      {
+        "delta": 604800,
+        "average_precision": 0.5975122579924161
+      },
+      {
+        "delta": 1209600,
+        "average_precision": 0.599613394411669
+      },
+      {
+        "delta": 2592000,
+        "average_precision": 0.614643777546115
+      }
+    ],
+    "intervals": {
+      "300": [
+        0.49635554480188376,
+        0.6569384243498697
+      ],
+      "1800": [
+        0.48208572838749447,
+        0.6443735631945866
+      ],
+      "3600": [
+        0.4968709555508278,
+        0.6589271561062531
+      ],
+      "21600": [
+        0.4974233370638669,
+        0.661362021859101
+      ],
+      "86400": [
+        0.4996920897080174,
+        0.6615633570387182
+      ],
+      "259200": [
+        0.5250033861731676,
+        0.6847896635097115
+      ],
+      "604800": [
+        0.5166270152337753,
+        0.6785389176963628
+      ],
+      "1209600": [
+        0.5190871039676747,
+        0.6791985913345049
+      ],
+      "2592000": [
+        0.5346501707737579,
+        0.6926752697009547
+      ]
+    },
+    "coverage": [
+      {
+        "delta": 300,
+        "label": "all",
+        "coverage": 0.1112
+      },
+      {
+        "delta": 300,
+        "label": "0",
+        "coverage": 0.1083089394280567
+      },
+      {
+        "delta": 300,
+        "label": "1",
+        "coverage": 0.1341681574239713
+      },
+      {
+        "delta": 1800,
+        "label": "all",
+        "coverage": 0.2868
+      },
+      {
+        "delta": 1800,
+        "label": "0",
+        "coverage": 0.2850709299707273
+      },
+      {
+        "delta": 1800,
+        "label": "1",
+        "coverage": 0.3005366726296959
+      },
+      {
+        "delta": 3600,
+        "label": "all",
+        "coverage": 0.3386
+      },
+      {
+        "delta": 3600,
+        "label": "0",
+        "coverage": 0.3346093222247241
+      },
+      {
+        "delta": 3600,
+        "label": "1",
+        "coverage": 0.370304114490161
+      },
+      {
+        "delta": 21600,
+        "label": "all",
+        "coverage": 0.4506
+      },
+      {
+        "delta": 21600,
+        "label": "0",
+        "coverage": 0.4465210538167079
+      },
+      {
+        "delta": 21600,
+        "label": "1",
+        "coverage": 0.4830053667262969
+      },
+      {
+        "delta": 86400,
+        "label": "all",
+        "coverage": 0.533
+      },
+      {
+        "delta": 86400,
+        "label": "0",
+        "coverage": 0.5289349245665391
+      },
+      {
+        "delta": 86400,
+        "label": "1",
+        "coverage": 0.5652951699463328
+      },
+      {
+        "delta": 259200,
+        "label": "all",
+        "coverage": 0.6124
+      },
+      {
+        "delta": 259200,
+        "label": "0",
+        "coverage": 0.6086467011934249
+      },
+      {
+        "delta": 259200,
+        "label": "1",
+        "coverage": 0.6422182468694096
+      },
+      {
+        "delta": 604800,
+        "label": "all",
+        "coverage": 0.6714
+      },
+      {
+        "delta": 604800,
+        "label": "0",
+        "coverage": 0.6687682954289574
+      },
+      {
+        "delta": 604800,
+        "label": "1",
+        "coverage": 0.6923076923076923
+      },
+      {
+        "delta": 1209600,
+        "label": "all",
+        "coverage": 0.7198
+      },
+      {
+        "delta": 1209600,
+        "label": "0",
+        "coverage": 0.7205584327854087
+      },
+      {
+        "delta": 1209600,
+        "label": "1",
+        "coverage": 0.7137745974955277
+      },
+      {
+        "delta": 2592000,
+        "label": "all",
+        "coverage": 0.7594
+      },
+      {
+        "delta": 2592000,
+        "label": "0",
+        "coverage": 0.7628912407115515
+      },
+      {
+        "delta": 2592000,
+        "label": "1",
+        "coverage": 0.7316636851520573
+      }
+    ]
+  }
+}

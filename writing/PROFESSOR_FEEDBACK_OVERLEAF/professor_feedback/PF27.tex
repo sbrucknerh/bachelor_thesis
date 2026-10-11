@@ -1,0 +1,52 @@
+% BEGIN PROFESSOR FEEDBACK PF27: Discussion - Behaviour categories
+\subsection{Differences between behaviour categories}
+
+The category analysis uses motif fingerprints alone. Its class-share and
+permutation references establish whether the fingerprints contain category
+information. They do not establish whether this representation is more useful
+than conventional behavioural features for category classification, which would
+require an additional baseline.
+
+RQ3 shows that the Real-CATS categories are not identical in their motif
+fingerprints. At the shared two-week window, the model reaches a macro AP of
+0.1953 compared with an average class share of 0.1111. The permutation test
+finds the category signal under every timestamp ordering. This provides evidence
+that the motif distributions contain information about the recorded behaviour
+category.
+
+The practical separation is much weaker than the permutation result alone might
+suggest. Macro F1 is 0.1914, and the confusion matrix shows that many addresses
+are assigned to the wrong category. The one-vs-rest AP values also need to be
+read together with their class shares. Phishing Scam has the highest AP, but it
+also represents more than two thirds of the sample. Several smaller categories
+have only 25 to 47 addresses in the test set, which makes their individual
+results less precise.
+
+One likely reason for the limited separation is that a category label does not
+define one transaction pattern. Two phishing addresses can use different
+collection and withdrawal strategies, while an impersonation scam and a fake
+returns scam can produce similar transfers despite having different social
+engineering methods. The label describes the purpose of the malicious activity,
+whereas the motif fingerprint describes local transaction structure. These two
+descriptions are related, but they are not equivalent. The slightly higher AP of
+the count-based model suggests that motif volume may also contain category
+information. However, the comparison changes more than volume alone and does not
+identify which part of the count representation produces the difference.
+
+RQ4 further limits the interpretation of the category results. The development
+data selects six different category-specific windows, ranging from six hours to
+30 days. On the held-out test set, using these windows instead of the shared
+two-week window changes macro AP by only 0.0009. The confidence interval includes
+zero and none of the category-level differences is significant after correction
+for multiple comparisons. Most selected windows also change when transactions
+with the same timestamp are ordered differently.
+
+The development maxima should therefore not be treated as stable properties of
+the categories. Selecting the highest point from nine windows will produce a
+maximum for every category even when several windows perform almost equally.
+The held-out comparison tests whether these apparent differences generalise, and
+in this study they do not. The category-specific windows also do not estimate how
+long the corresponding scam types last. They only describe where the classifier
+performed best on one development sample.
+% END PROFESSOR FEEDBACK PF27
+

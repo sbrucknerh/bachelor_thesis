@@ -119,6 +119,16 @@ def fdelta(seconds) -> str:
         return "--"
 
 
+def count_word(value: int) -> str:
+    return {1: "one", 2: "two", 3: "three", 4: "four"}.get(value, str(value))
+
+
+def latex_command(name: str, value: str) -> str:
+    if not name.isalpha():
+        raise ValueError(f"LaTeX command names must contain letters only: {name}")
+    return f"\\newcommand{{\\{name}}}{{{value}}}"
+
+
 def tex_escape(text: object) -> str:
     out = str(text)
     for a, b in (("\\", "\\textbackslash{}"), ("&", "\\&"), ("%", "\\%"),
@@ -131,8 +141,8 @@ def reject_cell(flag) -> str:
     return "reject" if bool(flag) else "not rejected"
 
 
-def support_cell(flag) -> str:
-    return "supported" if bool(flag) else "not supported"
+def yes_no(flag) -> str:
+    return "yes" if bool(flag) else "no"
 
 
 class RunSet:
@@ -242,6 +252,21 @@ class RunSet:
 
     def sources_for(self, rq: str) -> list[Path]:
         return list(self.rq_sources.get(rq, []))
+
+    def latest_source_for(self, rq: str) -> Path | None:
+        """Return the highest indexed replication selected for an RQ."""
+        sources = self.sources_for(rq)
+        if not sources:
+            return None
+        return max(
+            sources,
+            key=lambda path: (
+                self._replication_index(path)
+                if self._replication_index(path) is not None
+                else -1,
+                path.name,
+            ),
+        )
 
     def csv_from(self, run_dir: Path, relative: str) -> pd.DataFrame:
         path = run_dir / relative
@@ -386,6 +411,19 @@ def write_figures(runs: RunSet, out: Path) -> None:
                 source / "figures" / f"{stem}.pdf",
                 figure_out / f"{stem}{suffix}.pdf",
             )
+    latest_hf = runs.latest_source_for("rq1")
+    if latest_hf is not None:
+        replication = runs._replication_index(latest_hf)
+        suffix = f"_rep{replication}" if replication is not None else ""
+        for stem in (
+            "rq1_representation_ablation_controlled",
+            "rq1_representation_ablation_prevalence",
+            "rq2_motif_coverage_controlled",
+            "rq2_motif_coverage_prevalence",
+        ):
+            source = latest_hf / "figures" / f"{stem}.pdf"
+            if source.is_file():
+                shutil.copy2(source, figure_out / f"{stem}{suffix}.pdf")
     for rq, stems in {
         "rq3": ("rq3_fingerprint_heatmap", "rq3_confusion_matrix"),
         "rq4": ("rq4_label_delta_curves",),
@@ -404,10 +442,15 @@ def write_macros(runs: RunSet, out: Path) -> None:
     lines = ["% Auto-generated scalar macros. Do not edit by hand."]
 
     def cmd(name: str, value: str) -> None:
-        lines.append(f"\\newcommand{{\\{name}}}{{{value}}}")
+        lines.append(latex_command(name, value))
 
     hf_owner_rq = "rq1" if "rq1" in runs.claimed else "rq2"
-    hf = runs.dataset("huggingface", hf_owner_rq)
+    hf_source = runs.latest_source_for(hf_owner_rq)
+    hf = (
+        runs.protocols[hf_source].get("datasets", {}).get("huggingface")
+        if hf_source is not None
+        else None
+    )
     if hf:
         attr = hf.get("attrition", {})
         cmd("ResCohortLabelled", f"{attr.get('labelled_targets', 0):,}")
@@ -416,8 +459,9 @@ def write_macros(runs: RunSet, out: Path) -> None:
         cmd("ResPrevalenceN", f"{attr.get('prevalence_targets', 0):,}")
         cmd("ResControlledN", f"{attr.get('controlled_targets', 0):,}")
         extraction = hf.get("edge_extraction", {})
-        cmd("ResHFSourceEdges", f"{extraction.get('source_edges', 0):,}")
-        cmd("ResHFSelectedEdges", f"{extraction.get('selected_edges', 0):,}")
+        incident = extraction.get("incident", extraction)
+        cmd("ResHFSourceEdges", f"{incident.get('source_edges', 0):,}")
+        cmd("ResHFSelectedEdges", f"{incident.get('selected_edges', 0):,}")
     else:
         for name in (
             "ResCohortLabelled",
@@ -430,19 +474,27 @@ def write_macros(runs: RunSet, out: Path) -> None:
         ):
             cmd(name, "--")
 
-    if "rq1" in runs.claimed and runs.path_for("rq1", REQUIRED["rq1"][0]):
-        hyp = runs.csv_for("rq1", "tables/rq1_hypothesis_tests.csv")
+    latest_rq1 = runs.latest_source_for("rq1")
+    if latest_rq1 is not None and (latest_rq1 / REQUIRED["rq1"][0]).is_file():
+        hyp = runs.csv_from(latest_rq1, "tables/rq1_hypothesis_tests.csv")
         canon = hyp[hyp["ordering_variant"] == HEADLINE_VARIANT]
         for _, row in canon.iterrows():
             key = str(row["cohort"]).capitalize()
-            cmd(f"ResRQ1{key}DeltaAP", fnum(row["delta_average_precision"]))
-            cmd(f"ResRQ1{key}Reject", reject_cell(row["reject_h0"]))
+            cmd(f"ResRQOne{key}DeltaAP", fnum(row["delta_average_precision"]))
+            cmd(f"ResRQOne{key}Reject", reject_cell(row["reject_h0"]))
     else:
         for cohort in ("Controlled", "Prevalence"):
-            cmd(f"ResRQ1{cohort}DeltaAP", "--")
-            cmd(f"ResRQ1{cohort}Reject", "pending")
+            cmd(f"ResRQOne{cohort}DeltaAP", "--")
+            cmd(f"ResRQOne{cohort}Reject", "pending")
     sens_rq = "rq1" if "rq1" in runs.claimed else "rq2"
-    sens = runs.path_for(sens_rq, "metrics/hf_ordering_sensitivity.json")
+    latest_sens = runs.latest_source_for(sens_rq)
+    sens = (
+        latest_sens / "metrics/hf_ordering_sensitivity.json"
+        if latest_sens is not None
+        else None
+    )
+    if sens is not None and not sens.is_file():
+        sens = None
     if sens:
         general = json.loads(sens.read_text()).get("general_signal")
         cmd("ResHFGeneralSignal", "yes" if general else "no")
@@ -452,29 +504,29 @@ def write_macros(runs: RunSet, out: Path) -> None:
         glob = runs.csv_for("rq3", "tables/rq3_global_results.csv")
         canon = glob[glob["ordering_variant"] == HEADLINE_VARIANT]
         if len(canon):
-            cmd("ResRQ3MacroAP", fnum(canon.iloc[0]["macro_average_precision"]))
-            cmd("ResRQ3PermP", fp(canon.iloc[0]["permutation_p_value"]))
+            cmd("ResRQThreeMacroAP", fnum(canon.iloc[0]["macro_average_precision"]))
+            cmd("ResRQThreePermP", fp(canon.iloc[0]["permutation_p_value"]))
         else:
-            cmd("ResRQ3MacroAP", "--")
-            cmd("ResRQ3PermP", "--")
+            cmd("ResRQThreeMacroAP", "--")
+            cmd("ResRQThreePermP", "--")
     else:
-        cmd("ResRQ3MacroAP", "--")
-        cmd("ResRQ3PermP", "--")
+        cmd("ResRQThreeMacroAP", "--")
+        cmd("ResRQThreePermP", "--")
     if "rq4" in runs.claimed and runs.path_for("rq4", REQUIRED["rq4"][0]):
         glob = runs.csv_for("rq4", "tables/rq4_global_results.csv")
         canon = glob[glob["ordering_variant"] == HEADLINE_VARIANT]
         if len(canon):
             cmd(
-                "ResRQ4DeltaMacroAP",
+                "ResRQFourDeltaMacroAP",
                 fnum(canon.iloc[0]["observed_delta_macro_ap"]),
             )
-            cmd("ResRQ4P", fp(canon.iloc[0]["p_value"]))
+            cmd("ResRQFourP", fp(canon.iloc[0]["p_value"]))
         else:
-            cmd("ResRQ4DeltaMacroAP", "--")
-            cmd("ResRQ4P", "--")
+            cmd("ResRQFourDeltaMacroAP", "--")
+            cmd("ResRQFourP", "--")
     else:
-        cmd("ResRQ4DeltaMacroAP", "--")
-        cmd("ResRQ4P", "--")
+        cmd("ResRQFourDeltaMacroAP", "--")
+        cmd("ResRQFourP", "--")
 
     (out / "results_macros.tex").write_text("\n".join(lines) + "\n")
 
@@ -493,6 +545,7 @@ def write_cohorts(runs: RunSet, out: Path) -> None:
         hf = protocol.get("datasets", {}).get("huggingface", {})
         attr = hf.get("attrition", {})
         extraction = hf.get("edge_extraction", {})
+        incident = extraction.get("incident", extraction)
         replication = runs._replication_index(source)
         selected = int(attr.get("prevalence_targets", 0)) + int(
             attr.get("controlled_targets", 0)
@@ -502,19 +555,19 @@ def write_cohorts(runs: RunSet, out: Path) -> None:
             f"{int(attr.get('available_after_prior_run_exclusions', 0)):,} & "
             f"{int(attr.get('prevalence_targets', 0)):,} & "
             f"{int(attr.get('controlled_targets', 0)):,} & {selected:,} & "
-            f"{int(extraction.get('selected_edges', 0)):,} \\\\"
+            f"{int(incident.get('selected_edges', 0)):,} \\\\"
         )
     first_hf = runs.protocols[sources[0]]["datasets"]["huggingface"]
     first_attr = first_hf.get("attrition", {})
     table = (
         "\\begin{table}[ht]\n\\centering\n"
-        "\\caption{The two disjoint HuggingFace confirmation samples. The source "
-        f"contains {int(first_attr.get('labelled_targets', 0)):,} labelled targets; "
+        f"\\caption{{The {count_word(len(sources))} non-overlapping HuggingFace samples. "
+        f"The source contains {int(first_attr.get('labelled_targets', 0)):,} labelled targets. "
         f"{int(first_attr.get('eligible_active_targets', 0)):,} pass the common "
-        "activity and upper-tail rules before prior-run exclusions.}\n"
+        "activity and upper-tail rules before previously selected samples are excluded.}\n"
         "\\label{tab:res_cohorts}\n\\footnotesize\n"
         "\\begin{tabular}{@{}r r r r r r@{}}\n\\toprule\n"
-        "\\textbf{Rep.} & \\textbf{Available} & \\textbf{Prevalence} & "
+        "\\textbf{Sample} & \\textbf{Available} & \\textbf{Prevalence} & "
         "\\textbf{Controlled} & \\textbf{Total} & \\textbf{Incident edges} \\\\\n"
         "\\midrule\n"
         + "\n".join(rows)
@@ -548,19 +601,20 @@ def write_rq1(runs: RunSet, out: Path) -> None:
                 f"{fnum(at.get('motifs'))} & {fnum(at.get('combined'))} & "
                 f"{fnum(row['delta_average_precision'])} & "
                 f"[{fnum(row['ci_lower'])}, {fnum(row['ci_upper'])}] & "
-                f"{fp(row['p_value'])} & {reject_cell(row['reject_h0'])} \\\\"
+                f"{fp(row['p_value'])} & {yes_no(row['reject_h0'])} \\\\"
             )
     table = (
         "\\begin{table}[ht]\n\\centering\n"
         "\\caption{RQ1: average precision of each feature view at the selected window "
-        "for both disjoint confirmations (canonical ordering), the combined-minus-baseline "
+        f"for {count_word(len(sources))} non-overlapping samples using the default "
+        "timestamp ordering. The table also reports the combined-minus-baseline "
         "difference with its 95\\,\\% confidence interval, the permutation $p$-value, "
         "and the decision.}\n"
         "\\label{tab:res_rq1}\n\\footnotesize\n\\setlength{\\tabcolsep}{4pt}\n"
         "\\begin{tabular}{@{}r l l r r r r c c l@{}}\n\\toprule\n"
-        "\\textbf{Rep.} & \\textbf{Cohort} & \\textbf{$\\delta$} & \\textbf{Base} & \\textbf{Motifs} & "
+        "\\textbf{Sample} & \\textbf{Cohort} & \\textbf{$\\delta$} & \\textbf{Base} & \\textbf{Motifs} & "
         "\\textbf{Comb.} & \\textbf{$\\Delta$AP} & \\textbf{95\\,\\% CI} & "
-        "\\textbf{$p$} & \\textbf{Decision} \\\\\n\\midrule\n"
+        "\\textbf{$p$} & \\textbf{Significant?} \\\\\n\\midrule\n"
         + "\n".join(rows)
         + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
@@ -604,22 +658,22 @@ def write_rq1_diagnostics(runs: RunSet, out: Path) -> None:
         f"{fnum(row['alternative_average_precision'])} & "
         f"{fnum(row['observed_delta_ap'])} & "
         f"[{fnum(row['ci_lower'])}, {fnum(row['ci_upper'])}] & "
-        f"{fp(row['p_value_bh'])} & {reject_cell(row['reject_h0_bh'])} \\\\"
+        f"{fp(row['p_value_bh'])} & {yes_no(row['reject_h0_bh'])} \\\\"
         for _, row in comparisons.iterrows()
     ]
     table = (
         "\\begin{table}[ht]\n\\centering\n"
-        "\\caption{Prespecified secondary RQ1 representation comparisons at the "
-        "development-selected window under canonical ordering. The first contrast "
-        "tests fingerprint shape beyond total motif count; the second tests the "
+        "\\caption{Secondary RQ1 representation comparisons at the "
+        "development-selected window using the default timestamp ordering. The first comparison "
+        "tests fingerprint shape beyond total motif count. The second tests the "
         "combined model against a baseline augmented with motif composition and "
-        "volume. P-values use Benjamini--Hochberg correction across all eight "
-        "pre-specified contrasts per cohort.}\n"
+        "volume. P-values use Benjamini--Hochberg correction within the "
+        "comparison family for each sample.}\n"
         "\\label{tab:res_rq1_representations}\n\\scriptsize\n"
         "\\begin{tabular}{@{}r l p{3.4cm} r r r c r l@{}}\n\\toprule\n"
-        "\\textbf{Rep.} & \\textbf{Cohort} & \\textbf{Comparison} & \\textbf{Ref.} & "
+        "\\textbf{Sample} & \\textbf{Cohort} & \\textbf{Comparison} & \\textbf{Ref.} & "
         "\\textbf{Alt.} & \\textbf{$\\Delta$AP} & \\textbf{95\\,\\% CI} & "
-        "\\textbf{$p_{\\mathrm{BH}}$} & \\textbf{Decision} \\\\\n\\midrule\n"
+        "\\textbf{$p_{\\mathrm{BH}}$} & \\textbf{Significant?} \\\\\n\\midrule\n"
         + "\n".join(rows)
         + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
@@ -645,16 +699,107 @@ def write_rq1_diagnostics(runs: RunSet, out: Path) -> None:
     role_table = (
         "\\begin{table}[ht]\n\\centering\n"
         "\\caption{Descriptive held-out diagnostics for the three "
-        "prespecified all-incoming star roles. Counts are used directly as scores; "
-        "these values are not fitted-model performance.}\n"
+        "prespecified all-incoming star roles. Counts are used directly as scores. "
+        "These values are not fitted-model performance.}\n"
         "\\label{tab:res_rq1_incoming}\n\\footnotesize\n"
         "\\begin{tabular}{@{}r l l r r r@{}}\n\\toprule\n"
-        "\\textbf{Rep.} & \\textbf{Cohort} & \\textbf{Role} & "
+        "\\textbf{Sample} & \\textbf{Cohort} & \\textbf{Role} & "
         "\\textbf{ROC-AUC} & \\textbf{AP} & \\textbf{Coverage} \\\\\n\\midrule\n"
         + "\n".join(role_rows)
         + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
     (out / "results_rq1_incoming_roles.tex").write_text(role_table)
+
+
+def write_rq1_final_extensions(runs: RunSet, out: Path) -> None:
+    """Write triangle and external replication tables when present."""
+    latest_hf = runs.latest_source_for("rq1")
+    triangle_path = (
+        latest_hf / "tables/rq1_triangle_ablation.csv"
+        if latest_hf is not None
+        else None
+    )
+    if triangle_path is None or not triangle_path.is_file():
+        (out / "results_rq1_triangles.tex").write_text(
+            pending_table("RQ1 triangle-role ablation.", "tab:res_rq1_triangles")
+        )
+    else:
+        triangles = pd.read_csv(triangle_path)
+        triangles = triangles[
+            triangles["ordering_variant"].eq(HEADLINE_VARIANT)
+        ].sort_values(["cohort", "comparison"])
+        comparison_labels = {
+            "baseline_triangles_vs_baseline": "triangles added to baseline",
+            "combined_vs_combined_without_triangles": "40 roles versus 32 roles",
+        }
+        rows = [
+            f"{str(row['cohort']).capitalize()} & "
+            f"{comparison_labels.get(row['comparison'], row['comparison'])} & "
+            f"{fnum(row['reference_average_precision'])} & "
+            f"{fnum(row['alternative_average_precision'])} & "
+            f"{fnum(row['observed_delta_ap'])} & "
+            f"[{fnum(row['ci_lower'])}, {fnum(row['ci_upper'])}] & "
+            f"{fp(row['p_value_bh'])} & {yes_no(row['reject_h0_bh'])} \\\\"
+            for _, row in triangles.iterrows()
+        ]
+        table = (
+            "\\begin{table}[ht]\n\\centering\n"
+            "\\caption{RQ1 triangle-role comparison in the 40-role HuggingFace analysis at the selected "
+            "30-day window using the default timestamp ordering. Corrected $p$-values "
+            "account for the representation comparisons.}\n"
+            "\\label{tab:res_rq1_triangles}\n\\footnotesize\n"
+            "\\begin{tabular}{@{}l l r r r c r l@{}}\n\\toprule\n"
+            "\\textbf{Cohort} & \\textbf{Comparison} & \\textbf{Ref.} & "
+            "\\textbf{Alt.} & \\textbf{$\\Delta$AP} & \\textbf{95\\,\\% CI} & "
+            "\\textbf{$p_{\\mathrm{BH}}$} & \\textbf{Significant?} \\\\\n\\midrule\n"
+            + "\n".join(rows)
+            + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
+        )
+        (out / "results_rq1_triangles.tex").write_text(table)
+
+    latest_realcats = runs.latest_source_for("rq3")
+    external_path = (
+        latest_realcats / "tables/realcats_binary_rq1_results.csv"
+        if latest_realcats is not None
+        else None
+    )
+    if external_path is None or not external_path.is_file():
+        (out / "results_realcats_binary.tex").write_text(
+            pending_table(
+                "Binary Real-CATS comparison.",
+                "tab:res_realcats_binary",
+            )
+        )
+        return
+
+    external = pd.read_csv(external_path)
+    canonical = external[
+        external["ordering_variant"].eq(HEADLINE_VARIANT)
+    ].iloc[0]
+    metrics = pd.read_csv(
+        latest_realcats / "metrics/realcats_binary_canonical_metrics.csv"
+    )
+    selected = int(canonical["selected_delta"])
+    at = metrics[metrics["delta"].eq(selected)].set_index("arm")
+    table = (
+        "\\begin{table}[ht]\n\\centering\n"
+        "\\caption{Binary comparison on the activity-matched Real-CATS sample "
+        "using the default timestamp ordering.}\n"
+        "\\label{tab:res_realcats_binary}\n\\footnotesize\n"
+        "\\begin{tabular}{@{}l r@{}}\n\\toprule\n"
+        "\\textbf{Quantity} & \\textbf{Value} \\\\\n\\midrule\n"
+        "Addresses & 6,134 \\\\\n"
+        f"Selected window & {fdelta(selected)} \\\\\n"
+        f"One-standard-error window & {fdelta(canonical['one_se_delta'])} \\\\\n"
+        f"Baseline AP & {fnum(at.loc['baseline', 'average_precision'])} \\\\\n"
+        f"Motif-only AP & {fnum(at.loc['motifs', 'average_precision'])} \\\\\n"
+        f"Combined AP & {fnum(at.loc['combined', 'average_precision'])} \\\\\n"
+        f"$\\Delta$AP & {fnum(canonical['observed_delta_ap'])} \\\\\n"
+        f"95\\,\\% CI & [{fnum(canonical['ci_lower'])}, {fnum(canonical['ci_upper'])}] \\\\\n"
+        f"Permutation $p$-value & {fp(canonical['p_value'])} \\\\\n"
+        "\\bottomrule\n\\end{tabular}\n\\end{table}\n"
+    )
+    (out / "results_realcats_binary.tex").write_text(table)
 
 
 def write_rq2(runs: RunSet, out: Path) -> None:
@@ -682,12 +827,12 @@ def write_rq2(runs: RunSet, out: Path) -> None:
             )
     table = (
         "\\begin{table}[ht]\n\\centering\n"
-        "\\caption{RQ2: development-CV window selections for both disjoint "
-        "confirmations. The final column states whether the selected maximum was "
-        "uniquely superior after corrected comparisons under all seven orderings.}\n"
+        f"\\caption{{RQ2: development-CV window selections for {count_word(len(sources))} non-overlapping "
+        "samples. The final column states whether the selected maximum was better "
+        "than every other tested window after correction under all seven timestamp orderings.}\n"
         "\\label{tab:res_rq2}\n\\small\n"
         "\\begin{tabular}{@{}r l l l l@{}}\n\\toprule\n"
-        "\\textbf{Rep.} & \\textbf{Cohort} & \\textbf{Maximum $\\delta$} & "
+        "\\textbf{Sample} & \\textbf{Cohort} & \\textbf{Maximum $\\delta$} & "
         "\\textbf{1-SE $\\delta$} & \\textbf{Unique maximum} \\\\\n\\midrule\n"
         + "\n".join(rows)
         + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
@@ -712,14 +857,14 @@ def write_rq3(runs: RunSet, out: Path) -> None:
     global_table = (
         "\\begin{table}[ht]\n\\centering\n"
         "\\caption{RQ3: overall separability of the criminal categories from their "
-        "motif fingerprints (canonical ordering).}\n\\label{tab:res_rq3_global}\n\\small\n"
+        "motif fingerprints using the default timestamp ordering.}\n\\label{tab:res_rq3_global}\n\\small\n"
         "\\begin{tabular}{@{}l r@{}}\n\\toprule\n"
         "\\textbf{Quantity} & \\textbf{Value} \\\\\n\\midrule\n"
         f"Global window & {fdelta(canon['global_delta'])} \\\\\n"
         f"Macro average precision & {fnum(canon['macro_average_precision'])} \\\\\n"
         f"Macro F1 & {fnum(canon['macro_f1'])} \\\\\n"
         f"Permutation $p$-value & {fp(canon['permutation_p_value'])} \\\\\n"
-        f"Decision & {reject_cell(canon['reject_h0'])} \\\\\n"
+        f"Category signal significant? & {yes_no(canon['reject_h0'])} \\\\\n"
         "\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
     (out / "results_rq3_global.tex").write_text(global_table)
@@ -740,7 +885,7 @@ def write_rq3(runs: RunSet, out: Path) -> None:
     label_table = (
         "\\begin{table}[ht]\n\\centering\n"
         "\\caption{RQ3: one-vs-rest average precision for each behaviour category "
-        "at the globally selected window (canonical ordering). The address count "
+        "at the globally selected window using the default timestamp ordering. The address count "
         "and class share are included because average precision depends on class "
         "prevalence.}\n"
         "\\label{tab:res_rq3_labels}\n"
@@ -756,7 +901,7 @@ def write_rq4(runs: RunSet, out: Path) -> None:
     if not ("rq4" in runs.claimed and runs.path_for("rq4", REQUIRED["rq4"][0])):
         (out / "results_rq4_global.tex").write_text(
             pending_table(
-                "RQ4: category-specific versus global temporal windows.",
+                "RQ4: category-specific versus shared temporal windows.",
                 "tab:res_rq4_global",
             )
         )
@@ -775,16 +920,16 @@ def write_rq4(runs: RunSet, out: Path) -> None:
     global_table = (
         "\\begin{table}[ht]\n\\centering\n"
         "\\caption{RQ4: held-out comparison of development-selected category-specific "
-        "windows with one global window (canonical ordering).}\n"
+        "windows with one shared window using the default timestamp ordering.}\n"
         "\\label{tab:res_rq4_global}\n\\small\n"
         "\\begin{tabular}{@{}l r@{}}\n\\toprule\n"
         "\\textbf{Quantity} & \\textbf{Value} \\\\\n\\midrule\n"
-        f"Global window & {fdelta(canonical['global_delta'])} \\\\\n"
+        f"Shared window & {fdelta(canonical['global_delta'])} \\\\\n"
         f"Distinct category windows & {int(canonical['unique_category_deltas'])} \\\\\n"
         f"$\\Delta$ macro AP & {fnum(canonical['observed_delta_macro_ap'])} \\\\\n"
         f"95\\% CI & [{fnum(canonical['ci_lower'])}, {fnum(canonical['ci_upper'])}] \\\\\n"
         f"Bootstrap $p$-value & {fp(canonical['p_value'])} \\\\\n"
-        f"Decision & {reject_cell(canonical['reject_h0'])} \\\\\n"
+        f"Improvement significant? & {yes_no(canonical['reject_h0'])} \\\\\n"
         "\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
     (out / "results_rq4_global.tex").write_text(global_table)
@@ -797,18 +942,18 @@ def write_rq4(runs: RunSet, out: Path) -> None:
         f"{tex_escape(row['label'])} & {fdelta(row['category_delta'])} & "
         f"{fnum(row['observed_delta_ap'])} & "
         f"[{fnum(row['ci_lower'])}, {fnum(row['ci_upper'])}] & "
-        f"{fp(row['p_value_bh'])} & {reject_cell(row['reject_h0'])} \\\\"
+        f"{fp(row['p_value_bh'])} & {yes_no(row['reject_h0'])} \\\\"
         for _, row in categories.iterrows()
     ]
     category_table = (
         "\\begin{table}[ht]\n\\centering\n"
-        "\\caption{RQ4: category-specific windows compared with the global window "
-        "(canonical ordering). P-values use Benjamini--Hochberg correction.}\n"
+        "\\caption{RQ4: category-specific windows compared with the shared window "
+        "using the default timestamp ordering. P-values use Benjamini--Hochberg correction.}\n"
         "\\label{tab:res_rq4_categories}\n\\footnotesize\n"
         "\\begin{tabular}{@{}l l r l r l@{}}\n\\toprule\n"
         "\\textbf{Category} & \\textbf{$\\delta$} & \\textbf{$\\Delta$AP} & "
         "\\textbf{95\\% CI} & \\textbf{$p_{\\mathrm{BH}}$} & "
-        "\\textbf{Decision} \\\\\n\\midrule\n"
+        "\\textbf{Significant?} \\\\\n\\midrule\n"
         + "\n".join(rows)
         + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
@@ -863,44 +1008,66 @@ def write_validation(runs: RunSet, out: Path) -> None:
 
 def write_hypothesis(runs: RunSet, out: Path) -> None:
     rows = []
-    hf_rq = "rq1" if "rq1" in runs.claimed else "rq2"
-    for source in runs.sources_for(hf_rq):
-        sensitivity_path = source / "metrics/hf_ordering_sensitivity.json"
-        if not sensitivity_path.is_file():
-            continue
-        sens = json.loads(sensitivity_path.read_text())
-        replication = runs._replication_index(source)
-        rep_label = replication if replication is not None else "--"
-        for cohort in [c for c in sens if c != "general_signal"]:
-            detail = sens[cohort]
-            rows.append(
-                f"RQ1 (rep. {rep_label}, {cohort}) & motifs add signal & "
-                f"{support_cell(detail.get('rq1_rejected_in_all_variants'))} & "
-                f"robust: {'yes' if detail.get('ordering_robust') else 'no'} \\\\"
-            )
-            rows.append(
-                f"RQ2 (rep. {rep_label}, {cohort}) & a single best window & "
-                f"{support_cell(detail.get('rq2_unique_optimum_in_all_variants'))} & "
-                "-- \\\\"
-            )
-    rq3_sensitivity = runs.path_for("rq3", "metrics/realcats_ordering_sensitivity.json")
-    if rq3_sensitivity:
+    latest_hf = runs.latest_source_for("rq1")
+    if latest_hf is not None:
+        sens = runs.json_from(latest_hf, "metrics/hf_ordering_sensitivity.json")
+        positive = all(
+            all(sens[cohort].get("effect_directions_positive", []))
+            for cohort in ("controlled", "prevalence")
+        )
+        rows.append(
+            "RQ1 & small, inconsistent AP increase & "
+            "no reliable improvement over the baseline & "
+            f"positive direction in all seven orderings: {'yes' if positive else 'no'} \\\\"
+        )
+
+        selections = {
+            delta
+            for cohort in ("controlled", "prevalence")
+            for delta in sens[cohort].get("selected_deltas", [])
+        }
+        selected_text = (
+            fdelta(next(iter(selections)))
+            if len(selections) == 1
+            else "multiple windows"
+        )
+        unique = all(
+            sens[cohort].get("rq2_unique_optimum_in_all_variants", False)
+            for cohort in ("controlled", "prevalence")
+        )
+        rows.append(
+            "RQ2 & AP generally increases across the tested window range & "
+            f"{selected_text} selected in the 40-role analysis, "
+            f"{'with' if unique else 'without'} a unique optimum & "
+            f"same selected window in all seven orderings: {'yes' if len(selections) == 1 else 'no'} \\\\"
+        )
+
+    latest_realcats = runs.latest_source_for("rq3")
+    rq3_sensitivity = (
+        latest_realcats / "metrics/realcats_ordering_sensitivity.json"
+        if latest_realcats is not None
+        else None
+    )
+    if rq3_sensitivity is not None and rq3_sensitivity.is_file():
         rsens = json.loads(rq3_sensitivity.read_text())
         rows.append(
-            "RQ3 & categories are separable & "
-            f"{support_cell(rsens.get('ordering_robust_global_separability'))} & "
-            f"robust: {'yes' if rsens.get('ordering_robust_global_separability') else 'no'} \\\\"
+            "RQ3 & weak but detectable fingerprint differences & "
+            f"category information {'found' if rsens.get('ordering_robust_global_separability') else 'not established'}, "
+            "with no conventional-feature comparison & "
+            f"category signal in all seven orderings: {'yes' if rsens.get('ordering_robust_global_separability') else 'no'} \\\\"
         )
-    rq4_sensitivity = runs.path_for(
-        "rq4",
-        "metrics/realcats_rq4_ordering_sensitivity.json",
+    rq4_sensitivity = (
+        latest_realcats / "metrics/realcats_rq4_ordering_sensitivity.json"
+        if latest_realcats is not None
+        else None
     )
-    if rq4_sensitivity:
+    if rq4_sensitivity is not None and rq4_sensitivity.is_file():
         rq4 = json.loads(rq4_sensitivity.read_text())
         robust = rq4.get("ordering_robust_category_specific_windows")
         rows.append(
-            "RQ4 & category-specific windows outperform one global window & "
-            f"{support_cell(robust)} & robust: {'yes' if robust else 'no'} \\\\"
+            "RQ4 & category-specific versus shared windows & "
+            f"improvement on held-out addresses: {'yes' if robust else 'no'} & "
+            "no significant improvement in any ordering. Selected windows vary \\\\"
         )
     if not rows:
         (out / "results_hypothesis.tex").write_text(
@@ -909,11 +1076,11 @@ def write_hypothesis(runs: RunSet, out: Path) -> None:
         return
     table = (
         "\\begin{table}[ht]\n\\centering\n"
-        "\\caption{Summary of the hypothesis decisions across all seven orderings.}\n"
-        "\\label{tab:res_hypothesis}\n\\small\n"
-        "\\begin{tabular}{@{}l l l l@{}}\n\\toprule\n"
-        "\\textbf{Question} & \\textbf{Tested claim} & \\textbf{Conclusion} & "
-        "\\textbf{Ordering} \\\\\n\\midrule\n"
+        "\\caption{Summary of the answers to the four research questions.}\n"
+        "\\label{tab:res_hypothesis}\n\\footnotesize\n"
+        "\\begin{tabular}{@{}l p{3.6cm} p{4.0cm} p{4.0cm}@{}}\n\\toprule\n"
+        "\\textbf{Question} & \\textbf{Finding} & \\textbf{Answer} & "
+        "\\textbf{Other orderings} \\\\\n\\midrule\n"
         + "\n".join(rows)
         + "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     )
@@ -939,6 +1106,7 @@ def main() -> None:
     write_cohorts(runs, out)
     write_rq1(runs, out)
     write_rq1_diagnostics(runs, out)
+    write_rq1_final_extensions(runs, out)
     write_rq2(runs, out)
     write_rq3(runs, out)
     write_rq4(runs, out)
